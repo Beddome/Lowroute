@@ -112,7 +112,7 @@ export interface AppEvent {
   userId: string;
   title: string;
   description: string;
-  eventType: "car_meet" | "show_and_shine" | "cruise" | "photo_spot" | "shop_garage" | "warning";
+  eventType: "car_meet" | "show_and_shine" | "cruise" | "photo_spot" | "shop_garage";
   lat: number;
   lng: number;
   date: string | Date;
@@ -171,7 +171,6 @@ export const EVENT_TYPES = [
   { value: "cruise", label: "Cruise", icon: "car-sport" },
   { value: "photo_spot", label: "Photo Spot", icon: "camera" },
   { value: "shop_garage", label: "Shop / Garage", icon: "build" },
-  { value: "warning", label: "Road Warning", icon: "warning" },
 ] as const;
 
 export const SUSPENSION_TYPES = [

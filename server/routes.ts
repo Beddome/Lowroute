@@ -1085,7 +1085,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (typeof description !== "string" || description.length < 5 || description.length > 500) {
         return res.status(400).json({ message: "Description must be 5-500 characters" });
       }
-      const validEventTypes = ["car_meet", "show_and_shine", "cruise", "photo_spot", "shop_garage", "warning"];
+      const validEventTypes = ["car_meet", "show_and_shine", "cruise", "photo_spot", "shop_garage"];
       if (!validEventTypes.includes(eventType)) {
         return res.status(400).json({ message: "Invalid event type" });
       }
@@ -1128,7 +1128,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Not your event" });
       }
       const { title, description, eventType, date, endDate, maxAttendees, status } = req.body;
-      const validEventTypes = ["car_meet", "cruise", "car_show", "photo_spot", "other"];
+      const validEventTypes = ["car_meet", "show_and_shine", "cruise", "photo_spot", "shop_garage"];
       const validStatuses = ["active", "cancelled", "completed"];
       const updates: any = {};
       if (title !== undefined) {
