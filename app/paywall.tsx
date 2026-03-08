@@ -139,7 +139,7 @@ export default function PaywallScreen() {
         contentContainerStyle={{ paddingBottom: insets.bottom + 34 + 20 }}
       >
         <View style={styles.header}>
-          <Pressable style={styles.closeBtn} onPress={() => router.back()} hitSlop={12}>
+          <Pressable style={styles.closeBtn} onPress={() => router.back()} hitSlop={16} testID="paywall-close">
             <Ionicons name="close" size={24} color={Colors.textSecondary} />
           </Pressable>
           <View style={styles.headerIcon}>
@@ -315,9 +315,9 @@ const styles = StyleSheet.create({
     top: 16,
     right: 20,
     zIndex: 10,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: Colors.bgElevated,
     alignItems: "center",
     justifyContent: "center",
