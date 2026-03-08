@@ -23,6 +23,7 @@ import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { fetch } from "expo/fetch";
 import { File } from "expo-file-system";
+import LocationPicker from "@/components/LocationPicker";
 
 export default function ReportScreen() {
   const { lat, lng } = useLocalSearchParams<{ lat: string; lng: string }>();
@@ -39,8 +40,10 @@ export default function ReportScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  const latitude = parseFloat(lat ?? "34.0522");
-  const longitude = parseFloat(lng ?? "-118.2437");
+  const initialLat = parseFloat(lat ?? "34.0522");
+  const initialLng = parseFloat(lng ?? "-118.2437");
+  const [latitude, setLatitude] = useState(initialLat);
+  const [longitude, setLongitude] = useState(initialLng);
 
   const pickImage = async (useCamera: boolean) => {
     try {
@@ -162,12 +165,7 @@ export default function ReportScreen() {
             <View style={styles.headerIcon}>
               <Ionicons name="warning" size={20} color={Colors.tier3} />
             </View>
-            <View>
-              <Text style={styles.headerTitle}>Report Hazard</Text>
-              <Text style={styles.headerCoords}>
-                {latitude.toFixed(4)}, {longitude.toFixed(4)}
-              </Text>
-            </View>
+            <Text style={styles.headerTitle}>Report Hazard</Text>
           </View>
           <Pressable onPress={() => router.back()} style={styles.closeBtn} hitSlop={8}>
             <Ionicons name="close" size={22} color={Colors.textSecondary} />
@@ -253,6 +251,20 @@ export default function ReportScreen() {
               </Pressable>
             ))}
           </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Hazard Location</Text>
+          <LocationPicker
+            latitude={latitude}
+            longitude={longitude}
+            onLocationChange={(lat, lng) => {
+              setLatitude(lat);
+              setLongitude(lng);
+            }}
+            accentColor={Colors.tier3}
+            label="Tap the map or drag the pin to mark the hazard"
+          />
         </View>
 
         <View style={styles.section}>
@@ -363,7 +375,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   headerTitle: { fontSize: 18, fontFamily: "Inter_700Bold", color: Colors.text },
-  headerCoords: { fontSize: 12, fontFamily: "Inter_400Regular", color: Colors.textMuted, marginTop: 2 },
   closeBtn: { padding: 8 },
 
   authWarning: {

@@ -20,6 +20,7 @@ import { EVENT_TYPES } from "@/shared/types";
 import type { AppEvent } from "@/shared/types";
 import { apiRequest } from "@/lib/query-client";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import LocationPicker from "@/components/LocationPicker";
 
 const EVENT_COLOR = "#8B5CF6";
 
@@ -244,29 +245,18 @@ export default function CreateEventScreen() {
           </View>
         </View>
 
-        <View style={styles.rowFields}>
-          <View style={[styles.section, { flex: 1 }]}>
-            <Text style={styles.sectionLabel}>Latitude</Text>
-            <TextInput
-              style={styles.titleInput}
-              placeholder="33.4484"
-              placeholderTextColor={Colors.textMuted}
-              value={latitude}
-              onChangeText={setLatitude}
-              keyboardType="numeric"
-            />
-          </View>
-          <View style={[styles.section, { flex: 1 }]}>
-            <Text style={styles.sectionLabel}>Longitude</Text>
-            <TextInput
-              style={styles.titleInput}
-              placeholder="-112.0740"
-              placeholderTextColor={Colors.textMuted}
-              value={longitude}
-              onChangeText={setLongitude}
-              keyboardType="numeric"
-            />
-          </View>
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Location</Text>
+          <LocationPicker
+            latitude={Number.isFinite(parseFloat(latitude)) ? parseFloat(latitude) : 34.0522}
+            longitude={Number.isFinite(parseFloat(longitude)) ? parseFloat(longitude) : -118.2437}
+            onLocationChange={(lat, lng) => {
+              setLatitude(String(lat));
+              setLongitude(String(lng));
+            }}
+            accentColor={EVENT_COLOR}
+            label="Tap the map or drag the pin to set meetup location"
+          />
         </View>
 
         <View style={styles.section}>
