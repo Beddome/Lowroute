@@ -284,6 +284,7 @@ export default function MapScreen() {
 
   const panelExpanded = useRef(new Animated.Value(0)).current;
   const [panelOpen, setPanelOpen] = useState(false);
+  const [legendExpanded, setLegendExpanded] = useState(false);
 
   const [isNavigating, setIsNavigating] = useState(false);
   const [nearbyHazard, setNearbyHazard] = useState<Hazard | null>(null);
@@ -824,7 +825,7 @@ export default function MapScreen() {
 
   const navElapsedMin = isNavigating ? Math.floor((Date.now() - navStartTimeRef.current) / 60000) : 0;
 
-  const bottomPanelHeight = isNavigating ? 0 : routes.length > 0 ? (routePanelExpanded ? 320 : 100) : 140;
+  const bottomPanelHeight = isNavigating ? 0 : routes.length > 0 ? (routePanelExpanded ? 280 : 100) : (legendExpanded ? 360 : 140);
 
   return (
     <View style={styles.container}>
@@ -911,6 +912,7 @@ export default function MapScreen() {
               tappable
               onPress={() => {
                 setSelectedRouteIdx(i);
+                setRoutePanelExpanded(false);
                 Haptics.selectionAsync();
               }}
             />
@@ -1198,6 +1200,7 @@ export default function MapScreen() {
               selectedIdx={selectedRouteIdx}
               onSelect={(i) => {
                 setSelectedRouteIdx(i);
+                setRoutePanelExpanded(false);
                 Haptics.selectionAsync();
               }}
               onStartNav={startNavigation}
@@ -1217,6 +1220,8 @@ export default function MapScreen() {
               showEvents={showEvents}
               onToggleEvents={() => setShowEvents((v) => !v)}
               eventCount={events.length}
+              expanded={legendExpanded}
+              onToggleExpand={() => setLegendExpanded((v) => !v)}
             />
           )}
         </View>
@@ -1417,17 +1422,19 @@ function RoutePanel({
   );
 }
 
-function TierLegend({ hazards, showEvents, onToggleEvents, eventCount, routeHazardCount }: { hazards: Hazard[]; showEvents: boolean; onToggleEvents: () => void; eventCount: number; routeHazardCount?: number }) {
-  const [expanded, setExpanded] = useState(false);
-  const animVal = useRef(new Animated.Value(0)).current;
+function TierLegend({ hazards, showEvents, onToggleEvents, eventCount, routeHazardCount, expanded, onToggleExpand }: { hazards: Hazard[]; showEvents: boolean; onToggleEvents: () => void; eventCount: number; routeHazardCount?: number; expanded?: boolean; onToggleExpand?: () => void }) {
+  const animVal = useRef(new Animated.Value(expanded ? 1 : 0)).current;
 
-  const toggleExpanded = () => {
+  useEffect(() => {
     Animated.timing(animVal, {
-      toValue: expanded ? 0 : 1,
+      toValue: expanded ? 1 : 0,
       duration: 250,
       useNativeDriver: false,
     }).start();
-    setExpanded(!expanded);
+  }, [expanded]);
+
+  const toggleExpanded = () => {
+    if (onToggleExpand) onToggleExpand();
     Haptics.selectionAsync();
   };
 
