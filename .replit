@@ -5,9 +5,9 @@ modules = ["nodejs-22", "postgresql-16"]
 channel = "stable-24_05"
 
 [deployment]
-deploymentTarget = "cloudrun"
-build = ["sh", "-c", "npm run expo:static:build && npm run server:build"]
-run = ["npm", "run", "server:prod"]
+deploymentTarget = "autoscale"
+build = ["sh", "-c", "npm run expo:static:build && esbuild server/index.ts --platform=node --packages=external --bundle --format=cjs --outdir=server_dist"]
+run = ["node", "server_dist/index.js"]
 
 [[ports]]
 localPort = 5000
