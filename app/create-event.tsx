@@ -21,6 +21,7 @@ import type { AppEvent } from "@/shared/types";
 import { apiRequest } from "@/lib/query-client";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import LocationPicker from "@/components/LocationPicker";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 const EVENT_COLOR = "#8B5CF6";
 
@@ -39,8 +40,9 @@ export default function CreateEventScreen() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [eventType, setEventType] = useState<string>("");
-  const [dateStr, setDateStr] = useState("");
-  const [timeStr, setTimeStr] = useState("");
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [latitude, setLatitude] = useState(lat ?? "");
   const [longitude, setLongitude] = useState(lng ?? "");
   const [maxAttendees, setMaxAttendees] = useState("");
@@ -53,14 +55,7 @@ export default function CreateEventScreen() {
       setTitle(existingEvent.title);
       setDescription(existingEvent.description);
       setEventType(existingEvent.eventType);
-      const d = new Date(existingEvent.date);
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, "0");
-      const dd = String(d.getDate()).padStart(2, "0");
-      setDateStr(`${yyyy}-${mm}-${dd}`);
-      const hh = String(d.getHours()).padStart(2, "0");
-      const min = String(d.getMinutes()).padStart(2, "0");
-      setTimeStr(`${hh}:${min}`);
+      setSelectedDate(new Date(existingEvent.date));
       setLatitude(String(existingEvent.lat));
       setLongitude(String(existingEvent.lng));
       if (existingEvent.maxAttendees) {
@@ -75,17 +70,12 @@ export default function CreateEventScreen() {
       router.push("/(auth)/login");
       return;
     }
-    if (!title.trim() || !eventType || !dateStr || !timeStr || !latitude || !longitude || !description.trim()) {
-      setError("Title, description, type, date, time, and location are required");
+    if (!title.trim() || !eventType || !latitude || !longitude || !description.trim()) {
+      setError("Title, description, type, and location are required");
       return;
     }
     if (description.trim().length < 5) {
       setError("Description must be at least 5 characters");
-      return;
-    }
-    const parsedDate = new Date(`${dateStr}T${timeStr}:00`);
-    if (isNaN(parsedDate.getTime())) {
-      setError("Invalid date or time format");
       return;
     }
     setIsSubmitting(true);
@@ -95,7 +85,7 @@ export default function CreateEventScreen() {
         title: title.trim(),
         description: description.trim(),
         eventType,
-        date: parsedDate.toISOString(),
+        date: selectedDate.toISOString(),
         lat: parseFloat(latitude),
         lng: parseFloat(longitude),
         maxAttendees: maxAttendees ? parseInt(maxAttendees, 10) : null,
@@ -128,7 +118,7 @@ export default function CreateEventScreen() {
         contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        bounces={false}
+        bounces={true}
       >
         <View style={styles.header}>
           <View style={styles.headerLeft}>
@@ -224,25 +214,96 @@ export default function CreateEventScreen() {
         <View style={styles.rowFields}>
           <View style={[styles.section, { flex: 1 }]}>
             <Text style={styles.sectionLabel}>Date</Text>
-            <TextInput
-              style={styles.titleInput}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={Colors.textMuted}
-              value={dateStr}
-              onChangeText={setDateStr}
-              maxLength={10}
-            />
+            {Platform.OS === "web" ? (
+              <TextInput
+                style={styles.titleInput}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={Colors.textMuted}
+                value={`${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`}
+                onChangeText={(text) => {
+                  const d = new Date(text + "T" + String(selectedDate.getHours()).padStart(2, "0") + ":" + String(selectedDate.getMinutes()).padStart(2, "0") + ":00");
+                  if (!isNaN(d.getTime())) setSelectedDate(d);
+                }}
+                maxLength={10}
+              />
+            ) : (
+              <>
+                <Pressable
+                  style={styles.datePickerBtn}
+                  onPress={() => { setShowDatePicker(true); Haptics.selectionAsync(); }}
+                >
+                  <Ionicons name="calendar-outline" size={16} color={EVENT_COLOR} />
+                  <Text style={styles.datePickerText}>
+                    {selectedDate.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                  </Text>
+                </Pressable>
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={selectedDate}
+                    mode="date"
+                    display="spinner"
+                    minimumDate={new Date()}
+                    themeVariant="dark"
+                    onChange={(_, date) => {
+                      setShowDatePicker(Platform.OS === "ios");
+                      if (date) {
+                        const updated = new Date(selectedDate);
+                        updated.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+                        setSelectedDate(updated);
+                      }
+                    }}
+                  />
+                )}
+              </>
+            )}
           </View>
           <View style={[styles.section, { flex: 1 }]}>
             <Text style={styles.sectionLabel}>Time</Text>
-            <TextInput
-              style={styles.titleInput}
-              placeholder="HH:MM"
-              placeholderTextColor={Colors.textMuted}
-              value={timeStr}
-              onChangeText={setTimeStr}
-              maxLength={5}
-            />
+            {Platform.OS === "web" ? (
+              <TextInput
+                style={styles.titleInput}
+                placeholder="HH:MM"
+                placeholderTextColor={Colors.textMuted}
+                value={`${String(selectedDate.getHours()).padStart(2, "0")}:${String(selectedDate.getMinutes()).padStart(2, "0")}`}
+                onChangeText={(text) => {
+                  const parts = text.split(":");
+                  if (parts.length === 2) {
+                    const d = new Date(selectedDate);
+                    d.setHours(parseInt(parts[0], 10) || 0, parseInt(parts[1], 10) || 0);
+                    if (!isNaN(d.getTime())) setSelectedDate(d);
+                  }
+                }}
+                maxLength={5}
+              />
+            ) : (
+              <>
+                <Pressable
+                  style={styles.datePickerBtn}
+                  onPress={() => { setShowTimePicker(true); Haptics.selectionAsync(); }}
+                >
+                  <Ionicons name="time-outline" size={16} color={EVENT_COLOR} />
+                  <Text style={styles.datePickerText}>
+                    {selectedDate.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                  </Text>
+                </Pressable>
+                {showTimePicker && (
+                  <DateTimePicker
+                    value={selectedDate}
+                    mode="time"
+                    display="spinner"
+                    themeVariant="dark"
+                    onChange={(_, date) => {
+                      setShowTimePicker(Platform.OS === "ios");
+                      if (date) {
+                        const updated = new Date(selectedDate);
+                        updated.setHours(date.getHours(), date.getMinutes());
+                        setSelectedDate(updated);
+                      }
+                    }}
+                  />
+                )}
+              </>
+            )}
           </View>
         </View>
 
@@ -275,11 +336,11 @@ export default function CreateEventScreen() {
         <Pressable
           style={({ pressed }) => [
             styles.submitBtn,
-            (!title.trim() || !eventType || !dateStr || !timeStr || !latitude || !longitude || !description.trim() || isSubmitting) && styles.submitBtnDisabled,
+            (!title.trim() || !eventType || !latitude || !longitude || !description.trim() || isSubmitting) && styles.submitBtnDisabled,
             pressed && { opacity: 0.85 },
           ]}
           onPress={handleSubmit}
-          disabled={isSubmitting || !title.trim() || !eventType || !dateStr || !timeStr || !latitude || !longitude || !description.trim()}
+          disabled={isSubmitting || !title.trim() || !eventType || !latitude || !longitude || !description.trim()}
         >
           {isSubmitting ? (
             <ActivityIndicator color={Colors.bg} />
@@ -379,6 +440,21 @@ const styles = StyleSheet.create({
     color: Colors.text,
     fontSize: 15,
     fontFamily: "Inter_400Regular",
+  },
+  datePickerBtn: {
+    backgroundColor: Colors.bgInput,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 14,
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 8,
+  },
+  datePickerText: {
+    color: Colors.text,
+    fontSize: 15,
+    fontFamily: "Inter_500Medium",
   },
   descInput: {
     backgroundColor: Colors.bgInput,

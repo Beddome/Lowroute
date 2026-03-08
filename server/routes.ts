@@ -444,9 +444,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid vote type" });
       }
       const hazard = await storage.voteOnHazard(req.session.userId!, req.params.id, voteType);
-      if (!hazard) return res.status(404).json({ message: "Hazard not found" });
       const repDelta = voteType === "confirm" ? 2 : voteType === "clear" ? 3 : 0;
       if (repDelta > 0) await storage.updateUserReputation(req.session.userId!, repDelta);
+      if (!hazard) return res.json({ deleted: true, message: "Hazard cleared by community" });
       res.json(hazard);
     } catch (err) {
       console.error(err);

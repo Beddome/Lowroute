@@ -23,7 +23,7 @@ A community-powered GPS and hazard-reporting app for low-clearance vehicles (low
 - **Background location tracking** — navigation continues when app is minimized
 - **Hazard proximity alerts** — vibration + visual + voice warning when within 200m of a hazard during navigation
 - **Automatic rerouting** — detects when user deviates >30m from route for 3+ position updates, auto-recalculates from current GPS position and selects safest route; 15s cooldown between reroutes; voice announcement + visual "Rerouting..." indicator
-- Community hazard reporting (10 hazard types, 4 severity tiers) with input validation
+- Community hazard reporting (10 hazard types, 4 severity tiers) with input validation; auto-delete after 10 unique "cleared" votes
 - Community validation: confirm, downvote, or mark hazards as cleared
 - Confidence scoring based on community votes
 - User accounts with reputation/XP system and badges

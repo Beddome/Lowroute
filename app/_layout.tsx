@@ -34,9 +34,8 @@ function RootLayoutNav() {
       <Stack.Screen
         name="report"
         options={{
-          presentation: "formSheet",
-          sheetAllowedDetents: [0.85, 1.0],
-          sheetGrabberVisible: true,
+          presentation: "fullScreenModal",
+          gestureEnabled: false,
           headerShown: false,
           contentStyle: { backgroundColor: Colors.bgCard },
         }}
@@ -84,9 +83,8 @@ function RootLayoutNav() {
       <Stack.Screen
         name="create-event"
         options={{
-          presentation: "formSheet",
-          sheetAllowedDetents: [0.85, 1.0],
-          sheetGrabberVisible: true,
+          presentation: "fullScreenModal",
+          gestureEnabled: false,
           headerShown: false,
           contentStyle: { backgroundColor: Colors.bgCard },
         }}

@@ -118,6 +118,13 @@ export async function voteOnHazard(
   const clearCount = clears?.count ?? 0;
   const total = confirmCount + downvoteCount + clearCount + 1;
   const confidence = Math.min(1, (confirmCount + 1) / total);
+
+  if (clearCount >= 10) {
+    await db.delete(schema.hazardVotes).where(eq(schema.hazardVotes.hazardId, hazardId));
+    await db.delete(schema.hazards).where(eq(schema.hazards.id, hazardId));
+    return null;
+  }
+
   const status: "active" | "cleared" = clearCount >= 3 ? "cleared" : "active";
 
   await db

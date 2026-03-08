@@ -37,11 +37,18 @@ function getEventIcon(eventType: string): string {
 }
 
 function EventMarker({ event, onPress }: { event: AppEvent; onPress: () => void }) {
+  const [tracksChanges, setTracksChanges] = useState(Platform.OS !== "web");
+  useEffect(() => {
+    if (Platform.OS !== "web") {
+      const timer = setTimeout(() => setTracksChanges(false), 500);
+      return () => clearTimeout(timer);
+    }
+  }, []);
   return (
     <Marker
       coordinate={{ latitude: event.lat, longitude: event.lng }}
       onPress={onPress}
-      tracksViewChanges={false}
+      tracksViewChanges={tracksChanges}
     >
       <View
         style={[

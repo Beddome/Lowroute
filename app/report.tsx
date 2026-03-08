@@ -159,7 +159,7 @@ export default function ReportScreen() {
         contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        bounces={false}
+        bounces={true}
       >
         <View style={styles.header}>
           <View style={styles.headerLeft}>
