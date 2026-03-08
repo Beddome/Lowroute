@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, real, timestamp, boolean, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, real, doublePrecision, timestamp, boolean, jsonb, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -155,6 +155,24 @@ export const eventRsvps = pgTable("event_rsvps", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const savedRoutes = pgTable("saved_routes", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  name: text("name").notNull(),
+  startLat: doublePrecision("start_lat").notNull(),
+  startLng: doublePrecision("start_lng").notNull(),
+  endLat: doublePrecision("end_lat").notNull(),
+  endLng: doublePrecision("end_lng").notNull(),
+  startAddress: text("start_address"),
+  endAddress: text("end_address"),
+  riskScore: integer("risk_score").notNull().default(0),
+  carProfileId: varchar("car_profile_id").references(() => carProfiles.id),
+  routeData: jsonb("route_data"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   email: true,
@@ -182,6 +200,8 @@ export type InsertCarProfile = typeof carProfiles.$inferInsert;
 export type Event = typeof events.$inferSelect;
 export type InsertEvent = typeof events.$inferInsert;
 export type EventRsvp = typeof eventRsvps.$inferSelect;
+export type SavedRoute = typeof savedRoutes.$inferSelect;
+export type InsertSavedRoute = typeof savedRoutes.$inferInsert;
 
 export const HAZARD_TYPES = [
   { value: "pothole", label: "Pothole" },

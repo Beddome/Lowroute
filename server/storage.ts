@@ -564,6 +564,39 @@ export async function getUpcomingEvents(limit = 20) {
     .limit(limit);
 }
 
+export async function saveRoute(data: {
+  userId: string;
+  name: string;
+  startLat: number;
+  startLng: number;
+  endLat: number;
+  endLng: number;
+  startAddress?: string | null;
+  endAddress?: string | null;
+  riskScore: number;
+  carProfileId?: string | null;
+  routeData?: any;
+}) {
+  const [route] = await db.insert(schema.savedRoutes).values(data).returning();
+  return route;
+}
+
+export async function getSavedRoutesByUser(userId: string) {
+  return db.select().from(schema.savedRoutes)
+    .where(eq(schema.savedRoutes.userId, userId))
+    .orderBy(desc(schema.savedRoutes.createdAt));
+}
+
+export async function getSavedRouteById(id: string) {
+  const [route] = await db.select().from(schema.savedRoutes).where(eq(schema.savedRoutes.id, id));
+  return route || null;
+}
+
+export async function deleteSavedRoute(id: string) {
+  const [deleted] = await db.delete(schema.savedRoutes).where(eq(schema.savedRoutes.id, id)).returning();
+  return deleted || null;
+}
+
 export async function getAllEvents() {
   return db.select({
     id: schema.events.id,

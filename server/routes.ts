@@ -1,12 +1,16 @@
+import express from "express";
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
 import session from "express-session";
 import ConnectPgSimple from "connect-pg-simple";
 import bcrypt from "bcryptjs";
 import { Pool } from "pg";
+import multer from "multer";
+import path from "node:path";
+import fs from "node:fs";
 import * as storage from "./storage";
 import { parseDateEndOfDayMST } from "./timezone";
-import { SEVERITY_TIERS } from "../shared/schema";
+import { SEVERITY_TIERS, CLEARANCE_MODES } from "../shared/schema";
 
 const loginAttempts = new Map<string, { count: number; lastAttempt: number }>();
 const RATE_LIMIT_MAX = 10;
@@ -106,7 +110,7 @@ async function requireAdmin(req: Request, res: Response, next: Function) {
   next();
 }
 
-function calculateRouteRisk(hazards: Array<{ severity: number; confidenceScore: number }>) {
+function calculateRouteRisk(hazards: Array<{ severity: number; confidenceScore: number }>, riskMultiplier = 1.0) {
   const SEVERITY_PENALTIES = [0, 5, 20, 100, 1000];
   let score = 0;
   const counts = [0, 0, 0, 0, 0];
@@ -114,7 +118,7 @@ function calculateRouteRisk(hazards: Array<{ severity: number; confidenceScore: 
   for (const h of hazards) {
     if (h.confidenceScore < 0.4) continue;
     const tier = Math.max(1, Math.min(4, h.severity));
-    score += SEVERITY_PENALTIES[tier];
+    score += Math.round(SEVERITY_PENALTIES[tier] * riskMultiplier);
     counts[tier]++;
   }
 
@@ -447,7 +451,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/routes", async (req: Request, res: Response) => {
     try {
-      const { startLat, startLng, endLat, endLng } = req.query;
+      const { startLat, startLng, endLat, endLng, carProfileId } = req.query;
       if (!startLat || !startLng || !endLat || !endLng) {
         return res.status(400).json({ message: "Start and end coordinates required" });
       }
@@ -459,6 +463,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if ([sLat, sLng, eLat, eLng].some(isNaN)) {
         return res.status(400).json({ message: "Invalid coordinates" });
+      }
+
+      let riskMultiplier = 1.0;
+      let carProfileInfo: { make: string; model: string; year: number; clearanceMode: string } | null = null;
+      if (carProfileId && typeof carProfileId === "string" && req.session.userId) {
+        const carProfile = await storage.getCarProfileById(carProfileId);
+        if (carProfile && carProfile.userId === req.session.userId) {
+          const modeData = CLEARANCE_MODES.find(m => m.value === carProfile.clearanceMode);
+          riskMultiplier = modeData?.riskMultiplier ?? 1.0;
+          carProfileInfo = {
+            make: carProfile.make,
+            model: carProfile.model,
+            year: carProfile.year,
+            clearanceMode: carProfile.clearanceMode,
+          };
+        }
       }
 
       const allHazards = await storage.getAllActiveHazards();
@@ -480,7 +500,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const routes = osrmRoutes.slice(0, 3).map((osrmRoute, i) => {
         const polyline = decodePolyline(osrmRoute.geometry);
         const routeHazards = hazardsNearPolyline(allHazards, polyline);
-        const risk = calculateRouteRisk(routeHazards);
+        const risk = calculateRouteRisk(routeHazards, riskMultiplier);
         const label = ROUTE_LABELS[i] || { id: `route_${i}`, label: `Route ${i + 1}`, description: "Alternative route" };
         const estimatedMinutes = Math.round(osrmRoute.duration / 60);
         const distanceKm = Math.round(osrmRoute.distance / 100) / 10;
@@ -516,10 +536,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      res.json(routes);
+      res.json({ routes, carProfile: carProfileInfo, riskMultiplier });
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Route calculation failed" });
+    }
+  });
+
+  app.post("/api/routes/save", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { name, startLat, startLng, endLat, endLng, startAddress, endAddress, riskScore, carProfileId, routeData } = req.body;
+      if (!name || typeof name !== "string" || name.trim().length < 1 || name.trim().length > 100) {
+        return res.status(400).json({ message: "Name must be 1-100 characters" });
+      }
+      if (startLat == null || startLng == null || endLat == null || endLng == null) {
+        return res.status(400).json({ message: "Start and end coordinates are required" });
+      }
+      const route = await storage.saveRoute({
+        userId: req.session.userId!,
+        name: name.trim(),
+        startLat: parseFloat(startLat),
+        startLng: parseFloat(startLng),
+        endLat: parseFloat(endLat),
+        endLng: parseFloat(endLng),
+        startAddress: startAddress || null,
+        endAddress: endAddress || null,
+        riskScore: parseInt(riskScore) || 0,
+        carProfileId: carProfileId || null,
+        routeData: routeData || null,
+      });
+      res.json(route);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to save route" });
+    }
+  });
+
+  app.get("/api/routes/saved", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const routes = await storage.getSavedRoutesByUser(req.session.userId!);
+      res.json(routes);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch saved routes" });
+    }
+  });
+
+  app.delete("/api/routes/saved/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const route = await storage.getSavedRouteById(req.params.id);
+      if (!route) return res.status(404).json({ message: "Route not found" });
+      if (route.userId !== req.session.userId) {
+        return res.status(403).json({ message: "Not your route" });
+      }
+      await storage.deleteSavedRoute(req.params.id);
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to delete route" });
     }
   });
 
@@ -1043,6 +1117,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error(err);
       res.status(500).json({ message: "Failed to update event status" });
     }
+  });
+
+  const uploadsDir = path.resolve(process.cwd(), "public", "uploads");
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+
+  const uploadStorage = multer.diskStorage({
+    destination: function (_req, _file, cb) {
+      cb(null, uploadsDir);
+    },
+    filename: function (_req, file, cb) {
+      const uniqueSuffix = Date.now().toString() + "-" + Math.random().toString(36).substr(2, 9);
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, uniqueSuffix + ext);
+    },
+  });
+
+  const upload = multer({
+    storage: uploadStorage,
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      const allowed = [".jpg", ".jpeg", ".png", ".webp"];
+      const ext = path.extname(file.originalname).toLowerCase();
+      if (allowed.includes(ext)) {
+        cb(null, true);
+      } else {
+        cb(new Error("Only jpg, png, and webp files are allowed"));
+      }
+    },
+  });
+
+  const express = require("express");
+  app.use("/uploads", express.static(uploadsDir));
+
+  app.post("/api/upload", requireAuth, upload.single("photo"), (req: Request, res: Response) => {
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+    const photoUrl = `/uploads/${req.file.filename}`;
+    res.json({ url: photoUrl });
   });
 
   const httpServer = createServer(app);

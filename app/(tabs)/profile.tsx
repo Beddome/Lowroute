@@ -12,10 +12,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { Colors } from "@/constants/colors";
-import { formatMSTDateClient, CarProfile, SUSPENSION_TYPES, CLEARANCE_MODES } from "@/shared/types";
+import { formatMSTDateClient, CarProfile, SavedRoute, SUSPENSION_TYPES, CLEARANCE_MODES } from "@/shared/types";
+import { apiRequest, queryClient } from "@/lib/query-client";
 
 const BADGES = [
   { id: "first_report", icon: "flag" as const, label: "First Report", desc: "Submitted your first hazard", minRep: 10, color: Colors.accent },
@@ -218,6 +219,19 @@ export default function ProfileScreen() {
     enabled: !!user,
   });
 
+  const { data: savedRoutes = [] } = useQuery<SavedRoute[]>({
+    queryKey: ["/api/routes/saved"],
+    enabled: !!user,
+  });
+
+  const deleteRouteMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/routes/saved/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/routes/saved"] });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+  });
+
   const earnedBadges = BADGES.filter((b) => user.reputation >= b.minRep);
   const unearned = BADGES.filter((b) => user.reputation < b.minRep);
 
@@ -289,6 +303,59 @@ export default function ProfileScreen() {
             cars.map((car) => <GarageCard key={car.id} car={car} />)
           )}
         </View>
+
+        {/* Saved Routes */}
+        {savedRoutes.length > 0 && (
+          <View style={styles.card}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <Text style={styles.cardTitle}>Saved Routes</Text>
+              <View style={styles.sectionCount}>
+                <Text style={styles.sectionCountText}>{savedRoutes.length}</Text>
+              </View>
+            </View>
+            {savedRoutes.map((route) => (
+              <View key={route.id} style={styles.savedRouteCard}>
+                <Pressable
+                  style={{ flex: 1 }}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    router.push({ pathname: "/(tabs)", params: {
+                      loadRoute: route.id,
+                      startLat: String(route.startLat),
+                      startLng: String(route.startLng),
+                      endLat: String(route.endLat),
+                      endLng: String(route.endLng),
+                      startAddr: route.startAddress || "",
+                      endAddr: route.endAddress || "",
+                    }});
+                  }}
+                >
+                  <Text style={styles.savedRouteName} numberOfLines={1}>{route.name}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                      <Ionicons name="speedometer-outline" size={12} color={Colors.textMuted} />
+                      <Text style={styles.savedRouteDetail}>Risk: {route.riskScore}</Text>
+                    </View>
+                    {route.startAddress && (
+                      <Text style={styles.savedRouteDetail} numberOfLines={1}>
+                        {route.startAddress} → {route.endAddress || "Dest"}
+                      </Text>
+                    )}
+                  </View>
+                </Pressable>
+                <Pressable
+                  hitSlop={8}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    deleteRouteMutation.mutate(route.id);
+                  }}
+                >
+                  <Ionicons name="trash-outline" size={18} color={Colors.error} />
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* Badges */}
         {earnedBadges.length > 0 && (
@@ -539,4 +606,25 @@ const styles = StyleSheet.create({
   tipRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   tipText: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular", color: Colors.text },
   tipXP: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.tier1 },
+
+  sectionCount: {
+    backgroundColor: Colors.accent + "22",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  sectionCountText: { fontSize: 12, fontFamily: "Inter_700Bold", color: Colors.accent },
+  savedRouteCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: Colors.bgElevated,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  savedRouteName: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: Colors.text },
+  savedRouteDetail: { fontSize: 11, fontFamily: "Inter_400Regular", color: Colors.textMuted },
 });

@@ -125,6 +125,22 @@ export interface AppEvent {
   hasRsvped?: boolean;
 }
 
+export interface SavedRoute {
+  id: string;
+  userId: string;
+  name: string;
+  startLat: number;
+  startLng: number;
+  endLat: number;
+  endLng: number;
+  startAddress: string | null;
+  endAddress: string | null;
+  riskScore: number;
+  carProfileId: string | null;
+  routeData: any;
+  createdAt: string | Date;
+}
+
 export const EVENT_TYPES = [
   { value: "car_meet", label: "Car Meet", icon: "people" },
   { value: "show_and_shine", label: "Show & Shine", icon: "trophy" },

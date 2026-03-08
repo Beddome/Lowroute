@@ -16,12 +16,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import * as Haptics from "expo-haptics";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { SEVERITY_TIERS, HAZARD_TYPES, EVENT_TYPES } from "@/shared/types";
-import type { Hazard, AppEvent } from "@/shared/types";
-import { getApiUrl } from "@/lib/query-client";
+import type { Hazard, AppEvent, CarProfile } from "@/shared/types";
+import { getApiUrl, apiRequest, queryClient } from "@/lib/query-client";
 import { fetch } from "expo/fetch";
 import { useLocation } from "@/contexts/LocationContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -144,6 +144,7 @@ const PROXIMITY_ALERT_METERS = 200;
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
+  const params = useLocalSearchParams<{ loadRoute?: string; startLat?: string; startLng?: string; endLat?: string; endLng?: string; startAddr?: string; endAddr?: string }>();
   const { user } = useAuth();
   const { currentPosition, heading, speed, isTracking, startTracking, stopTracking, startBackgroundTracking, stopBackgroundTracking } = useLocation();
 
@@ -176,10 +177,40 @@ export default function MapScreen() {
   const alertedHazardsRef = useRef<Set<string>>(new Set());
   const navStartTimeRef = useRef<number>(0);
   const [showEvents, setShowEvents] = useState(true);
+  const [activeCarProfile, setActiveCarProfile] = useState<CarProfile | null>(null);
 
   const { data: hazards = [] } = useQuery<Hazard[]>({
     queryKey: ["/api/hazards"],
   });
+
+  const { data: carProfiles = [] } = useQuery<CarProfile[]>({
+    queryKey: ["/api/cars"],
+    enabled: !!user,
+  });
+
+  useEffect(() => {
+    if (carProfiles.length > 0) {
+      const defaultCar = carProfiles.find((c) => c.isDefault) || carProfiles[0];
+      setActiveCarProfile(defaultCar);
+    } else {
+      setActiveCarProfile(null);
+    }
+  }, [carProfiles]);
+
+  useEffect(() => {
+    if (params.loadRoute && params.startLat && params.startLng && params.endLat && params.endLng) {
+      const sLat = parseFloat(params.startLat);
+      const sLng = parseFloat(params.startLng);
+      const eLat = parseFloat(params.endLat);
+      const eLng = parseFloat(params.endLng);
+      if (!isNaN(sLat) && !isNaN(sLng) && !isNaN(eLat) && !isNaN(eLng)) {
+        setOriginText(params.startAddr || `${sLat.toFixed(4)}, ${sLng.toFixed(4)}`);
+        setDestText(params.endAddr || `${eLat.toFixed(4)}, ${eLng.toFixed(4)}`);
+        setOriginCoords({ lat: sLat, lng: sLng });
+        setDestCoords({ lat: eLat, lng: eLng });
+      }
+    }
+  }, [params.loadRoute]);
 
   const eventsQueryKey = [
     "/api/events",
@@ -339,6 +370,9 @@ export default function MapScreen() {
       url.searchParams.set("startLng", String(originCoords.lng));
       url.searchParams.set("endLat", String(destCoords.lat));
       url.searchParams.set("endLng", String(destCoords.lng));
+      if (activeCarProfile?.id) {
+        url.searchParams.set("carProfileId", activeCarProfile.id);
+      }
       const res = await fetch(url.toString(), { credentials: "include" });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ message: "Route calculation failed" }));
@@ -346,12 +380,13 @@ export default function MapScreen() {
         return;
       }
       const data = await res.json();
-      if (!Array.isArray(data) || data.length === 0) {
+      const routeList = data.routes || data;
+      if (!Array.isArray(routeList) || routeList.length === 0) {
         Alert.alert("No Routes", "No routes found between these locations.");
         return;
       }
-      setRoutes(data);
-      setSelectedRouteIdx(data.length > 1 ? 1 : 0);
+      setRoutes(routeList);
+      setSelectedRouteIdx(routeList.length > 1 ? 1 : 0);
       setPanelOpen(true);
       Animated.spring(panelExpanded, { toValue: 1, useNativeDriver: false }).start();
 
@@ -374,13 +409,67 @@ export default function MapScreen() {
     } finally {
       setIsRoutingLoading(false);
     }
-  }, [originCoords, destCoords]);
+  }, [originCoords, destCoords, activeCarProfile]);
 
   useEffect(() => {
     if (originCoords && destCoords) {
       calculateRoutes();
     }
   }, [originCoords, destCoords]);
+
+  const handleSaveRoute = useCallback(async () => {
+    if (!user) {
+      Alert.alert("Sign In", "Sign in to save routes.");
+      return;
+    }
+    const sel = routes[selectedRouteIdx];
+    if (!sel || !originCoords || !destCoords) return;
+    const defaultName = `${originText || "Start"} → ${destText || "End"}`;
+    Alert.prompt
+      ? Alert.prompt("Save Route", "Name this route:", async (name: string) => {
+          if (!name?.trim()) return;
+          try {
+            await apiRequest("POST", "/api/routes/save", {
+              name: name.trim(),
+              startLat: originCoords.lat,
+              startLng: originCoords.lng,
+              endLat: destCoords.lat,
+              endLng: destCoords.lng,
+              startAddress: originText || null,
+              endAddress: destText || null,
+              riskScore: sel.riskScore,
+              carProfileId: activeCarProfile?.id || null,
+              routeData: { waypoints: sel.waypoints?.slice(0, 200) },
+            });
+            queryClient.invalidateQueries({ queryKey: ["/api/routes/saved"] });
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            Alert.alert("Saved!", "Route saved to your profile.");
+          } catch {
+            Alert.alert("Error", "Could not save route.");
+          }
+        }, "plain-text", defaultName)
+      : (async () => {
+          try {
+            await apiRequest("POST", "/api/routes/save", {
+              name: defaultName,
+              startLat: originCoords.lat,
+              startLng: originCoords.lng,
+              endLat: destCoords.lat,
+              endLng: destCoords.lng,
+              startAddress: originText || null,
+              endAddress: destText || null,
+              riskScore: sel.riskScore,
+              carProfileId: activeCarProfile?.id || null,
+              routeData: { waypoints: sel.waypoints?.slice(0, 200) },
+            });
+            queryClient.invalidateQueries({ queryKey: ["/api/routes/saved"] });
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            Alert.alert("Saved!", "Route saved to your profile.");
+          } catch {
+            Alert.alert("Error", "Could not save route.");
+          }
+        })();
+  }, [routes, selectedRouteIdx, originCoords, destCoords, originText, destText, user, activeCarProfile]);
 
   const clearRoute = () => {
     if (isNavigating) endNavigation();
@@ -699,6 +788,8 @@ export default function MapScreen() {
                 Haptics.selectionAsync();
               }}
               onStartNav={startNavigation}
+              carProfile={activeCarProfile}
+              onSaveRoute={handleSaveRoute}
             />
           ) : (
             <TierLegend hazards={hazards} showEvents={showEvents} onToggleEvents={() => setShowEvents((v) => !v)} eventCount={events.length} />
@@ -714,11 +805,15 @@ function RoutePanel({
   selectedIdx,
   onSelect,
   onStartNav,
+  carProfile,
+  onSaveRoute,
 }: {
   routes: RouteOption[];
   selectedIdx: number;
   onSelect: (i: number) => void;
   onStartNav: () => void;
+  carProfile: CarProfile | null;
+  onSaveRoute: () => void;
 }) {
   return (
     <View style={styles.routePanel}>
@@ -732,6 +827,14 @@ function RoutePanel({
           <Text style={styles.startNavText}>Navigate</Text>
         </Pressable>
       </View>
+      {carProfile && (
+        <View style={styles.carProfileBadge}>
+          <Ionicons name="car-sport" size={14} color={Colors.accent} />
+          <Text style={styles.carProfileBadgeText}>
+            Risk for: {carProfile.year} {carProfile.make} {carProfile.model}
+          </Text>
+        </View>
+      )}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }}>
         {routes.map((route, i) => {
           const tier = route.highestSeverity > 0 ? SEVERITY_TIERS[route.highestSeverity - 1] : null;
@@ -798,6 +901,13 @@ function RoutePanel({
               {routes[selectedIdx].estimatedMinutes} base · +{routes[selectedIdx].timePenaltyMinutes}m risk
             </Text>
           </View>
+          <Pressable
+            style={({ pressed }) => [styles.saveRouteBtn, pressed && { opacity: 0.7 }]}
+            onPress={onSaveRoute}
+          >
+            <Ionicons name="bookmark-outline" size={14} color={Colors.accent} />
+            <Text style={styles.saveRouteBtnText}>Save</Text>
+          </Pressable>
         </View>
       )}
     </View>
@@ -1053,6 +1163,38 @@ const styles = StyleSheet.create({
   },
 
   routePanel: { padding: 16 },
+  carProfileBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: Colors.accent + "18",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    marginTop: 6,
+    alignSelf: "flex-start",
+  },
+  carProfileBadgeText: {
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
+    color: Colors.accent,
+  },
+  saveRouteBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: Colors.accent + "18",
+    borderWidth: 1,
+    borderColor: Colors.accent + "44",
+  },
+  saveRouteBtnText: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.accent,
+  },
   routePanelHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   routePanelTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.textSecondary, textTransform: "uppercase" as const, letterSpacing: 0.8 },
   startNavButton: {

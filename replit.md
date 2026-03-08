@@ -25,6 +25,10 @@ A community-powered GPS and hazard-reporting app for low-clearance vehicles (low
 - User accounts with reputation/XP system and badges
 - **Car Profile / Garage system** — add/edit/delete vehicles with make, model, year, ride height, suspension type, clearance mode, front lip, wheel size; set a default car
 - **Events / Meet-ups** — create car meets, cruises, shows, photo spots with RSVP; purple event pins on map; admin event management (cancel/delete)
+- **Personalized route risk scoring** — default car profile's clearance mode applies risk multipliers (1.0x normal to 2.0x show car) to route hazard penalties
+- **Hazard photo uploads** — camera/gallery photo support on hazard reports via expo-image-picker + multer; photos displayed in hazard detail
+- **Interactive web map** — Leaflet-based map on web with dark CartoDB tiles, hazard/event markers, search, routing, and right-click to report
+- **Route saving** — save calculated routes to profile, view/delete saved routes, re-load on map
 - **Admin panel** with stats dashboard, hazard management, user role management, promo code management, event management
 - **Subscription system** with Free and Pro tiers (Pro gates live navigation + hazard alerts)
 - **Security hardening**: rate limiting on auth endpoints, input validation, env-configurable admin credentials
@@ -112,6 +116,7 @@ metro.config.js        # Custom resolver to stub react-native-maps on web
 - `car_profiles`: id, user_id, make, model, year, ride_height, suspension_type (enum), front_lip, wheel_size, clearance_mode (enum), is_default, created_at
 - `events`: id, creator_id, title, description, event_type (enum), lat, lng, event_date, max_attendees, rsvp_count, status, created_at
 - `event_rsvps`: id, event_id, user_id, created_at
+- `saved_routes`: id, user_id, name, start_lat, start_lng, end_lat, end_lng, start_address, end_address, risk_score, car_profile_id, route_data (jsonb), created_at
 - `session` (auto-created by connect-pg-simple)
 
 ## API Endpoints
@@ -121,6 +126,8 @@ Hazards: GET /api/hazards, POST /api/hazards (validated), GET /api/hazards/:id, 
 Routes: GET /api/routes (OSRM-powered)
 Cars: GET /api/cars, POST /api/cars, PUT /api/cars/:id, DELETE /api/cars/:id
 Events: GET /api/events (bbox filter), GET /api/events/:id, POST /api/events, PUT /api/events/:id, DELETE /api/events/:id, POST /api/events/:id/rsvp
+Saved Routes: POST /api/routes/save, GET /api/routes/saved, DELETE /api/routes/saved/:id
+Upload: POST /api/upload (multipart, photo field, max 5MB)
 Admin: GET /api/admin/stats, GET /api/admin/users, PATCH /api/admin/users/:id/role, DELETE /api/admin/hazards/:id
 Admin Promos: POST /api/admin/promo-codes, GET /api/admin/promo-codes, PATCH /api/admin/promo-codes/:id/deactivate
 Admin Events: GET /api/admin/events, PATCH /api/admin/events/:id/status, DELETE /api/admin/events/:id
@@ -137,5 +144,8 @@ Admin user seeded on startup (configurable via env vars).
 - `react-native-maps@1.18.0` — pinned for Expo Go compatibility
 - `react-native-purchases` — RevenueCat SDK for subscriptions
 - `expo-task-manager` — background location task registration
+- `multer` — file upload middleware for hazard photos
+- `leaflet` — interactive web map (web platform only)
+- `expo-image-picker` — camera/gallery photo selection for hazard reports
 - `bcryptjs` — password hashing
 - `express-session` + `connect-pg-simple` — session management

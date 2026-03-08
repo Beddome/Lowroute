@@ -6,6 +6,9 @@ import {
   Pressable,
   ScrollView,
   ActivityIndicator,
+  Image,
+  Modal,
+  Dimensions,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -14,7 +17,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { SEVERITY_TIERS, HAZARD_TYPES } from "@/shared/types";
 import type { Hazard } from "@/shared/types";
-import { apiRequest } from "@/lib/query-client";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -53,11 +56,18 @@ const confStyles = StyleSheet.create({
   fill: { height: "100%", borderRadius: 3 },
 });
 
+function resolvePhotoUrl(photoUrl: string): string {
+  if (photoUrl.startsWith("http")) return photoUrl;
+  const base = getApiUrl();
+  return new URL(photoUrl, base).toString();
+}
+
 export default function HazardDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
+  const [photoExpanded, setPhotoExpanded] = useState(false);
 
   const { data: hazard, isLoading } = useQuery<Hazard>({
     queryKey: [`/api/hazards/${id}`],
@@ -110,13 +120,14 @@ export default function HazardDetailScreen() {
     hazard.severity >= 2 ? "alert-circle-outline" :
     "information-circle-outline";
 
+  const screenWidth = Dimensions.get("window").width;
+
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
       showsVerticalScrollIndicator={false}
     >
-      {/* Header */}
       <View style={styles.topRow}>
         <View style={[styles.severityBadge, { backgroundColor: tier?.bg, borderColor: tier?.color }]}>
           <Ionicons name={tierIcon} size={16} color={tier?.color} />
@@ -139,7 +150,49 @@ export default function HazardDetailScreen() {
         </View>
       )}
 
-      {/* Severity detail */}
+      {hazard.photoUrl && (
+        <Pressable
+          style={styles.photoCard}
+          onPress={() => setPhotoExpanded(true)}
+        >
+          <Image
+            source={{ uri: resolvePhotoUrl(hazard.photoUrl) }}
+            style={styles.photoThumbnail}
+            resizeMode="cover"
+          />
+          <View style={styles.photoExpandHint}>
+            <Ionicons name="expand-outline" size={16} color={Colors.white} />
+          </View>
+        </Pressable>
+      )}
+
+      {hazard.photoUrl && (
+        <Modal
+          visible={photoExpanded}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setPhotoExpanded(false)}
+        >
+          <Pressable
+            style={styles.modalOverlay}
+            onPress={() => setPhotoExpanded(false)}
+          >
+            <Pressable
+              style={styles.modalCloseBtn}
+              onPress={() => setPhotoExpanded(false)}
+              hitSlop={12}
+            >
+              <Ionicons name="close-circle" size={32} color={Colors.white} />
+            </Pressable>
+            <Image
+              source={{ uri: resolvePhotoUrl(hazard.photoUrl) }}
+              style={[styles.modalImage, { width: screenWidth - 32 }]}
+              resizeMode="contain"
+            />
+          </Pressable>
+        </Modal>
+      )}
+
       {tier && (
         <View style={[styles.tierDetailCard, { borderColor: tier.color, backgroundColor: tier.bg }]}>
           <View style={styles.tierDetailHeader}>
@@ -150,13 +203,11 @@ export default function HazardDetailScreen() {
         </View>
       )}
 
-      {/* Description */}
       <View style={styles.card}>
         <Text style={styles.cardLabel}>Report Details</Text>
         <Text style={styles.description}>{hazard.description}</Text>
       </View>
 
-      {/* Location & time */}
       <View style={styles.metaRow}>
         <View style={styles.metaItem}>
           <Ionicons name="location-outline" size={14} color={Colors.textMuted} />
@@ -170,7 +221,6 @@ export default function HazardDetailScreen() {
         </View>
       </View>
 
-      {/* Confidence meter */}
       <View style={styles.card}>
         <ConfidenceMeter score={hazard.confidenceScore} />
         <View style={styles.voteStats}>
@@ -185,7 +235,6 @@ export default function HazardDetailScreen() {
         </View>
       </View>
 
-      {/* Action buttons */}
       {!isCleared ? (
         <View style={styles.actionCard}>
           <Text style={styles.cardLabel}>Community Actions</Text>
@@ -276,6 +325,43 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   clearedText: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: Colors.tier1 },
+
+  photoCard: {
+    borderRadius: 14,
+    overflow: "hidden",
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    position: "relative",
+  },
+  photoThumbnail: {
+    width: "100%",
+    height: 200,
+  },
+  photoExpandHint: {
+    position: "absolute",
+    bottom: 8,
+    right: 8,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    borderRadius: 8,
+    padding: 6,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.92)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalCloseBtn: {
+    position: "absolute",
+    top: 60,
+    right: 20,
+    zIndex: 10,
+  },
+  modalImage: {
+    height: "70%",
+    borderRadius: 8,
+  },
 
   tierDetailCard: {
     borderRadius: 14,

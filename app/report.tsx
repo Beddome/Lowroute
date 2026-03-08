@@ -9,16 +9,20 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { Colors } from "@/constants/colors";
 import { HAZARD_TYPES, SEVERITY_TIERS } from "@/shared/types";
-import { apiRequest } from "@/lib/query-client";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { fetch } from "expo/fetch";
+import { File } from "expo-file-system";
 
 export default function ReportScreen() {
   const { lat, lng } = useLocalSearchParams<{ lat: string; lng: string }>();
@@ -32,9 +36,79 @@ export default function ReportScreen() {
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const latitude = parseFloat(lat ?? "34.0522");
   const longitude = parseFloat(lng ?? "-118.2437");
+
+  const pickImage = async (useCamera: boolean) => {
+    try {
+      if (useCamera) {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== "granted") {
+          setError("Camera permission is required to take photos");
+          return;
+        }
+      }
+
+      const result = useCamera
+        ? await ImagePicker.launchCameraAsync({
+            mediaTypes: ["images"],
+            allowsEditing: true,
+            quality: 0.7,
+          })
+        : await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ["images"],
+            allowsEditing: true,
+            quality: 0.7,
+          });
+
+      if (!result.canceled && result.assets[0]) {
+        setPhotoUri(result.assets[0].uri);
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+    } catch (e: any) {
+      setError("Failed to pick image");
+    }
+  };
+
+  const uploadPhoto = async (): Promise<string | null> => {
+    if (!photoUri) return null;
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+
+      if (Platform.OS === "web") {
+        const response = await globalThis.fetch(photoUri);
+        const blob = await response.blob();
+        formData.append("photo", blob, "photo.jpg");
+      } else {
+        const file = new File(photoUri);
+        formData.append("photo", file as any);
+      }
+
+      const baseUrl = getApiUrl();
+      const url = new URL("/api/upload", baseUrl);
+      const res = await fetch(url.toString(), {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Upload failed");
+      }
+
+      const data = await res.json() as { url: string };
+      return data.url;
+    } catch (e: any) {
+      throw new Error("Photo upload failed: " + (e.message || "Unknown error"));
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!user) {
@@ -48,6 +122,11 @@ export default function ReportScreen() {
     setIsSubmitting(true);
     setError("");
     try {
+      let photoUrl: string | null = null;
+      if (photoUri) {
+        photoUrl = await uploadPhoto();
+      }
+
       await apiRequest("POST", "/api/hazards", {
         lat: latitude,
         lng: longitude,
@@ -55,6 +134,7 @@ export default function ReportScreen() {
         severity: selectedSeverity,
         title: title.trim(),
         description: description.trim(),
+        photoUrl,
       });
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       queryClient.invalidateQueries({ queryKey: ["/api/hazards"] });
@@ -77,7 +157,6 @@ export default function ReportScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <View style={styles.headerIcon}>
@@ -113,7 +192,6 @@ export default function ReportScreen() {
           </View>
         ) : null}
 
-        {/* Hazard Type */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Hazard Type</Text>
           <View style={styles.typeGrid}>
@@ -142,7 +220,6 @@ export default function ReportScreen() {
           </View>
         </View>
 
-        {/* Severity Tier */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Severity Tier</Text>
           <View style={styles.tierList}>
@@ -178,7 +255,6 @@ export default function ReportScreen() {
           </View>
         </View>
 
-        {/* Title */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Title</Text>
           <TextInput
@@ -191,7 +267,6 @@ export default function ReportScreen() {
           />
         </View>
 
-        {/* Description */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Description</Text>
           <TextInput
@@ -208,7 +283,42 @@ export default function ReportScreen() {
           <Text style={styles.charCount}>{description.length}/500</Text>
         </View>
 
-        {/* Submit */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Photo (Optional)</Text>
+          {photoUri ? (
+            <View style={styles.photoPreview}>
+              <Image source={{ uri: photoUri }} style={styles.photoImage} />
+              <Pressable
+                style={styles.photoRemoveBtn}
+                onPress={() => {
+                  setPhotoUri(null);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
+                hitSlop={8}
+              >
+                <Ionicons name="close-circle" size={26} color={Colors.tier4} />
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.photoActions}>
+              <Pressable
+                style={styles.photoBtn}
+                onPress={() => pickImage(true)}
+              >
+                <Ionicons name="camera" size={22} color={Colors.accent} />
+                <Text style={styles.photoBtnText}>Camera</Text>
+              </Pressable>
+              <Pressable
+                style={styles.photoBtn}
+                onPress={() => pickImage(false)}
+              >
+                <Ionicons name="images" size={22} color={Colors.accent} />
+                <Text style={styles.photoBtnText}>Gallery</Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
+
         <Pressable
           style={({ pressed }) => [
             styles.submitBtn,
@@ -216,9 +326,9 @@ export default function ReportScreen() {
             pressed && { opacity: 0.85 },
           ]}
           onPress={handleSubmit}
-          disabled={isSubmitting}
+          disabled={isSubmitting || isUploading}
         >
-          {isSubmitting ? (
+          {isSubmitting || isUploading ? (
             <ActivityIndicator color={Colors.bg} />
           ) : (
             <>
@@ -356,6 +466,46 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     textAlign: "right",
     marginTop: 4,
+  },
+
+  photoActions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  photoBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    height: 52,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderStyle: "dashed",
+    backgroundColor: Colors.bgElevated,
+  },
+  photoBtnText: {
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
+    color: Colors.accent,
+  },
+  photoPreview: {
+    position: "relative",
+    borderRadius: 12,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  photoImage: {
+    width: "100%",
+    height: 200,
+    borderRadius: 12,
+  },
+  photoRemoveBtn: {
+    position: "absolute",
+    top: 8,
+    right: 8,
   },
 
   submitBtn: {
