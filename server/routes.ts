@@ -1459,11 +1459,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Marketplace routes
   app.get("/api/marketplace", async (req: Request, res: Response) => {
     try {
-      const { category, condition, search, lat, lng, radius, priceMin, priceMax, sort } = req.query;
+      const { category, condition, search, lat, lng, radius, priceMin, priceMax, sort, shippingOption, sellerId } = req.query;
       const filters: any = {};
       if (category && typeof category === "string") filters.category = category;
       if (condition && typeof condition === "string") filters.condition = condition;
       if (search && typeof search === "string") filters.search = search;
+      if (shippingOption && typeof shippingOption === "string") {
+        const validShippingFilters = ["pickup_only", "shipping_available", "shipping_only"];
+        if (validShippingFilters.includes(shippingOption)) {
+          filters.shippingOption = shippingOption;
+        }
+      }
+      if (sellerId && typeof sellerId === "string") filters.sellerId = sellerId;
       if (lat && lng) {
         filters.lat = parseFloat(lat as string);
         filters.lng = parseFloat(lng as string);
@@ -1483,9 +1490,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/marketplace", requireAuth, async (req: Request, res: Response) => {
     try {
-      const { title, description, price, category, condition, lat, lng, city, photos } = req.body;
+      const { title, description, price, category, condition, lat, lng, city, photos, shippingOption } = req.body;
       if (!title || !description || price == null || !category || !condition || lat == null || lng == null) {
         return res.status(400).json({ message: "Title, description, price, category, condition, and location are required" });
+      }
+      const validShipping = ["pickup_only", "shipping_available", "shipping_only"];
+      if (shippingOption && !validShipping.includes(shippingOption)) {
+        return res.status(400).json({ message: "Invalid shipping option" });
       }
       if (typeof title !== "string" || title.trim().length < 3 || title.trim().length > 100) {
         return res.status(400).json({ message: "Title must be 3-100 characters" });
@@ -1524,6 +1535,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lng: parsedLng,
         city: city || null,
         photos: Array.isArray(photos) ? photos : [],
+        shippingOption: shippingOption || "pickup_only",
       });
       res.json(listing);
     } catch (err) {
@@ -1550,7 +1562,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (listing.sellerId !== req.session.userId) {
         return res.status(403).json({ message: "Not your listing" });
       }
-      const { title, description, price, category, condition, photos, status } = req.body;
+      const { title, description, price, category, condition, photos, status, shippingOption } = req.body;
       const updates: any = {};
       if (title !== undefined) {
         if (typeof title !== "string" || title.trim().length < 3 || title.trim().length > 100) {
@@ -1597,6 +1609,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ message: "Invalid status" });
         }
         updates.status = status;
+      }
+      if (shippingOption !== undefined) {
+        const validShipping = ["pickup_only", "shipping_available", "shipping_only"];
+        if (!validShipping.includes(shippingOption)) {
+          return res.status(400).json({ message: "Invalid shipping option" });
+        }
+        updates.shippingOption = shippingOption;
       }
       const updated = await storage.updateMarketplaceListing(req.params.id, updates);
       res.json(updated);
@@ -1650,6 +1669,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
         cb(new Error("Only jpg, png, and webp files are allowed"));
       }
     },
+  });
+
+  // ===== MESSAGING ROUTES =====
+  app.post("/api/messages", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { receiverId, listingId, content } = req.body;
+      if (!receiverId || !content) {
+        return res.status(400).json({ message: "Receiver and content are required" });
+      }
+      if (typeof content !== "string" || content.trim().length < 1 || content.trim().length > 2000) {
+        return res.status(400).json({ message: "Message must be 1-2000 characters" });
+      }
+      if (receiverId === req.session.userId) {
+        return res.status(400).json({ message: "Cannot message yourself" });
+      }
+      const receiver = await storage.getUserById(receiverId);
+      if (!receiver) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      if (listingId) {
+        const listing = await storage.getMarketplaceListingById(listingId);
+        if (!listing) {
+          return res.status(404).json({ message: "Listing not found" });
+        }
+      }
+      const msg = await storage.sendMessage({
+        senderId: req.session.userId!,
+        receiverId,
+        listingId: listingId || null,
+        content: content.trim(),
+      });
+      res.json(msg);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to send message" });
+    }
+  });
+
+  app.get("/api/messages/conversations", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const conversations = await storage.getConversations(req.session.userId!);
+      res.json(conversations);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch conversations" });
+    }
+  });
+
+  app.get("/api/messages/unread-count", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const count = await storage.getUnreadCount(req.session.userId!);
+      res.json({ count });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch unread count" });
+    }
+  });
+
+  app.get("/api/messages/:userId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const listingId = req.query.listingId as string | undefined;
+      const messages = await storage.getMessages(
+        req.session.userId!,
+        req.params.userId,
+        listingId || null
+      );
+      res.json(messages);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch messages" });
+    }
+  });
+
+  app.patch("/api/messages/read", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { otherUserId, listingId } = req.body;
+      if (!otherUserId) {
+        return res.status(400).json({ message: "otherUserId is required" });
+      }
+      await storage.markMessagesRead(req.session.userId!, otherUserId, listingId || null);
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to mark messages as read" });
+    }
   });
 
   const express = require("express");

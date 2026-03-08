@@ -9,24 +9,28 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  Platform,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
+import MapView, { Circle, PROVIDER_DEFAULT } from "react-native-maps";
 import { Colors } from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
 import {
   LISTING_CATEGORIES,
   LISTING_CONDITIONS,
+  SHIPPING_OPTIONS,
   formatMSTClient,
 } from "@/shared/types";
 import type { MarketplaceListing } from "@/shared/types";
 
 const ACCENT = "#60A5FA";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const PRIVACY_RADIUS_METERS = 2000;
 
 function getConditionColor(condition: string): string {
   switch (condition) {
@@ -42,6 +46,24 @@ function getConditionColor(condition: string): string {
 function formatPrice(cents: number): string {
   if (cents === 0) return "Free";
   return "$" + (cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function getShippingIcon(option: string): string {
+  switch (option) {
+    case "shipping_available": return "airplane-outline";
+    case "shipping_only": return "airplane";
+    case "pickup_only": return "location-outline";
+    default: return "location-outline";
+  }
+}
+
+function getShippingColor(option: string): string {
+  switch (option) {
+    case "shipping_available": return "#60A5FA";
+    case "shipping_only": return "#8B5CF6";
+    case "pickup_only": return "#22C55E";
+    default: return Colors.textMuted;
+  }
 }
 
 export default function ListingDetailScreen() {
@@ -97,6 +119,23 @@ export default function ListingDetailScreen() {
     ]);
   };
 
+  const handleContactSeller = () => {
+    if (!user) {
+      router.push("/(auth)/login");
+      return;
+    }
+    if (!listing) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    router.push({
+      pathname: "/conversation",
+      params: {
+        userId: listing.sellerId,
+        listingId: listing.id,
+        listingTitle: listing.title,
+      },
+    });
+  };
+
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -116,11 +155,13 @@ export default function ListingDetailScreen() {
 
   const categoryInfo = LISTING_CATEGORIES.find((c) => c.value === listing.category);
   const conditionInfo = LISTING_CONDITIONS.find((c) => c.value === listing.condition);
+  const shippingInfo = SHIPPING_OPTIONS.find((o) => o.value === listing.shippingOption);
   const isOwner = user && user.id === listing.sellerId;
   const isAdmin = user?.role === "admin";
   const isSold = listing.status === "sold";
 
   const photos = listing.photos && listing.photos.length > 0 ? listing.photos : [];
+  const shippingColor = getShippingColor(listing.shippingOption);
 
   return (
     <ScrollView
@@ -209,6 +250,14 @@ export default function ListingDetailScreen() {
               {categoryInfo?.label ?? listing.category}
             </Text>
           </View>
+          <View style={[styles.badge, { backgroundColor: shippingColor + "22" }]}>
+            <View style={styles.shippingBadgeContent}>
+              <Ionicons name={getShippingIcon(listing.shippingOption) as any} size={12} color={shippingColor} />
+              <Text style={[styles.badgeText, { color: shippingColor }]}>
+                {shippingInfo?.label ?? listing.shippingOption}
+              </Text>
+            </View>
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -229,18 +278,66 @@ export default function ListingDetailScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Location</Text>
-          <View style={styles.locationRow}>
-            <Ionicons name="location" size={16} color={Colors.textSecondary} />
-            <Text style={styles.locationText}>
-              {listing.city ?? `${listing.lat.toFixed(4)}, ${listing.lng.toFixed(4)}`}
-            </Text>
-          </View>
+          <Text style={styles.sectionTitle}>Approximate Location</Text>
+          {listing.city ? (
+            <View style={styles.locationRow}>
+              <Ionicons name="location" size={16} color={Colors.textSecondary} />
+              <Text style={styles.locationText}>{listing.city}</Text>
+            </View>
+          ) : null}
+          {Platform.OS !== "web" ? (
+            <View style={styles.miniMapContainer}>
+              <MapView
+                provider={PROVIDER_DEFAULT}
+                style={styles.miniMap}
+                initialRegion={{
+                  latitude: listing.lat,
+                  longitude: listing.lng,
+                  latitudeDelta: 0.05,
+                  longitudeDelta: 0.05,
+                }}
+                scrollEnabled={false}
+                zoomEnabled={false}
+                rotateEnabled={false}
+                pitchEnabled={false}
+                customMapStyle={Colors.mapStyle}
+              >
+                <Circle
+                  center={{ latitude: listing.lat, longitude: listing.lng }}
+                  radius={PRIVACY_RADIUS_METERS}
+                  strokeColor="rgba(96,165,250,0.5)"
+                  fillColor="rgba(96,165,250,0.12)"
+                  strokeWidth={2}
+                />
+              </MapView>
+              <View style={styles.miniMapOverlay}>
+                <Ionicons name="shield-checkmark" size={12} color={ACCENT} />
+                <Text style={styles.miniMapOverlayText}>Approximate area shown for privacy</Text>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.locationRow}>
+              <Ionicons name="location" size={16} color={Colors.textSecondary} />
+              <Text style={styles.locationText}>
+                {listing.city ?? "Location available on mobile"}
+              </Text>
+            </View>
+          )}
         </View>
 
         <Text style={styles.dateText}>
           Listed {formatMSTClient(listing.createdAt)}
         </Text>
+
+        {!isOwner && !isSold && user && (
+          <Pressable
+            style={styles.contactButton}
+            onPress={handleContactSeller}
+          >
+            <Ionicons name="chatbubble-outline" size={20} color="#fff" />
+            <Text style={styles.contactButtonText}>Contact Seller</Text>
+          </Pressable>
+        )}
 
         {(isOwner || isAdmin) && (
           <View style={styles.actionsRow}>
@@ -364,6 +461,7 @@ const styles = StyleSheet.create({
   },
   badgesRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
     marginBottom: 20,
   },
@@ -375,6 +473,11 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 13,
     fontFamily: "Inter_600SemiBold",
+  },
+  shippingBadgeContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   section: {
     marginBottom: 20,
@@ -415,17 +518,56 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+    marginBottom: 8,
   },
   locationText: {
     fontSize: 14,
     fontFamily: "Inter_400Regular",
     color: Colors.textSecondary,
   },
+  miniMapContainer: {
+    borderRadius: 12,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  miniMap: {
+    width: "100%",
+    height: 180,
+  },
+  miniMapOverlay: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: Colors.bgElevated,
+  },
+  miniMapOverlayText: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textMuted,
+  },
   dateText: {
     fontSize: 12,
     fontFamily: "Inter_400Regular",
     color: Colors.textMuted,
     marginBottom: 20,
+  },
+  contactButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: ACCENT,
+    marginBottom: 12,
+  },
+  contactButtonText: {
+    color: "#fff",
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 15,
   },
   actionsRow: {
     flexDirection: "row",

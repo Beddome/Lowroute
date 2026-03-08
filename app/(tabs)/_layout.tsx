@@ -2,8 +2,9 @@ import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs } from "expo-router";
 import { NativeTabs, Icon, Label } from "expo-router/unstable-native-tabs";
 import { BlurView } from "expo-blur";
-import { Platform, StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View, Text } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useQuery } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -20,6 +21,10 @@ function NativeTabLayout() {
       <NativeTabs.Trigger name="marketplace">
         <Icon sf={{ default: "bag", selected: "bag.fill" }} />
         <Label>Market</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="inbox">
+        <Icon sf={{ default: "bubble.left.and.bubble.right", selected: "bubble.left.and.bubble.right.fill" }} />
+        <Label>Inbox</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
         <Icon sf={{ default: "person", selected: "person.fill" }} />
@@ -87,6 +92,15 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
+        name="inbox"
+        options={{
+          title: "Inbox",
+          tabBarIcon: ({ color, size }) => (
+            <InboxTabIcon color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: "Profile",
@@ -108,6 +122,47 @@ function ClassicTabLayout() {
     </Tabs>
   );
 }
+
+function InboxTabIcon({ color, size }: { color: string; size: number }) {
+  const { user } = useAuth();
+  const { data } = useQuery<{ count: number }>({
+    queryKey: ["/api/messages/unread-count"],
+    enabled: !!user,
+    refetchInterval: 15000,
+  });
+  const count = data?.count ?? 0;
+
+  return (
+    <View>
+      <Ionicons name="chatbubbles" size={size} color={color} />
+      {count > 0 && (
+        <View style={tabStyles.badge}>
+          <Text style={tabStyles.badgeText}>{count > 99 ? "99+" : count}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const tabStyles = StyleSheet.create({
+  badge: {
+    position: "absolute",
+    top: -4,
+    right: -8,
+    backgroundColor: Colors.error,
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    fontSize: 9,
+    fontFamily: "Inter_700Bold",
+    color: "#fff",
+  },
+});
 
 export default function TabLayout() {
   if (isLiquidGlassAvailable()) {

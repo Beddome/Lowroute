@@ -28,7 +28,8 @@ The application features an interactive map displaying hazard markers colored by
 - **Route Safety Logic:** Routes are scored based on proximity to hazards and their severity, with scores amplified by the user's car profile clearance mode. Routes are sorted safety-first, then by severity, hazard count, and time.
 - **Car Profiles/Garage:** Users can manage multiple car profiles with details like make, model, ride height, suspension type, and clearance mode, which influences route risk scoring.
 - **Social Features:** Includes a friends system with live location sharing (Snap Maps-style), car avatars, and event creation/RSVP functionality (car meets, cruises).
-- **Marketplace:** A car parts marketplace allows users to browse, create, and manage listings with photos, category/condition filters, and radius-based search.
+- **Marketplace:** A car parts marketplace allows users to browse, create, and manage listings with photos, category/condition filters, radius-based search, shipping options (pickup only/shipping available/shipping only), pin-based location with privacy jitter (~500m), and "My Listings" management. Listing detail shows approximate location with 2km privacy circle and "Contact Seller" messaging button.
+- **Messaging/Inbox:** Server-based messaging system for buyer-seller communication (listing-scoped) and friend DMs. Inbox tab shows conversations grouped by listing/friend, with unread count badges. Chat UI with message bubbles, polling for new messages every 10s.
 - **Subscription System:** Free and Pro tiers managed via RevenueCat SDK, gating features like live navigation and hazard alerts.
 - **Admin Panel:** Provides tools for stats, hazard management, user role management, promo code creation, and event management.
 - **Security:** Implements rate limiting on auth endpoints, robust input validation, and secure storage of API keys.

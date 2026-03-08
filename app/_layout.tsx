@@ -119,6 +119,13 @@ function RootLayoutNav() {
           contentStyle: { backgroundColor: Colors.bgCard },
         }}
       />
+      <Stack.Screen
+        name="conversation"
+        options={{
+          headerShown: false,
+          contentStyle: { backgroundColor: Colors.bg },
+        }}
+      />
     </Stack>
   );
 }

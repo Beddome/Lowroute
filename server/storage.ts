@@ -856,6 +856,8 @@ export async function getMarketplaceListings(filters: {
   priceMin?: number;
   priceMax?: number;
   sort?: string;
+  shippingOption?: string;
+  sellerId?: string;
 }) {
   const conditions: any[] = [eq(schema.marketplaceListings.status, "active")];
 
@@ -864,6 +866,12 @@ export async function getMarketplaceListings(filters: {
   }
   if (filters.condition) {
     conditions.push(eq(schema.marketplaceListings.condition, filters.condition as any));
+  }
+  if (filters.shippingOption) {
+    conditions.push(eq(schema.marketplaceListings.shippingOption, filters.shippingOption as any));
+  }
+  if (filters.sellerId) {
+    conditions.push(eq(schema.marketplaceListings.sellerId, filters.sellerId));
   }
   if (filters.search) {
     conditions.push(
@@ -932,6 +940,7 @@ export async function getMarketplaceListings(filters: {
     city: schema.marketplaceListings.city,
     photos: schema.marketplaceListings.photos,
     status: schema.marketplaceListings.status,
+    shippingOption: schema.marketplaceListings.shippingOption,
     createdAt: schema.marketplaceListings.createdAt,
     sellerUsername: schema.users.username,
   })
@@ -958,6 +967,7 @@ export async function getMarketplaceListingById(id: string) {
     city: schema.marketplaceListings.city,
     photos: schema.marketplaceListings.photos,
     status: schema.marketplaceListings.status,
+    shippingOption: schema.marketplaceListings.shippingOption,
     createdAt: schema.marketplaceListings.createdAt,
     sellerUsername: schema.users.username,
   })
@@ -978,6 +988,7 @@ export async function createMarketplaceListing(data: {
   lng: number;
   city?: string | null;
   photos?: string[];
+  shippingOption?: string;
 }) {
   const [listing] = await db.insert(schema.marketplaceListings).values({
     sellerId: data.sellerId,
@@ -990,6 +1001,7 @@ export async function createMarketplaceListing(data: {
     lng: data.lng,
     city: data.city ?? null,
     photos: data.photos ?? [],
+    shippingOption: (data.shippingOption as any) || "pickup_only",
   }).returning();
   return listing;
 }
@@ -1005,6 +1017,7 @@ export async function updateMarketplaceListing(id: string, data: Partial<{
   city: string | null;
   photos: string[];
   status: string;
+  shippingOption: string;
 }>) {
   const [listing] = await db.update(schema.marketplaceListings)
     .set(data as any)
@@ -1018,4 +1031,117 @@ export async function deleteMarketplaceListing(id: string) {
     .where(eq(schema.marketplaceListings.id, id))
     .returning();
   return deleted || null;
+}
+
+export async function sendMessage(data: { senderId: string; receiverId: string; listingId?: string | null; content: string }) {
+  const [msg] = await db.insert(schema.messages).values({
+    senderId: data.senderId,
+    receiverId: data.receiverId,
+    listingId: data.listingId ?? null,
+    content: data.content,
+  }).returning();
+  return msg;
+}
+
+export async function getConversations(userId: string) {
+  const rows = await db.execute(sql`
+    WITH convos AS (
+      SELECT
+        CASE WHEN m.sender_id = ${userId} THEN m.receiver_id ELSE m.sender_id END as other_user_id,
+        m.listing_id,
+        m.content as last_message,
+        m.created_at as last_message_at,
+        ROW_NUMBER() OVER (
+          PARTITION BY
+            CASE WHEN m.sender_id = ${userId} THEN m.receiver_id ELSE m.sender_id END,
+            m.listing_id
+          ORDER BY m.created_at DESC
+        ) as rn
+      FROM messages m
+      WHERE m.sender_id = ${userId} OR m.receiver_id = ${userId}
+    )
+    SELECT
+      c.other_user_id,
+      u.username as other_username,
+      c.listing_id,
+      ml.title as listing_title,
+      ml.photos as listing_photos,
+      c.last_message,
+      c.last_message_at,
+      COALESCE(
+        (SELECT COUNT(*) FROM messages m2
+         WHERE m2.sender_id = c.other_user_id
+         AND m2.receiver_id = ${userId}
+         AND (m2.listing_id = c.listing_id OR (m2.listing_id IS NULL AND c.listing_id IS NULL))
+         AND m2.is_read = false),
+        0
+      )::int as unread_count
+    FROM convos c
+    LEFT JOIN users u ON u.id = c.other_user_id
+    LEFT JOIN marketplace_listings ml ON ml.id = c.listing_id
+    WHERE c.rn = 1
+    ORDER BY c.last_message_at DESC
+  `);
+  const resultRows = Array.isArray(rows) ? rows : (rows as any).rows ?? [];
+  return resultRows.map((r: any) => ({
+    otherUserId: r.other_user_id,
+    otherUsername: r.other_username,
+    listingId: r.listing_id,
+    listingTitle: r.listing_title,
+    listingPhoto: r.listing_photos ? (typeof r.listing_photos === 'string' ? JSON.parse(r.listing_photos) : r.listing_photos)?.[0] ?? null : null,
+    lastMessage: r.last_message,
+    lastMessageAt: r.last_message_at,
+    unreadCount: parseInt(r.unread_count) || 0,
+  }));
+}
+
+export async function getMessages(userId: string, otherUserId: string, listingId?: string | null) {
+  const listingCondition = listingId
+    ? sql`AND m.listing_id = ${listingId}`
+    : sql`AND m.listing_id IS NULL`;
+  const rows = await db.execute(sql`
+    SELECT m.*, u.username as sender_username
+    FROM messages m
+    LEFT JOIN users u ON u.id = m.sender_id
+    WHERE (
+      (m.sender_id = ${userId} AND m.receiver_id = ${otherUserId})
+      OR (m.sender_id = ${otherUserId} AND m.receiver_id = ${userId})
+    ) ${listingCondition}
+    ORDER BY m.created_at ASC
+    LIMIT 200
+  `);
+  const resultRows = Array.isArray(rows) ? rows : (rows as any).rows ?? [];
+  return resultRows.map((r: any) => ({
+    id: r.id,
+    senderId: r.sender_id,
+    receiverId: r.receiver_id,
+    listingId: r.listing_id,
+    content: r.content,
+    isRead: r.is_read,
+    createdAt: r.created_at,
+    senderUsername: r.sender_username,
+  }));
+}
+
+export async function markMessagesRead(userId: string, otherUserId: string, listingId?: string | null) {
+  const listingCondition = listingId
+    ? sql`AND listing_id = ${listingId}`
+    : sql`AND listing_id IS NULL`;
+  await db.execute(sql`
+    UPDATE messages
+    SET is_read = true
+    WHERE sender_id = ${otherUserId}
+    AND receiver_id = ${userId}
+    ${listingCondition}
+    AND is_read = false
+  `);
+}
+
+export async function getUnreadCount(userId: string): Promise<number> {
+  const result = await db.execute(sql`
+    SELECT COUNT(*)::int as count FROM messages
+    WHERE receiver_id = ${userId} AND is_read = false
+  `);
+  const resultRows = Array.isArray(result) ? result : (result as any).rows ?? [];
+  return resultRows[0]?.count ?? 0;
 }

@@ -21,12 +21,22 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "@/contexts/LocationContext";
 import { Colors } from "@/constants/colors";
-import { LISTING_CATEGORIES, LISTING_CONDITIONS } from "@/shared/types";
+import { LISTING_CATEGORIES, LISTING_CONDITIONS, SHIPPING_OPTIONS } from "@/shared/types";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { fetch } from "expo/fetch";
 import { File } from "expo-file-system";
+import LocationPicker from "@/components/LocationPicker";
 
 const ACCENT = "#60A5FA";
+
+function applyPrivacyJitter(lat: number, lng: number): { lat: number; lng: number } {
+  const maxOffsetKm = 0.5;
+  const angle = Math.random() * 2 * Math.PI;
+  const distance = Math.random() * maxOffsetKm;
+  const latOffset = (distance / 111.32) * Math.cos(angle);
+  const lngOffset = (distance / (111.32 * Math.cos(lat * (Math.PI / 180)))) * Math.sin(angle);
+  return { lat: lat + latOffset, lng: lng + lngOffset };
+}
 
 export default function CreateListingScreen() {
   const { user } = useAuth();
@@ -40,9 +50,19 @@ export default function CreateListingScreen() {
   const [category, setCategory] = useState<string>("");
   const [condition, setCondition] = useState<string>("");
   const [photos, setPhotos] = useState<string[]>([]);
-  const [city, setCity] = useState("");
+  const [shippingOption, setShippingOption] = useState<string>("pickup_only");
+  const [pinLat, setPinLat] = useState<number | null>(null);
+  const [pinLng, setPinLng] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  const effectiveLat = pinLat ?? currentPosition?.latitude ?? 49.6946;
+  const effectiveLng = pinLng ?? currentPosition?.longitude ?? -112.8451;
+
+  const handleLocationChange = (lat: number, lng: number) => {
+    setPinLat(lat);
+    setPinLng(lng);
+  };
 
   const handlePickPhoto = async () => {
     try {
@@ -117,28 +137,24 @@ export default function CreateListingScreen() {
       return;
     }
 
-    const lat = currentPosition?.latitude ?? null;
-    const lng = currentPosition?.longitude ?? null;
-    if (lat === null || lng === null) {
-      setError("Location not available. Please enable location services.");
-      return;
-    }
 
     setIsSubmitting(true);
     setError("");
 
     try {
       const priceCents = Math.round(priceDollars * 100);
+      const jittered = applyPrivacyJitter(effectiveLat, effectiveLng);
       await apiRequest("POST", "/api/marketplace", {
         title: title.trim(),
         description: description.trim(),
         price: priceCents,
         category,
         condition,
-        lat,
-        lng,
-        city: city.trim() || null,
+        lat: jittered.lat,
+        lng: jittered.lng,
+        city: null,
         photos,
+        shippingOption,
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       queryClient.invalidateQueries({ queryKey: ["/api/marketplace"] });
@@ -299,14 +315,42 @@ export default function CreateListingScreen() {
           ))}
         </View>
 
-        <Text style={styles.label}>City (optional)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. Los Angeles, CA"
-          placeholderTextColor={Colors.textMuted}
-          value={city}
-          onChangeText={setCity}
-          maxLength={100}
+        <Text style={styles.label}>Shipping</Text>
+        <View style={styles.chipsWrap}>
+          {SHIPPING_OPTIONS.map((opt) => (
+            <Pressable
+              key={opt.value}
+              style={[
+                styles.chip,
+                shippingOption === opt.value && styles.chipActive,
+              ]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setShippingOption(opt.value);
+              }}
+            >
+              <Text
+                style={[
+                  styles.chipText,
+                  shippingOption === opt.value && styles.chipTextActive,
+                ]}
+              >
+                {opt.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <Text style={styles.label}>Location</Text>
+        <Text style={styles.locationHint}>
+          Tap the map or drag the pin. Exact location is hidden for privacy.
+        </Text>
+        <LocationPicker
+          latitude={effectiveLat}
+          longitude={effectiveLng}
+          onLocationChange={handleLocationChange}
+          accentColor={ACCENT}
+          label="Set pickup / item location"
         />
 
         <Pressable
@@ -373,6 +417,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginBottom: 6,
     marginTop: 14,
+  },
+  locationHint: {
+    color: Colors.textMuted,
+    fontFamily: "Inter_400Regular",
+    fontSize: 11,
+    marginBottom: 8,
   },
   input: {
     backgroundColor: Colors.bgInput,

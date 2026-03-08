@@ -25,12 +25,20 @@ import { getApiUrl } from "@/lib/query-client";
 import {
   LISTING_CATEGORIES,
   LISTING_CONDITIONS,
+  SHIPPING_OPTIONS,
 } from "@/shared/types";
 import type { MarketplaceListing } from "@/shared/types";
 
 const ACCENT = "#60A5FA";
 const RADIUS_OPTIONS_IMPERIAL = [25, 50, 100, 200];
 const RADIUS_OPTIONS_METRIC = [40, 80, 160, 320];
+
+const SHIPPING_FILTERS = [
+  { value: null, label: "All" },
+  { value: "pickup_only", label: "Pickup" },
+  { value: "shipping_available", label: "Ships" },
+  { value: "shipping_only", label: "Ship Only" },
+];
 
 function getConditionColor(condition: string): string {
   switch (condition) {
@@ -41,6 +49,20 @@ function getConditionColor(condition: string): string {
     case "parts_only": return "#F97316";
     default: return Colors.textMuted;
   }
+}
+
+function getShippingIcon(option: string): string {
+  switch (option) {
+    case "shipping_available": return "airplane-outline";
+    case "shipping_only": return "airplane";
+    case "pickup_only": return "location-outline";
+    default: return "location-outline";
+  }
+}
+
+function getShippingLabel(option: string): string {
+  const found = SHIPPING_OPTIONS.find((o) => o.value === option);
+  return found?.label ?? option;
 }
 
 function formatPrice(cents: number): string {
@@ -94,6 +116,8 @@ function ListingCard({
       : `${baseUrl}${photoUrl.startsWith("/") ? "" : "/"}${photoUrl}`
     : null;
 
+  const showShippingBadge = listing.shippingOption && listing.shippingOption !== "pickup_only";
+
   return (
     <Pressable
       style={styles.card}
@@ -108,6 +132,14 @@ function ListingCard({
         ) : (
           <View style={styles.cardImagePlaceholder}>
             <Ionicons name="image-outline" size={32} color={Colors.textMuted} />
+          </View>
+        )}
+        {showShippingBadge && (
+          <View style={styles.shippingBadgeOverlay}>
+            <Ionicons name={getShippingIcon(listing.shippingOption) as any} size={10} color="#fff" />
+            <Text style={styles.shippingBadgeOverlayText}>
+              {listing.shippingOption === "shipping_only" ? "Ship" : "Ships"}
+            </Text>
           </View>
         )}
       </View>
@@ -161,6 +193,8 @@ export default function MarketplaceScreen() {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [radiusIndex, setRadiusIndex] = useState(1);
+  const [shippingFilter, setShippingFilter] = useState<string | null>(null);
+  const [showMyListings, setShowMyListings] = useState(false);
 
   const radiusOptions = system === "metric" ? RADIUS_OPTIONS_METRIC : RADIUS_OPTIONS_IMPERIAL;
   const radiusLabel = system === "metric" ? "km" : "mi";
@@ -177,11 +211,16 @@ export default function MarketplaceScreen() {
   const queryParams = new URLSearchParams();
   if (selectedCategory) queryParams.set("category", selectedCategory);
   if (search.trim()) queryParams.set("search", search.trim());
-  if (userLat !== null && userLng !== null) {
-    queryParams.set("lat", String(userLat));
-    queryParams.set("lng", String(userLng));
+  if (shippingFilter) queryParams.set("shippingOption", shippingFilter);
+  if (showMyListings && user) {
+    queryParams.set("sellerId", user.id);
+  } else {
+    if (userLat !== null && userLng !== null) {
+      queryParams.set("lat", String(userLat));
+      queryParams.set("lng", String(userLng));
+    }
+    queryParams.set("radius", String(radiusMiles));
   }
-  queryParams.set("radius", String(radiusMiles));
   queryParams.set("sort", "newest");
 
   const queryString = queryParams.toString();
@@ -190,7 +229,8 @@ export default function MarketplaceScreen() {
     queryKey: ["/api/marketplace", queryString],
     queryFn: async () => {
       const baseUrl = getApiUrl();
-      const res = await fetch(`${baseUrl}/api/marketplace?${queryString}`, { credentials: "include" });
+      const url = new URL(`/api/marketplace?${queryString}`, baseUrl);
+      const res = await fetch(url.toString(), { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
@@ -218,19 +258,36 @@ export default function MarketplaceScreen() {
     <View style={[styles.container, { paddingTop: topPadding }]}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Marketplace</Text>
-        <Pressable
-          style={styles.createButton}
-          onPress={() => {
-            if (!user) {
-              router.push("/(auth)/login");
-              return;
-            }
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            router.push("/create-listing");
-          }}
-        >
-          <Ionicons name="add" size={24} color={Colors.bg} />
-        </Pressable>
+        <View style={styles.headerActions}>
+          {user && (
+            <Pressable
+              style={[styles.myListingsButton, showMyListings && styles.myListingsButtonActive]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setShowMyListings(!showMyListings);
+              }}
+            >
+              <Ionicons
+                name={showMyListings ? "person" : "person-outline"}
+                size={18}
+                color={showMyListings ? ACCENT : Colors.textSecondary}
+              />
+            </Pressable>
+          )}
+          <Pressable
+            style={styles.createButton}
+            onPress={() => {
+              if (!user) {
+                router.push("/(auth)/login");
+                return;
+              }
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              router.push("/create-listing");
+            }}
+          >
+            <Ionicons name="add" size={24} color={Colors.bg} />
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.searchRow}>
@@ -303,31 +360,67 @@ export default function MarketplaceScreen() {
         ))}
       </ScrollView>
 
-      <View style={styles.radiusRow}>
-        <Text style={styles.radiusLabel}>Radius:</Text>
-        {radiusOptions.map((r, i) => (
-          <Pressable
-            key={r}
-            style={[
-              styles.radiusPill,
-              radiusIndex === i && styles.radiusPillActive,
-            ]}
-            onPress={() => {
-              Haptics.selectionAsync();
-              setRadiusIndex(i);
-            }}
-          >
-            <Text
+      <View style={styles.filterSecondRow}>
+        <View style={styles.shippingFilterRow}>
+          {SHIPPING_FILTERS.map((sf) => (
+            <Pressable
+              key={sf.value ?? "all"}
               style={[
-                styles.radiusPillText,
-                radiusIndex === i && styles.radiusPillTextActive,
+                styles.radiusPill,
+                shippingFilter === sf.value && styles.radiusPillActive,
               ]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setShippingFilter(shippingFilter === sf.value ? null : sf.value);
+              }}
             >
-              {r} {radiusLabel}
-            </Text>
-          </Pressable>
-        ))}
+              <Text
+                style={[
+                  styles.radiusPillText,
+                  shippingFilter === sf.value && styles.radiusPillTextActive,
+                ]}
+              >
+                {sf.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
       </View>
+
+      {!showMyListings && (
+        <View style={styles.radiusRow}>
+          <Text style={styles.radiusLabel}>Radius:</Text>
+          {radiusOptions.map((r, i) => (
+            <Pressable
+              key={r}
+              style={[
+                styles.radiusPill,
+                radiusIndex === i && styles.radiusPillActive,
+              ]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setRadiusIndex(i);
+              }}
+            >
+              <Text
+                style={[
+                  styles.radiusPillText,
+                  radiusIndex === i && styles.radiusPillTextActive,
+                ]}
+              >
+                {r} {radiusLabel}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      {showMyListings && (
+        <View style={styles.myListingsBanner}>
+          <Ionicons name="person" size={14} color={ACCENT} />
+          <Text style={styles.myListingsBannerText}>Showing your listings</Text>
+        </View>
+      )}
 
       {isLoading ? (
         <View style={styles.centered}>
@@ -336,8 +429,12 @@ export default function MarketplaceScreen() {
       ) : !listings || listings.length === 0 ? (
         <View style={styles.centered}>
           <Ionicons name="storefront-outline" size={48} color={Colors.textMuted} />
-          <Text style={styles.emptyText}>No listings found</Text>
-          <Text style={styles.emptySubtext}>Try adjusting your filters or radius</Text>
+          <Text style={styles.emptyText}>
+            {showMyListings ? "No listings yet" : "No listings found"}
+          </Text>
+          <Text style={styles.emptySubtext}>
+            {showMyListings ? "Create your first listing" : "Try adjusting your filters or radius"}
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -378,13 +475,31 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     color: Colors.text,
   },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  myListingsButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  myListingsButtonActive: {
+    borderColor: ACCENT,
+    backgroundColor: ACCENT + "18",
+  },
   createButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
     backgroundColor: ACCENT,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
   },
   searchRow: {
     paddingHorizontal: 20,
@@ -437,6 +552,14 @@ const styles = StyleSheet.create({
   filterChipTextActive: {
     color: ACCENT,
   },
+  filterSecondRow: {
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+  },
+  shippingFilterRow: {
+    flexDirection: "row",
+    gap: 6,
+  },
   radiusRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -469,6 +592,18 @@ const styles = StyleSheet.create({
   },
   radiusPillTextActive: {
     color: ACCENT,
+  },
+  myListingsBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+  },
+  myListingsBannerText: {
+    color: ACCENT,
+    fontFamily: "Inter_500Medium",
+    fontSize: 13,
   },
   centered: {
     flex: 1,
@@ -516,6 +651,23 @@ const styles = StyleSheet.create({
     height: "100%",
     alignItems: "center",
     justifyContent: "center",
+  },
+  shippingBadgeOverlay: {
+    position: "absolute",
+    top: 6,
+    left: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "rgba(96,165,250,0.85)",
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  shippingBadgeOverlayText: {
+    color: "#fff",
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 9,
   },
   cardContent: {
     padding: 10,

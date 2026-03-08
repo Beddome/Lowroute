@@ -215,9 +215,38 @@ export interface MarketplaceListing {
   city: string | null;
   photos: string[];
   status: "active" | "sold" | "removed";
+  shippingOption: "pickup_only" | "shipping_available" | "shipping_only";
   createdAt: string | Date;
   sellerUsername?: string;
 }
+
+export interface Message {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  listingId: string | null;
+  content: string;
+  isRead: boolean;
+  createdAt: string | Date;
+  senderUsername?: string;
+}
+
+export interface Conversation {
+  otherUserId: string;
+  otherUsername: string;
+  listingId: string | null;
+  listingTitle: string | null;
+  listingPhoto: string | null;
+  lastMessage: string;
+  lastMessageAt: string | Date;
+  unreadCount: number;
+}
+
+export const SHIPPING_OPTIONS = [
+  { value: "pickup_only", label: "Pickup Only" },
+  { value: "shipping_available", label: "Shipping Available" },
+  { value: "shipping_only", label: "Shipping Only" },
+] as const;
 
 export const LISTING_CATEGORIES = [
   { value: "wheels_tires", label: "Wheels & Tires" },

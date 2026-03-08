@@ -223,6 +223,12 @@ export const listingStatusEnum = pgEnum("listing_status", [
   "removed",
 ]);
 
+export const shippingOptionEnum = pgEnum("shipping_option", [
+  "pickup_only",
+  "shipping_available",
+  "shipping_only",
+]);
+
 export const marketplaceListings = pgTable("marketplace_listings", {
   id: varchar("id")
     .primaryKey()
@@ -238,6 +244,19 @@ export const marketplaceListings = pgTable("marketplace_listings", {
   city: text("city"),
   photos: jsonb("photos").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   status: listingStatusEnum("status").notNull().default("active"),
+  shippingOption: shippingOptionEnum("shipping_option").notNull().default("pickup_only"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const messages = pgTable("messages", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  senderId: varchar("sender_id").references(() => users.id).notNull(),
+  receiverId: varchar("receiver_id").references(() => users.id).notNull(),
+  listingId: varchar("listing_id").references(() => marketplaceListings.id),
+  content: text("content").notNull(),
+  isRead: boolean("is_read").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
