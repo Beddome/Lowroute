@@ -68,6 +68,7 @@ interface RouteOption {
   label: string;
   description: string;
   estimatedMinutes: number;
+  distanceKm?: number;
   timePenaltyMinutes: number;
   riskScore: number;
   highestSeverity: number;
@@ -108,7 +109,7 @@ export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
   const { user } = useAuth();
-  const { currentPosition, heading, speed, isTracking, startTracking, stopTracking } = useLocation();
+  const { currentPosition, heading, speed, isTracking, startTracking, stopTracking, startBackgroundTracking, stopBackgroundTracking } = useLocation();
 
   const [locationGranted, setLocationGranted] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -215,18 +216,20 @@ export default function MapScreen() {
       alertedHazardsRef.current.clear();
       navStartTimeRef.current = Date.now();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      startBackgroundTracking().catch(() => {});
     } catch (err) {
       Alert.alert("Location Error", "Unable to start navigation. Please ensure location permissions are granted.");
     }
-  }, [user, startTracking]);
+  }, [user, startTracking, startBackgroundTracking]);
 
   const endNavigation = useCallback(() => {
     setIsNavigating(false);
     setNearbyHazard(null);
     alertedHazardsRef.current.clear();
     stopTracking();
+    stopBackgroundTracking().catch(() => {});
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-  }, [stopTracking]);
+  }, [stopTracking, stopBackgroundTracking]);
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -276,9 +279,18 @@ export default function MapScreen() {
       url.searchParams.set("endLat", String(destCoords.lat));
       url.searchParams.set("endLng", String(destCoords.lng));
       const res = await fetch(url.toString(), { credentials: "include" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: "Route calculation failed" }));
+        Alert.alert("Routing Error", err.message || "Could not calculate routes. Please try again.");
+        return;
+      }
       const data = await res.json();
+      if (!Array.isArray(data) || data.length === 0) {
+        Alert.alert("No Routes", "No routes found between these locations.");
+        return;
+      }
       setRoutes(data);
-      setSelectedRouteIdx(1);
+      setSelectedRouteIdx(data.length > 1 ? 1 : 0);
       setPanelOpen(true);
       Animated.spring(panelExpanded, { toValue: 1, useNativeDriver: false }).start();
 
@@ -296,7 +308,8 @@ export default function MapScreen() {
         800
       );
     } catch (e) {
-      console.error(e);
+      console.error("Route calculation error:", e);
+      Alert.alert("Connection Error", "Unable to reach the routing service. Check your internet connection and try again.");
     } finally {
       setIsRoutingLoading(false);
     }
@@ -380,12 +393,23 @@ export default function MapScreen() {
           </Marker>
         )}
 
+        {!isNavigating && routes.map((route, i) => {
+          if (i === selectedRouteIdx || !route.waypoints || route.waypoints.length < 2) return null;
+          return (
+            <Polyline
+              key={`route-bg-${i}`}
+              coordinates={route.waypoints.map((w) => ({ latitude: w.lat, longitude: w.lng }))}
+              strokeColor={ROUTE_COLORS[i] ?? Colors.accent}
+              strokeWidth={3}
+              strokeOpacity={0.3}
+            />
+          );
+        })}
         {selectedRoute?.waypoints && selectedRoute.waypoints.length >= 2 && (
           <Polyline
             coordinates={selectedRoute.waypoints.map((w) => ({ latitude: w.lat, longitude: w.lng }))}
             strokeColor={ROUTE_COLORS[selectedRouteIdx] ?? Colors.accent}
             strokeWidth={isNavigating ? 6 : 4}
-            lineDashPattern={isNavigating ? undefined : [1]}
           />
         )}
       </MapView>
@@ -640,6 +664,7 @@ function RoutePanel({
               <Text style={[styles.routeLabel, isSelected && { color: Colors.text }]}>{route.label}</Text>
               <Text style={styles.routeTime}>
                 {route.estimatedMinutes + route.timePenaltyMinutes} min
+                {route.distanceKm ? ` · ${route.distanceKm} km` : ""}
               </Text>
               <View style={styles.routeStats}>
                 <View style={styles.routeStat}>

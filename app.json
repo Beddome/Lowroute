@@ -3,6 +3,7 @@
     "name": "LowRoute",
     "slug": "lowroute",
     "version": "1.0.0",
+    "description": "Navigate safer routes by avoiding reported road hazards in your area.",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "lowroute",
@@ -15,16 +16,30 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.myapp"
+      "bundleIdentifier": "com.lowroute.app",
+      "infoPlist": {
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "LowRoute uses your location in the background to provide turn-by-turn navigation and alert you to nearby hazards while driving.",
+        "NSLocationWhenInUseUsageDescription": "LowRoute needs your location to show nearby hazards and help plan safe routes.",
+        "UIBackgroundModes": [
+          "location"
+        ]
+      }
     },
     "android": {
-      "package": "com.myapp",
+      "package": "com.lowroute.app",
       "adaptiveIcon": {
         "backgroundColor": "#0A0A0B",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
-      }
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/images/favicon.png"
@@ -41,7 +56,10 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "LowRoute needs your location to show nearby hazards and help plan safe routes."
+          "locationAlwaysAndWhenInUsePermission": "LowRoute needs your location to show nearby hazards and help plan safe routes.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
         }
       ]
     ],

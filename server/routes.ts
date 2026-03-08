@@ -7,6 +7,78 @@ import { Pool } from "pg";
 import * as storage from "./storage";
 import { SEVERITY_TIERS } from "../shared/schema";
 
+const loginAttempts = new Map<string, { count: number; lastAttempt: number }>();
+const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+
+function checkRateLimit(key: string): boolean {
+  const now = Date.now();
+  const entry = loginAttempts.get(key);
+  if (!entry || now - entry.lastAttempt > RATE_LIMIT_WINDOW_MS) {
+    loginAttempts.set(key, { count: 1, lastAttempt: now });
+    return true;
+  }
+  if (entry.count >= RATE_LIMIT_MAX) return false;
+  entry.count++;
+  entry.lastAttempt = now;
+  return true;
+}
+
+function decodePolyline(encoded: string): Array<{ lat: number; lng: number }> {
+  const points: Array<{ lat: number; lng: number }> = [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+
+  while (index < encoded.length) {
+    let b: number;
+    let shift = 0;
+    let result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const dlat = result & 1 ? ~(result >> 1) : result >> 1;
+    lat += dlat;
+
+    shift = 0;
+    result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const dlng = result & 1 ? ~(result >> 1) : result >> 1;
+    lng += dlng;
+
+    points.push({ lat: lat / 1e5, lng: lng / 1e5 });
+  }
+  return points;
+}
+
+function distanceToSegment(
+  px: number, py: number,
+  ax: number, ay: number,
+  bx: number, by: number
+): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) {
+    const ddx = px - ax;
+    const ddy = py - ay;
+    return Math.sqrt(ddx * ddx + ddy * ddy);
+  }
+  let t = ((px - ax) * dx + (py - ay) * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  const projX = ax + t * dx;
+  const projY = ay + t * dy;
+  const ddx = px - projX;
+  const ddy = py - projY;
+  return Math.sqrt(ddx * ddx + ddy * ddy);
+}
+
 declare module "express-session" {
   interface SessionData {
     userId?: string;
@@ -33,22 +105,6 @@ async function requireAdmin(req: Request, res: Response, next: Function) {
   next();
 }
 
-/**
- * Route Safety Scoring Logic:
- *
- * Each route is scored based on hazards along its path.
- * Tier 4 hazards add 1000 penalty points (route nearly unusable)
- * Tier 3 hazards add 100 penalty points each
- * Tier 2 hazards add 20 penalty points each
- * Tier 1 hazards add 5 penalty points each
- *
- * Only hazards with confidence >= 0.4 are considered.
- * The "safest" route picks one that avoids Tier 4 and minimizes Tier 3.
- * The "balanced" route weighs safety vs distance.
- *
- * Since we don't have a real routing engine, we simulate 3 route variants
- * by slightly adjusting the bounding box and sampling hazards within each.
- */
 function calculateRouteRisk(hazards: Array<{ severity: number; confidenceScore: number }>) {
   const SEVERITY_PENALTIES = [0, 5, 20, 100, 1000];
   let score = 0;
@@ -67,21 +123,50 @@ function calculateRouteRisk(hazards: Array<{ severity: number; confidenceScore: 
   return { score, counts, highestTier, totalHazards };
 }
 
-function hazardsNearLine(
-  allHazards: Array<{ lat: number; lng: number; severity: number; confidenceScore: number }>,
-  startLat: number,
-  startLng: number,
-  endLat: number,
-  endLng: number,
-  bufferDeg: number
+const HAZARD_BUFFER_DEG = 0.0015;
+
+function hazardsNearPolyline(
+  allHazards: Array<{ lat: number; lng: number; severity: number; confidenceScore: number; [key: string]: any }>,
+  polyline: Array<{ lat: number; lng: number }>
 ) {
+  if (polyline.length === 0) return [];
+
+  const lats = polyline.map((p) => p.lat);
+  const lngs = polyline.map((p) => p.lng);
+  const minLat = Math.min(...lats) - HAZARD_BUFFER_DEG;
+  const maxLat = Math.max(...lats) + HAZARD_BUFFER_DEG;
+  const minLng = Math.min(...lngs) - HAZARD_BUFFER_DEG;
+  const maxLng = Math.max(...lngs) + HAZARD_BUFFER_DEG;
+
   return allHazards.filter((h) => {
-    const minLat = Math.min(startLat, endLat) - bufferDeg;
-    const maxLat = Math.max(startLat, endLat) + bufferDeg;
-    const minLng = Math.min(startLng, endLng) - bufferDeg;
-    const maxLng = Math.max(startLng, endLng) + bufferDeg;
-    return h.lat >= minLat && h.lat <= maxLat && h.lng >= minLng && h.lng <= maxLng;
+    if (h.lat < minLat || h.lat > maxLat || h.lng < minLng || h.lng > maxLng) return false;
+    for (let i = 0; i < polyline.length - 1; i++) {
+      const d = distanceToSegment(
+        h.lat, h.lng,
+        polyline[i].lat, polyline[i].lng,
+        polyline[i + 1].lat, polyline[i + 1].lng
+      );
+      if (d < HAZARD_BUFFER_DEG) return true;
+    }
+    return false;
   });
+}
+
+async function fetchOSRMRoutes(
+  sLat: number, sLng: number, eLat: number, eLng: number
+): Promise<Array<{ geometry: string; distance: number; duration: number }>> {
+  const url = `https://router.project-osrm.org/route/v1/driving/${sLng},${sLat};${eLng},${eLat}?alternatives=true&overview=full&geometries=polyline`;
+  const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+  if (!resp.ok) throw new Error(`OSRM returned ${resp.status}`);
+  const data = await resp.json() as any;
+  if (data.code !== "Ok" || !data.routes?.length) {
+    throw new Error("OSRM could not find routes");
+  }
+  return data.routes.map((r: any) => ({
+    geometry: r.geometry,
+    distance: r.distance,
+    duration: r.duration,
+  }));
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -103,18 +188,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   await storage.seedDemoHazards();
-  const adminHash = await bcrypt.hash("lowroute-admin", 10);
-  await storage.seedAdminUser(adminHash);
+  if (process.env.NODE_ENV === "production") {
+    if (process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD) {
+      const adminHash = await bcrypt.hash(process.env.ADMIN_PASSWORD, 10);
+      await storage.seedAdminUser(process.env.ADMIN_USERNAME, adminHash);
+    }
+  } else {
+    const adminUsername = process.env.ADMIN_USERNAME || "admin";
+    const adminPassword = process.env.ADMIN_PASSWORD || "lowroute-admin";
+    const adminHash = await bcrypt.hash(adminPassword, 10);
+    await storage.seedAdminUser(adminUsername, adminHash);
+  }
 
   // Auth routes
   app.post("/api/auth/register", async (req: Request, res: Response) => {
     try {
+      const ip = req.ip || req.socket.remoteAddress || "unknown";
+      if (!checkRateLimit(`register:${ip}`)) {
+        return res.status(429).json({ message: "Too many attempts. Please try again later." });
+      }
+
       const { username, email, password } = req.body;
       if (!username || !email || !password) {
         return res.status(400).json({ message: "All fields are required" });
       }
-      if (password.length < 6) {
-        return res.status(400).json({ message: "Password must be at least 6 characters" });
+      if (typeof username !== "string" || username.length < 3 || username.length > 30) {
+        return res.status(400).json({ message: "Username must be 3-30 characters" });
+      }
+      if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+        return res.status(400).json({ message: "Username can only contain letters, numbers, and underscores" });
+      }
+      if (typeof email !== "string" || !email.includes("@") || email.length > 254) {
+        return res.status(400).json({ message: "Valid email is required" });
+      }
+      if (password.length < 6 || password.length > 128) {
+        return res.status(400).json({ message: "Password must be 6-128 characters" });
       }
       const existingEmail = await storage.getUserByEmail(email);
       if (existingEmail) return res.status(400).json({ message: "Email already in use" });
@@ -133,6 +241,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/auth/login", async (req: Request, res: Response) => {
     try {
+      const ip = req.ip || req.socket.remoteAddress || "unknown";
+      if (!checkRateLimit(`login:${ip}`)) {
+        return res.status(429).json({ message: "Too many login attempts. Please try again later." });
+      }
+
       const { username, password } = req.body;
       if (!username || !password) return res.status(400).json({ message: "All fields required" });
 
@@ -189,14 +302,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!lat || !lng || !type || !severity || !title || !description) {
         return res.status(400).json({ message: "All fields required" });
       }
+      const parsedLat = parseFloat(lat);
+      const parsedLng = parseFloat(lng);
+      const parsedSeverity = parseInt(severity);
+      if (isNaN(parsedLat) || parsedLat < -90 || parsedLat > 90) {
+        return res.status(400).json({ message: "Invalid latitude" });
+      }
+      if (isNaN(parsedLng) || parsedLng < -180 || parsedLng > 180) {
+        return res.status(400).json({ message: "Invalid longitude" });
+      }
+      if (isNaN(parsedSeverity) || parsedSeverity < 1 || parsedSeverity > 4) {
+        return res.status(400).json({ message: "Severity must be 1-4" });
+      }
+      if (typeof title !== "string" || title.length < 3 || title.length > 100) {
+        return res.status(400).json({ message: "Title must be 3-100 characters" });
+      }
+      if (typeof description !== "string" || description.length < 5 || description.length > 500) {
+        return res.status(400).json({ message: "Description must be 5-500 characters" });
+      }
+      const validTypes = ["pothole", "speed_bump", "construction", "raised_manhole", "railroad_crossing", "flooded_road", "debris", "large_bump_dip", "steep_driveway", "other"];
+      if (!validTypes.includes(type)) {
+        return res.status(400).json({ message: "Invalid hazard type" });
+      }
       const hazard = await storage.createHazard({
         userId: req.session.userId!,
-        lat: parseFloat(lat),
-        lng: parseFloat(lng),
+        lat: parsedLat,
+        lng: parsedLng,
         type,
-        severity: parseInt(severity),
-        title,
-        description,
+        severity: parsedSeverity,
+        title: title.trim(),
+        description: description.trim(),
       });
       await storage.updateUserReputation(req.session.userId!, 10);
       res.json(hazard);
@@ -295,7 +430,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Route calculation with hazard scoring
   app.get("/api/routes", async (req: Request, res: Response) => {
     try {
       const { startLat, startLng, endLat, endLng } = req.query;
@@ -308,81 +442,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const eLat = parseFloat(endLat as string);
       const eLng = parseFloat(endLng as string);
 
+      if ([sLat, sLng, eLat, eLng].some(isNaN)) {
+        return res.status(400).json({ message: "Invalid coordinates" });
+      }
+
       const allHazards = await storage.getAllActiveHazards();
 
-      // Route 1: Fastest (direct path, narrow buffer = more hazards possible)
-      const route1Hazards = hazardsNearLine(allHazards, sLat, sLng, eLat, eLng, 0.003);
-      const route1Risk = calculateRouteRisk(route1Hazards);
+      let osrmRoutes: Array<{ geometry: string; distance: number; duration: number }>;
+      try {
+        osrmRoutes = await fetchOSRMRoutes(sLat, sLng, eLat, eLng);
+      } catch (osrmErr) {
+        console.error("OSRM fetch failed:", osrmErr);
+        return res.status(502).json({ message: "Routing service temporarily unavailable. Please try again." });
+      }
 
-      // Route 2: Safest (wider detour, different midpoints to simulate alternate road)
-      const midLat = (sLat + eLat) / 2 + 0.008;
-      const midLng = (sLng + eLng) / 2 - 0.006;
-      const route2AHazards = hazardsNearLine(allHazards, sLat, sLng, midLat, midLng, 0.002);
-      const route2BHazards = hazardsNearLine(allHazards, midLat, midLng, eLat, eLng, 0.002);
-      const route2Hazards = [...new Set([...route2AHazards, ...route2BHazards])];
-      const route2Risk = calculateRouteRisk(route2Hazards);
-
-      // Route 3: Balanced (moderate buffer, different offset)
-      const mid3Lat = (sLat + eLat) / 2 - 0.004;
-      const mid3Lng = (sLng + eLng) / 2 + 0.005;
-      const route3AHazards = hazardsNearLine(allHazards, sLat, sLng, mid3Lat, mid3Lng, 0.0025);
-      const route3BHazards = hazardsNearLine(allHazards, mid3Lat, mid3Lng, eLat, eLng, 0.0025);
-      const route3Hazards = [...new Set([...route3AHazards, ...route3BHazards])];
-      const route3Risk = calculateRouteRisk(route3Hazards);
-
-      // Calculate estimated time penalty in minutes (10 pts = 1 min delay)
-      const routes = [
-        {
-          id: "fastest",
-          label: "Fastest",
-          description: "Direct route, minimum travel time",
-          estimatedMinutes: 18,
-          timePenaltyMinutes: Math.round(route1Risk.score / 10),
-          hazards: route1Hazards,
-          riskScore: route1Risk.score,
-          highestSeverity: route1Risk.highestTier,
-          totalHazards: route1Risk.totalHazards,
-          severityCounts: route1Risk.counts,
-          waypoints: [
-            { lat: sLat, lng: sLng },
-            { lat: eLat, lng: eLng },
-          ],
-        },
-        {
-          id: "safest",
-          label: "Low-Car Safe",
-          description: "Avoids Tier 4 hazards, safest for low vehicles",
-          estimatedMinutes: 24,
-          timePenaltyMinutes: Math.round(route2Risk.score / 10),
-          hazards: route2Hazards,
-          riskScore: route2Risk.score,
-          highestSeverity: route2Risk.highestTier,
-          totalHazards: route2Risk.totalHazards,
-          severityCounts: route2Risk.counts,
-          waypoints: [
-            { lat: sLat, lng: sLng },
-            { lat: midLat, lng: midLng },
-            { lat: eLat, lng: eLng },
-          ],
-        },
-        {
-          id: "balanced",
-          label: "Balanced",
-          description: "Balance between time and road safety",
-          estimatedMinutes: 21,
-          timePenaltyMinutes: Math.round(route3Risk.score / 10),
-          hazards: route3Hazards,
-          riskScore: route3Risk.score,
-          highestSeverity: route3Risk.highestTier,
-          totalHazards: route3Risk.totalHazards,
-          severityCounts: route3Risk.counts,
-          waypoints: [
-            { lat: sLat, lng: sLng },
-            { lat: mid3Lat, lng: mid3Lng },
-            { lat: eLat, lng: eLng },
-          ],
-        },
+      const ROUTE_LABELS = [
+        { id: "fastest", label: "Fastest", description: "Shortest travel time" },
+        { id: "safest", label: "Low-Car Safe", description: "Alternate route, may avoid hazards" },
+        { id: "balanced", label: "Balanced", description: "Balance between time and safety" },
       ];
+
+      const routes = osrmRoutes.slice(0, 3).map((osrmRoute, i) => {
+        const polyline = decodePolyline(osrmRoute.geometry);
+        const routeHazards = hazardsNearPolyline(allHazards, polyline);
+        const risk = calculateRouteRisk(routeHazards);
+        const label = ROUTE_LABELS[i] || { id: `route_${i}`, label: `Route ${i + 1}`, description: "Alternative route" };
+        const estimatedMinutes = Math.round(osrmRoute.duration / 60);
+        const distanceKm = Math.round(osrmRoute.distance / 100) / 10;
+
+        return {
+          id: label.id,
+          label: label.label,
+          description: label.description,
+          estimatedMinutes,
+          distanceKm,
+          timePenaltyMinutes: Math.round(risk.score / 10),
+          hazards: routeHazards,
+          riskScore: risk.score,
+          highestSeverity: risk.highestTier,
+          totalHazards: risk.totalHazards,
+          severityCounts: risk.counts,
+          waypoints: polyline,
+        };
+      });
+
+      routes.sort((a, b) => a.estimatedMinutes - b.estimatedMinutes);
+      if (routes.length > 0) {
+        routes[0].id = "fastest";
+        routes[0].label = "Fastest";
+        routes[0].description = "Shortest travel time";
+      }
+      if (routes.length > 1) {
+        const safest = routes.reduce((best, r) => r.riskScore < best.riskScore ? r : best, routes[1]);
+        if (safest !== routes[0]) {
+          safest.id = "safest";
+          safest.label = "Low-Car Safe";
+          safest.description = "Lowest hazard risk for low vehicles";
+        }
+      }
 
       res.json(routes);
     } catch (err) {

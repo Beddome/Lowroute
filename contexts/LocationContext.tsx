@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState, useRef, useMemo, useCallback, ReactNode } from "react";
-import { Platform } from "react-native";
+import { Platform, Alert, Linking } from "react-native";
 import * as Location from "expo-location";
+import * as TaskManager from "expo-task-manager";
+
+const BACKGROUND_LOCATION_TASK = "lowroute-background-location";
 
 interface LocationPosition {
   latitude: number;
@@ -15,11 +18,41 @@ interface LocationContextValue {
   heading: number | null;
   speed: number | null;
   isTracking: boolean;
+  isBackgroundTracking: boolean;
   permissionStatus: Location.PermissionStatus | null;
+  backgroundPermissionStatus: Location.PermissionStatus | null;
   requestPermission: () => Promise<void>;
+  requestBackgroundPermission: () => Promise<boolean>;
   startTracking: () => Promise<void>;
   stopTracking: () => void;
+  startBackgroundTracking: () => Promise<void>;
+  stopBackgroundTracking: () => Promise<void>;
 }
+
+let backgroundLocationCallback: ((position: LocationPosition, heading: number | null, speed: number | null) => void) | null = null;
+
+TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
+  if (error) {
+    console.warn("Background location error:", error.message);
+    return;
+  }
+  if (data) {
+    const { locations } = data as { locations: Location.LocationObject[] };
+    if (locations && locations.length > 0) {
+      const loc = locations[locations.length - 1];
+      const position: LocationPosition = {
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+        altitude: loc.coords.altitude,
+        accuracy: loc.coords.accuracy,
+        timestamp: loc.timestamp,
+      };
+      if (backgroundLocationCallback) {
+        backgroundLocationCallback(position, loc.coords.heading ?? null, loc.coords.speed ?? null);
+      }
+    }
+  }
+});
 
 const LocationContext = createContext<LocationContextValue | null>(null);
 
@@ -28,7 +61,9 @@ export function LocationProvider({ children }: { children: ReactNode }) {
   const [heading, setHeading] = useState<number | null>(null);
   const [speed, setSpeed] = useState<number | null>(null);
   const [isTracking, setIsTracking] = useState(false);
+  const [isBackgroundTracking, setIsBackgroundTracking] = useState(false);
   const [permissionStatus, setPermissionStatus] = useState<Location.PermissionStatus | null>(null);
+  const [backgroundPermissionStatus, setBackgroundPermissionStatus] = useState<Location.PermissionStatus | null>(null);
 
   const watchSubscription = useRef<Location.LocationSubscription | null>(null);
   const webWatchId = useRef<number | null>(null);
@@ -48,6 +83,40 @@ export function LocationProvider({ children }: { children: ReactNode }) {
 
     const { status } = await Location.requestForegroundPermissionsAsync();
     setPermissionStatus(status);
+  }, []);
+
+  const requestBackgroundPermission = useCallback(async (): Promise<boolean> => {
+    if (Platform.OS === "web") {
+      return false;
+    }
+
+    const fgPerm = await Location.requestForegroundPermissionsAsync();
+    setPermissionStatus(fgPerm.status);
+    if (fgPerm.status !== Location.PermissionStatus.GRANTED) {
+      return false;
+    }
+
+    const { status, canAskAgain } = await Location.requestBackgroundPermissionsAsync();
+    setBackgroundPermissionStatus(status);
+
+    if (status === Location.PermissionStatus.GRANTED) {
+      return true;
+    }
+
+    if (status === Location.PermissionStatus.DENIED && !canAskAgain) {
+      if (Platform.OS === "ios" || Platform.OS === "android") {
+        Alert.alert(
+          "Background Location Required",
+          'LowRoute needs "Always" location access to continue tracking your route when the app is in the background. Please enable it in Settings.',
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Open Settings", onPress: () => { try { Linking.openSettings(); } catch {} } },
+          ]
+        );
+      }
+    }
+
+    return false;
   }, []);
 
   const startTracking = useCallback(async () => {
@@ -123,18 +192,77 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     setIsTracking(false);
   }, []);
 
+  const startBackgroundTracking = useCallback(async () => {
+    if (Platform.OS === "web") return;
+    if (isBackgroundTracking) return;
+
+    const hasPermission = await requestBackgroundPermission();
+    if (!hasPermission) return;
+
+    backgroundLocationCallback = (position, h, s) => {
+      setCurrentPosition(position);
+      setHeading(h);
+      setSpeed(s);
+    };
+
+    const isTaskDefined = TaskManager.isTaskDefined(BACKGROUND_LOCATION_TASK);
+    if (!isTaskDefined) {
+      console.warn("Background location task not defined");
+      return;
+    }
+
+    const hasStarted = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
+    if (!hasStarted) {
+      await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
+        accuracy: Location.Accuracy.High,
+        distanceInterval: 10,
+        timeInterval: 2000,
+        showsBackgroundLocationIndicator: true,
+        foregroundService: {
+          notificationTitle: "LowRoute Navigation",
+          notificationBody: "Tracking your route for hazard alerts",
+          notificationColor: "#60A5FA",
+        },
+      });
+    }
+
+    setIsBackgroundTracking(true);
+  }, [isBackgroundTracking, requestBackgroundPermission]);
+
+  const stopBackgroundTracking = useCallback(async () => {
+    if (Platform.OS === "web") return;
+
+    backgroundLocationCallback = null;
+
+    try {
+      const hasStarted = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
+      if (hasStarted) {
+        await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
+      }
+    } catch (e) {
+      console.warn("Error stopping background location:", e);
+    }
+
+    setIsBackgroundTracking(false);
+  }, []);
+
   const value = useMemo(
     () => ({
       currentPosition,
       heading,
       speed,
       isTracking,
+      isBackgroundTracking,
       permissionStatus,
+      backgroundPermissionStatus,
       requestPermission,
+      requestBackgroundPermission,
       startTracking,
       stopTracking,
+      startBackgroundTracking,
+      stopBackgroundTracking,
     }),
-    [currentPosition, heading, speed, isTracking, permissionStatus, requestPermission, startTracking, stopTracking]
+    [currentPosition, heading, speed, isTracking, isBackgroundTracking, permissionStatus, backgroundPermissionStatus, requestPermission, requestBackgroundPermission, startTracking, stopTracking, startBackgroundTracking, stopBackgroundTracking]
   );
 
   return <LocationContext.Provider value={value}>{children}</LocationContext.Provider>;

@@ -206,12 +206,12 @@ export async function updateSubscriptionTier(userId: string, tier: string) {
     .where(eq(schema.users.id, userId));
 }
 
-export async function seedAdminUser(passwordHash: string) {
-  const existing = await getUserByUsername("admin");
+export async function seedAdminUser(username: string, passwordHash: string) {
+  const existing = await getUserByUsername(username);
   if (existing) return existing;
   const [admin] = await db.insert(schema.users).values({
-    username: "admin",
-    email: "admin@lowroute.app",
+    username,
+    email: `${username}@lowroute.app`,
     passwordHash,
     reputation: 1000,
     role: "admin",

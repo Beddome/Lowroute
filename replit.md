@@ -8,31 +8,35 @@ A community-powered GPS and hazard-reporting app for low-clearance vehicles (low
 **Backend:** Express.js + TypeScript on port 5000
 **Database:** PostgreSQL via Drizzle ORM
 **Auth:** express-session with connect-pg-simple store, bcryptjs for password hashing
+**Routing:** OSRM (Open Source Routing Machine) via public API — real road-following routes
 **Payments:** RevenueCat SDK (react-native-purchases) — runs in Preview API Mode in Expo Go
 
 ## Key Features
 
 - Interactive map with hazard markers colored by severity tier (1-4)
+- **Real road-following routes** via OSRM with multiple alternatives, distance, and duration
 - 3 route options: Fastest, Low-Car Safe, Balanced — each with a Low Clearance Risk Score
 - **Live GPS navigation** with continuous position tracking, speed, heading display
+- **Background location tracking** — navigation continues when app is minimized
 - **Hazard proximity alerts** — vibration + visual warning when within 200m of a hazard during navigation
-- Community hazard reporting (10 hazard types, 4 severity tiers)
+- Community hazard reporting (10 hazard types, 4 severity tiers) with input validation
 - Community validation: confirm, downvote, or mark hazards as cleared
 - Confidence scoring based on community votes
 - User accounts with reputation/XP system and badges
 - **Admin panel** with stats dashboard, hazard management, user role management
 - **Subscription system** with Free and Pro tiers (Pro gates live navigation + hazard alerts)
+- **Security hardening**: rate limiting on auth endpoints, input validation, env-configurable admin credentials
 - Geocoding via OpenStreetMap Nominatim (free, no API key required)
 
 ## Route Safety Logic
 
-The route scoring system (see `server/routes.ts`) applies severity penalties:
+Routes are fetched from OSRM (real road geometry), then scored based on nearby hazards:
 - Tier 1 (Minor): +5 points
 - Tier 2 (Caution): +20 points
 - Tier 3 (Major): +100 points
 - Tier 4 (No-Go): +1000 points
 
-Only hazards with confidence >= 0.4 count. Routes with more Tier 3/4 hazards score higher (worse). The "Low-Car Safe" route uses alternate waypoints to reduce hazard exposure.
+Hazard proximity to route is calculated using point-to-segment distance (not bounding box). Only hazards with confidence >= 0.4 count.
 
 ## Project Structure
 
@@ -41,7 +45,7 @@ app/
   _layout.tsx          # Root layout with QueryClient, AuthProvider, LocationProvider, ErrorBoundary
   (tabs)/
     _layout.tsx        # NativeTabs (iOS 26+) or classic BlurView Tabs, conditional admin tab
-    index.tsx          # Main map screen with search, routing, hazard markers, live navigation
+    index.tsx          # Main map screen with search, OSRM routing, hazard markers, live navigation
     index.web.tsx      # Web fallback for map (no react-native-maps on web)
     profile.tsx        # User profile, reputation, badges, subscription upgrade
     admin.tsx          # Admin dashboard: stats, hazard mgmt, user mgmt (admin only)
@@ -54,10 +58,10 @@ app/
   paywall.tsx          # Subscription/upgrade screen with Free & Pro tiers
 contexts/
   AuthContext.tsx      # Auth state with role + subscriptionTier
-  LocationContext.tsx  # Live GPS tracking: watchPositionAsync, heading, speed
+  LocationContext.tsx  # Live GPS tracking + background location via expo-task-manager
 server/
   index.ts             # Express setup with CORS, sessions
-  routes.ts            # API routes: auth, hazards, route calc, admin, subscription, nearby
+  routes.ts            # API routes: OSRM routing, auth (rate limited), hazards (validated), admin, subscription
   storage.ts           # Drizzle DB operations + seed data + admin ops
 shared/
   schema.ts            # Drizzle schema: users (with role, subscriptionTier), hazards, hazard_votes
@@ -74,8 +78,12 @@ metro.config.js        # Custom resolver to stub react-native-maps on web
 - **Frontend files MUST import from `shared/types.ts`** NOT `shared/schema.ts` (schema uses drizzle-orm which is Node.js-only and breaks the Expo web bundle)
 - `react-native-maps@1.18.0` is pinned for Expo Go compatibility
 - Metro config stubs react-native-maps for web platform via custom resolver
-- Admin account: username `admin`, password `lowroute-admin`
+- Admin credentials configurable via ADMIN_USERNAME / ADMIN_PASSWORD env vars (defaults: admin / lowroute-admin)
 - Live navigation is gated behind Pro subscription (or admin role)
+- Auth endpoints rate-limited: 10 attempts per 15 minutes per IP
+- Hazard reports validated: coordinate bounds, severity 1-4, title 3-100 chars, description 5-500 chars
+- Bundle identifiers: `com.lowroute.app` (iOS and Android)
+- Background location configured for both iOS (UIBackgroundModes) and Android (foreground service)
 
 ## Color Theme
 
@@ -96,20 +104,21 @@ metro.config.js        # Custom resolver to stub react-native-maps on web
 
 ## API Endpoints
 
-Auth: POST /api/auth/register, POST /api/auth/login, POST /api/auth/logout, GET /api/auth/me
-Hazards: GET /api/hazards, POST /api/hazards, GET /api/hazards/:id, POST /api/hazards/:id/vote, GET /api/hazards/nearby
-Routes: GET /api/routes
+Auth: POST /api/auth/register (rate limited), POST /api/auth/login (rate limited), POST /api/auth/logout, GET /api/auth/me
+Hazards: GET /api/hazards, POST /api/hazards (validated), GET /api/hazards/:id, POST /api/hazards/:id/vote, GET /api/hazards/nearby
+Routes: GET /api/routes (OSRM-powered)
 Admin: GET /api/admin/stats, GET /api/admin/users, PATCH /api/admin/users/:id/role, DELETE /api/admin/hazards/:id
 Subscription: POST /api/subscription
 
 ## Seed Data
 
 10 sample hazards seeded around downtown Los Angeles (lat 34.05, lng -118.24) on first startup.
-Admin user seeded on startup (admin / lowroute-admin).
+Admin user seeded on startup (configurable via env vars).
 
 ## Dependencies
 
 - `react-native-maps@1.18.0` — pinned for Expo Go compatibility
 - `react-native-purchases` — RevenueCat SDK for subscriptions
+- `expo-task-manager` — background location task registration
 - `bcryptjs` — password hashing
 - `express-session` + `connect-pg-simple` — session management

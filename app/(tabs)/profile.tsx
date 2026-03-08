@@ -77,8 +77,12 @@ export default function ProfileScreen() {
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   const handleLogout = async () => {
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    await logout();
+    try {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      await logout();
+    } catch (err) {
+      console.error("Logout error:", err);
+    }
   };
 
   if (isLoading) {
