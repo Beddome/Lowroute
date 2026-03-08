@@ -1163,9 +1163,9 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* Floating action buttons — on map edge, not inside panels */}
-      {!isNavigating && (
-        <View style={[styles.mapFabColumn, { bottom: insets.bottom + bottomPanelHeight + 90, right: 16 }]}>
+      {/* Floating action buttons — anchored below the location button */}
+      {!isNavigating && geocodeResults.length === 0 && (
+        <View style={[styles.mapFabColumn, { top: insets.top + topPadding + 120 + 44 + 10, right: 16 }]}>
           <Pressable
             style={[styles.mapFab, { backgroundColor: Colors.bgCard }]}
             onPress={() => {
