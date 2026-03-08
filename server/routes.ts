@@ -133,8 +133,8 @@ function calculateRouteRisk(hazards: Array<{ severity: number; confidenceScore: 
   return { score, counts, highestTier, totalHazards };
 }
 
-const HAZARD_BUFFER_METERS = 50;
-const HAZARD_BUFFER_DEG = 0.00045;
+const HAZARD_BUFFER_METERS = 3;
+const HAZARD_BUFFER_DEG = 0.00003;
 
 function hazardsNearPolyline(
   allHazards: Array<{ lat: number; lng: number; severity: number; confidenceScore: number; [key: string]: any }>,
