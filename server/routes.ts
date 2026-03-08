@@ -5,6 +5,7 @@ import ConnectPgSimple from "connect-pg-simple";
 import bcrypt from "bcryptjs";
 import { Pool } from "pg";
 import * as storage from "./storage";
+import { parseDateEndOfDayMST } from "./timezone";
 import { SEVERITY_TIERS } from "../shared/schema";
 
 const loginAttempts = new Map<string, { count: number; lastAttempt: number }>();
@@ -541,22 +542,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/admin/promo-codes", requireAdmin, async (req: Request, res: Response) => {
     try {
-      const { type, maxUses, expiresAt } = req.body;
+      const { type, maxUses, expiresAt, code: customCode } = req.body;
       if (!type || !["7_day", "30_day", "permanent"].includes(type)) {
         return res.status(400).json({ message: "Invalid promo type. Use 7_day, 30_day, or permanent." });
       }
       const parsedUses = maxUses ? parseInt(maxUses) : 1;
       const uses = isNaN(parsedUses) ? 1 : Math.max(1, Math.min(10000, parsedUses));
-      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-      let code = "LOWPRO-";
-      for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+
+      let code: string;
+      if (customCode && typeof customCode === "string" && customCode.trim()) {
+        code = customCode.trim().toUpperCase().replace(/[^A-Z0-9\-]/g, "");
+        if (code.length < 3 || code.length > 20) {
+          return res.status(400).json({ message: "Custom code must be 3-20 characters (letters, numbers, hyphens)" });
+        }
+        const existing = await storage.getPromoCodeByCode(code);
+        if (existing) {
+          return res.status(409).json({ message: `Code "${code}" is already taken` });
+        }
+      } else {
+        const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        code = "LOWPRO-";
+        for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+      }
+
+      let parsedExpiry: Date | null = null;
+      if (expiresAt && typeof expiresAt === "string" && expiresAt.trim()) {
+        parsedExpiry = parseDateEndOfDayMST(expiresAt.trim());
+        if (!parsedExpiry) {
+          return res.status(400).json({ message: "Invalid expiry date. Use YYYY-MM-DD format." });
+        }
+        if (parsedExpiry < new Date()) {
+          return res.status(400).json({ message: "Expiry date must be in the future" });
+        }
+      }
 
       const promo = await storage.createPromoCode({
         code,
         type,
         maxUses: uses,
         createdBy: req.session.userId!,
-        expiresAt: expiresAt ? new Date(expiresAt) : null,
+        expiresAt: parsedExpiry,
       });
       res.json(promo);
     } catch (err) {
@@ -603,8 +628,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "This promo code has reached its usage limit" });
       }
 
-      const existing = await storage.getUserRedemption(req.session.userId!, promo.id);
-      if (existing) return res.status(400).json({ message: "You have already used this promo code" });
+      const hasRedeemed = await storage.hasUserRedeemedAnyPromo(req.session.userId!);
+      if (hasRedeemed) return res.status(400).json({ message: "Promo codes are limited to one per account" });
 
       await storage.redeemPromoCode(req.session.userId!, promo.id);
 

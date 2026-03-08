@@ -249,6 +249,13 @@ export async function getUserRedemption(userId: string, promoCodeId: string) {
   return redemption || null;
 }
 
+export async function hasUserRedeemedAnyPromo(userId: string): Promise<boolean> {
+  const [result] = await db.select({ count: sql<number>`count(*)::int` })
+    .from(schema.promoRedemptions)
+    .where(eq(schema.promoRedemptions.userId, userId));
+  return (result?.count ?? 0) > 0;
+}
+
 export async function redeemPromoCode(userId: string, promoCodeId: string) {
   await db.insert(schema.promoRedemptions).values({ userId, promoCodeId });
   await db.update(schema.promoCodes)

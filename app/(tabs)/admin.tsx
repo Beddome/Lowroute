@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest, queryClient } from "@/lib/query-client";
-import { SEVERITY_TIERS, PROMO_TYPES } from "@/shared/types";
+import { SEVERITY_TIERS, PROMO_TYPES, formatMSTDateClient, formatMSTClient } from "@/shared/types";
 import type { PromoCode } from "@/shared/types";
 
 type Tab = "stats" | "hazards" | "users" | "promos";
@@ -313,22 +313,36 @@ function UsersPanel({ currentUserId }: { currentUserId: string }) {
 function PromoCodesPanel() {
   const [promoType, setPromoType] = useState<string>("7_day");
   const [maxUses, setMaxUses] = useState("1");
+  const [customCode, setCustomCode] = useState("");
+  const [expiryDate, setExpiryDate] = useState("");
 
   const promosQuery = useQuery<PromoCode[]>({ queryKey: ["/api/admin/promo-codes"] });
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("POST", "/api/admin/promo-codes", {
+      const body: Record<string, unknown> = {
         type: promoType,
         maxUses: parseInt(maxUses) || 1,
-      });
+      };
+      if (customCode.trim()) body.code = customCode.trim();
+      if (expiryDate.trim()) body.expiresAt = expiryDate.trim();
+      await apiRequest("POST", "/api/admin/promo-codes", body);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/promo-codes"] });
       setMaxUses("1");
+      setCustomCode("");
+      setExpiryDate("");
     },
-    onError: () => {
-      Alert.alert("Error", "Failed to create promo code");
+    onError: (err: any) => {
+      let msg = "Failed to create promo code";
+      if (err?.message) {
+        const match = err.message.match(/^\d+:\s*(.+)/);
+        if (match) {
+          try { msg = JSON.parse(match[1]).message || msg; } catch {}
+        }
+      }
+      Alert.alert("Error", msg);
     },
   });
 
@@ -378,6 +392,20 @@ function PromoCodesPanel() {
       ListHeaderComponent={
         <View style={promoStyles.createCard}>
           <Text style={styles.sectionTitle}>Create Promo Code</Text>
+          <View style={promoStyles.inputRow}>
+            <Text style={promoStyles.inputLabel}>Code</Text>
+            <TextInput
+              style={promoStyles.input}
+              value={customCode}
+              onChangeText={(t) => setCustomCode(t.toUpperCase().replace(/[^A-Z0-9\-]/g, ""))}
+              placeholder="Auto-generate"
+              placeholderTextColor={Colors.textMuted}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              maxLength={20}
+            />
+          </View>
+          <Text style={promoStyles.inputHint}>Leave blank to auto-generate, or enter a custom code (e.g. LOWRIDER50)</Text>
           <View style={promoStyles.typeRow}>
             {PROMO_TYPES.map((t) => (
               <TouchableOpacity
@@ -401,6 +429,18 @@ function PromoCodesPanel() {
               placeholderTextColor={Colors.textMuted}
             />
           </View>
+          <View style={promoStyles.inputRow}>
+            <Text style={promoStyles.inputLabel}>Expires</Text>
+            <TextInput
+              style={promoStyles.input}
+              value={expiryDate}
+              onChangeText={setExpiryDate}
+              placeholder="YYYY-MM-DD (optional)"
+              placeholderTextColor={Colors.textMuted}
+              autoCorrect={false}
+            />
+          </View>
+          <Text style={promoStyles.inputHint}>Set a date limit, a usage limit, or both</Text>
           <TouchableOpacity
             style={[promoStyles.createBtn, createMutation.isPending && { opacity: 0.6 }]}
             onPress={() => createMutation.mutate()}
@@ -411,7 +451,7 @@ function PromoCodesPanel() {
             ) : (
               <>
                 <Ionicons name="add-circle" size={18} color={Colors.bg} />
-                <Text style={promoStyles.createBtnText}>Generate Code</Text>
+                <Text style={promoStyles.createBtnText}>{customCode.trim() ? "Create Code" : "Generate Code"}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -434,9 +474,10 @@ function PromoCodesPanel() {
                 {item.currentUses}/{item.maxUses} used
               </Text>
               <Text style={promoStyles.promoMetaText}>
-                {new Date(item.createdAt).toLocaleDateString()}
+                {item.expiresAt ? formatMSTDateClient(item.expiresAt) : "No expiry"}
               </Text>
             </View>
+            <Text style={promoStyles.promoCreated}>Created {formatMSTClient(item.createdAt)}</Text>
             {item.isActive && (
               <TouchableOpacity
                 style={promoStyles.deactivateBtn}
@@ -493,12 +534,13 @@ const promoStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    marginBottom: 14,
+    marginBottom: 8,
   },
   inputLabel: {
     fontSize: 14,
     fontWeight: "600" as const,
     color: Colors.textSecondary,
+    width: 65,
   },
   input: {
     flex: 1,
@@ -510,6 +552,12 @@ const promoStyles = StyleSheet.create({
     color: Colors.text,
     borderWidth: 1,
     borderColor: Colors.border,
+  },
+  inputHint: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginBottom: 12,
+    marginLeft: 77,
   },
   createBtn: {
     backgroundColor: Colors.accent,
@@ -556,11 +604,17 @@ const promoStyles = StyleSheet.create({
   },
   promoMeta: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 12,
   },
   promoMetaText: {
     fontSize: 12,
     color: Colors.textSecondary,
+  },
+  promoCreated: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginTop: 6,
   },
   deactivateBtn: {
     flexDirection: "row",

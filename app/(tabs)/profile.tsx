@@ -14,6 +14,7 @@ import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useAuth } from "@/contexts/AuthContext";
 import { Colors } from "@/constants/colors";
+import { formatMSTDateClient } from "@/shared/types";
 
 const BADGES = [
   { id: "first_report", icon: "flag" as const, label: "First Report", desc: "Submitted your first hazard", minRep: 10, color: Colors.accent },
@@ -250,7 +251,7 @@ export default function ProfileScreen() {
               </Text>
               {user.subscriptionTier === "pro" && user.subscriptionExpiresAt && (
                 <Text style={styles.subExpiry}>
-                  Pro until {new Date(user.subscriptionExpiresAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                  Pro until {formatMSTDateClient(user.subscriptionExpiresAt)}
                 </Text>
               )}
             </View>

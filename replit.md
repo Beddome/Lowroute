@@ -80,6 +80,8 @@ metro.config.js        # Custom resolver to stub react-native-maps on web
 - Metro config stubs react-native-maps for web platform via custom resolver
 - Admin credentials configurable via ADMIN_USERNAME / ADMIN_PASSWORD env vars (defaults: admin / lowroute-admin)
 - Live navigation is gated behind Pro subscription (or admin role)
+- **Promo codes**: one redemption per account lifetime; admin can set custom codes (e.g. influencer codes), date expiry, usage limit, or both
+- **Timezone**: All promo/subscription dates use Mountain Standard Time (MST, UTC-7); helper functions in `server/timezone.ts` and `shared/types.ts`
 - Auth endpoints rate-limited: 10 attempts per 15 minutes per IP
 - Hazard reports validated: coordinate bounds, severity 1-4, title 3-100 chars, description 5-500 chars
 - Bundle identifiers: `com.lowroute.app` (iOS and Android)

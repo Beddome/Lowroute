@@ -90,3 +90,28 @@ export const PROMO_TYPES = [
   { value: "30_day", label: "30-Day Trial", days: 30 },
   { value: "permanent", label: "Permanent Access", days: null },
 ] as const;
+
+const MST_TIMEZONE = "America/Phoenix";
+
+export function formatMSTDateClient(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  return d.toLocaleString("en-US", {
+    timeZone: MST_TIMEZONE,
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }) + " MST";
+}
+
+export function formatMSTClient(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  return d.toLocaleString("en-US", {
+    timeZone: MST_TIMEZONE,
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }) + " MST";
+}
