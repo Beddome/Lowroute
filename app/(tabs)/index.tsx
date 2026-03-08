@@ -199,6 +199,34 @@ function getDistance(lat1: number, lon1: number, lat2: number, lon2: number): nu
 
 const ROUTE_COLORS = ["#60A5FA", "#34D399", "#FBBF24"];
 const PROXIMITY_ALERT_METERS = 200;
+const OFF_ROUTE_THRESHOLD_METERS = 30;
+const OFF_ROUTE_CONSECUTIVE_COUNT = 3;
+const REROUTE_COOLDOWN_MS = 15000;
+
+function distanceToPolyline(lat: number, lng: number, polyline: Array<{ lat: number; lng: number }>): number {
+  if (polyline.length === 0) return Infinity;
+  if (polyline.length === 1) return getDistance(lat, lng, polyline[0].lat, polyline[0].lng);
+  let minDist = Infinity;
+  for (let i = 0; i < polyline.length - 1; i++) {
+    const aLat = polyline[i].lat;
+    const aLng = polyline[i].lng;
+    const bLat = polyline[i + 1].lat;
+    const bLng = polyline[i + 1].lng;
+    const cosLat = Math.cos((lat * Math.PI) / 180);
+    const dx = (bLng - aLng) * cosLat;
+    const dy = bLat - aLat;
+    const px = (lng - aLng) * cosLat;
+    const py = lat - aLat;
+    const lenSq = dx * dx + dy * dy;
+    let t = lenSq > 0 ? (px * dx + py * dy) / lenSq : 0;
+    t = Math.max(0, Math.min(1, t));
+    const projLat = aLat + t * (bLat - aLat);
+    const projLng = aLng + t * (bLng - aLng);
+    const d = getDistance(lat, lng, projLat, projLng);
+    if (d < minDist) minDist = d;
+  }
+  return minDist;
+}
 
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
@@ -247,6 +275,9 @@ export default function MapScreen() {
   const spokenHazardsVoiceRef = useRef<Set<string>>(new Set());
   const speechQueueRef = useRef<string[]>([]);
   const isSpeakingRef = useRef(false);
+  const offRouteCountRef = useRef(0);
+  const lastRerouteTimeRef = useRef(0);
+  const [isRerouting, setIsRerouting] = useState(false);
   const hazardTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const { data: hazards = [] } = useQuery<Hazard[]>({
@@ -377,6 +408,46 @@ export default function MapScreen() {
     processQueue();
   }, [voiceEnabled, processQueue]);
 
+  const isNavigatingRef = useRef(false);
+  useEffect(() => { isNavigatingRef.current = isNavigating; }, [isNavigating]);
+
+  const rerouteFromCurrentPosition = useCallback(async () => {
+    if (!currentPosition || !destCoords || isRerouting) return;
+    setIsRerouting(true);
+    lastRerouteTimeRef.current = Date.now();
+    try {
+      const baseUrl = getApiUrl();
+      const url = new URL("/api/routes", baseUrl);
+      url.searchParams.set("startLat", String(currentPosition.latitude));
+      url.searchParams.set("startLng", String(currentPosition.longitude));
+      url.searchParams.set("endLat", String(destCoords.lat));
+      url.searchParams.set("endLng", String(destCoords.lng));
+      if (activeCarProfile?.id) {
+        url.searchParams.set("carProfileId", activeCarProfile.id);
+      }
+      const res = await fetch(url.toString(), { credentials: "include" });
+      if (!res.ok) return;
+      if (!isNavigatingRef.current) return;
+      const data = await res.json();
+      const routeList = data.routes || data;
+      if (!Array.isArray(routeList) || routeList.length === 0) return;
+      if (!isNavigatingRef.current) return;
+      setRoutes(routeList);
+      setSelectedRouteIdx(0);
+      currentStepIdxRef.current = 0;
+      spokenStepsRef.current = new Set();
+      alertedHazardsRef.current = new Set();
+      spokenHazardsVoiceRef.current = new Set();
+      offRouteCountRef.current = 0;
+      setCurrentInstruction(null);
+      speak("Rerouting. Taking the safest route.", true);
+    } catch (e) {
+      console.error("Reroute error:", e);
+    } finally {
+      setIsRerouting(false);
+    }
+  }, [currentPosition, destCoords, activeCarProfile, isRerouting, speak]);
+
   useEffect(() => {
     if (!isNavigating || !currentPosition) return;
 
@@ -453,7 +524,29 @@ export default function MapScreen() {
         hazardTimersRef.current.push(timer);
       }
     }
-  }, [currentPosition, isNavigating, speak]);
+
+    if (route.waypoints && route.waypoints.length >= 2) {
+      const distToRoute = distanceToPolyline(
+        currentPosition.latitude,
+        currentPosition.longitude,
+        route.waypoints
+      );
+      if (distToRoute > OFF_ROUTE_THRESHOLD_METERS) {
+        offRouteCountRef.current += 1;
+      } else {
+        offRouteCountRef.current = 0;
+      }
+      const timeSinceLastReroute = Date.now() - lastRerouteTimeRef.current;
+      if (
+        offRouteCountRef.current >= OFF_ROUTE_CONSECUTIVE_COUNT &&
+        timeSinceLastReroute > REROUTE_COOLDOWN_MS &&
+        !isRerouting
+      ) {
+        offRouteCountRef.current = 0;
+        rerouteFromCurrentPosition();
+      }
+    }
+  }, [currentPosition, isNavigating, speak, rerouteFromCurrentPosition, isRerouting]);
 
   const startNavigation = useCallback(async () => {
     if (!user) {
@@ -473,6 +566,8 @@ export default function MapScreen() {
       currentStepIdxRef.current = 0;
       spokenStepsRef.current.clear();
       spokenHazardsVoiceRef.current.clear();
+      offRouteCountRef.current = 0;
+      lastRerouteTimeRef.current = 0;
       setCurrentInstruction(null);
       navStartTimeRef.current = Date.now();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -491,12 +586,15 @@ export default function MapScreen() {
     hazardTimersRef.current = [];
     if (voiceEnabled) Speech.speak("Navigation ended");
     setIsNavigating(false);
+    setIsRerouting(false);
     setNearbyHazard(null);
     setCurrentInstruction(null);
     alertedHazardsRef.current.clear();
     spokenStepsRef.current.clear();
     spokenHazardsVoiceRef.current.clear();
     currentStepIdxRef.current = 0;
+    offRouteCountRef.current = 0;
+    lastRerouteTimeRef.current = 0;
     stopTracking();
     stopBackgroundTracking().catch(() => {});
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -870,7 +968,13 @@ export default function MapScreen() {
                 <Text style={styles.navStatLabel}>min</Text>
               </View>
             </View>
-            {currentInstruction && (
+            {isRerouting && (
+              <View style={[styles.instructionStrip, { backgroundColor: "#7C3AED" }]}>
+                <Ionicons name="refresh" size={14} color="#FFF" />
+                <Text style={[styles.instructionText, { color: "#FFF" }]}>Rerouting...</Text>
+              </View>
+            )}
+            {!isRerouting && currentInstruction && (
               <View style={styles.instructionStrip}>
                 <Ionicons name="arrow-forward" size={14} color={Colors.accent} />
                 <Text style={styles.instructionText} numberOfLines={2}>{currentInstruction}</Text>
