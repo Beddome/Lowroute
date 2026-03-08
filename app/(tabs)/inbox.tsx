@@ -31,8 +31,12 @@ function timeAgo(date: string | Date): string {
 }
 
 function ConversationItem({ item, onPress }: { item: Conversation; onPress: () => void }) {
-  const initial = item.otherUsername?.[0]?.toUpperCase() ?? "?";
   const hasUnread = item.unreadCount > 0;
+  const isGroup = !!item.isGroup;
+  const displayName = isGroup
+    ? (item.groupName || `Group (${item.memberCount ?? 0})`)
+    : item.otherUsername;
+  const initial = isGroup ? "G" : (item.otherUsername?.[0]?.toUpperCase() ?? "?");
 
   return (
     <Pressable
@@ -41,6 +45,10 @@ function ConversationItem({ item, onPress }: { item: Conversation; onPress: () =
     >
       {item.listingPhoto ? (
         <Image source={{ uri: item.listingPhoto }} style={styles.convAvatar} />
+      ) : isGroup ? (
+        <View style={[styles.convAvatarPlaceholder, { backgroundColor: Colors.accent + "22", borderColor: Colors.accent + "44" }, hasUnread && { borderColor: Colors.accent }]}>
+          <Ionicons name="people" size={22} color={Colors.accent} />
+        </View>
       ) : (
         <View style={[styles.convAvatarPlaceholder, hasUnread && { borderColor: Colors.accent }]}>
           <Text style={styles.convAvatarInitial}>{initial}</Text>
@@ -50,10 +58,10 @@ function ConversationItem({ item, onPress }: { item: Conversation; onPress: () =
       <View style={styles.convContent}>
         <View style={styles.convTopRow}>
           <Text style={[styles.convUsername, hasUnread && styles.convUsernameUnread]} numberOfLines={1}>
-            {item.otherUsername}
+            {displayName}
           </Text>
           <Text style={[styles.convTime, hasUnread && { color: Colors.accent }]}>
-            {timeAgo(item.lastMessageAt)}
+            {item.lastMessageAt ? timeAgo(item.lastMessageAt) : ""}
           </Text>
         </View>
         {item.listingTitle && (
@@ -61,8 +69,13 @@ function ConversationItem({ item, onPress }: { item: Conversation; onPress: () =
             {item.listingTitle}
           </Text>
         )}
+        {isGroup && item.memberCount ? (
+          <Text style={styles.convListingTitle} numberOfLines={1}>
+            {item.memberCount} members
+          </Text>
+        ) : null}
         <Text style={[styles.convLastMessage, hasUnread && styles.convLastMessageUnread]} numberOfLines={1}>
-          {item.lastMessage}
+          {item.lastMessage || "No messages yet"}
         </Text>
       </View>
 
@@ -94,15 +107,25 @@ export default function InboxScreen() {
   }, [refetch]);
 
   const openConversation = useCallback((conv: Conversation) => {
-    router.push({
-      pathname: "/conversation",
-      params: {
-        userId: conv.otherUserId,
-        username: conv.otherUsername,
-        ...(conv.listingId ? { listingId: conv.listingId } : {}),
-        ...(conv.listingTitle ? { listingTitle: conv.listingTitle } : {}),
-      },
-    });
+    if (conv.isGroup && conv.groupChatId) {
+      router.push({
+        pathname: "/conversation",
+        params: {
+          groupChatId: conv.groupChatId,
+          groupName: conv.groupName || `Group (${conv.memberCount ?? 0})`,
+        },
+      });
+    } else {
+      router.push({
+        pathname: "/conversation",
+        params: {
+          userId: conv.otherUserId,
+          username: conv.otherUsername,
+          ...(conv.listingId ? { listingId: conv.listingId } : {}),
+          ...(conv.listingTitle ? { listingTitle: conv.listingTitle } : {}),
+        },
+      });
+    }
   }, []);
 
   if (!user) {
@@ -126,6 +149,13 @@ export default function InboxScreen() {
     <View style={[styles.container, { paddingTop: insets.top + topPadding }]}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Messages</Text>
+        <Pressable
+          style={({ pressed }) => [styles.composeBtn, pressed && { opacity: 0.7 }]}
+          onPress={() => router.push("/new-chat")}
+          hitSlop={12}
+        >
+          <Ionicons name="create-outline" size={22} color={Colors.accent} />
+        </Pressable>
       </View>
 
       {isLoading ? (
@@ -143,7 +173,7 @@ export default function InboxScreen() {
       ) : (
         <FlatList
           data={conversations}
-          keyExtractor={(item) => `${item.otherUserId}-${item.listingId ?? "dm"}`}
+          keyExtractor={(item) => item.isGroup ? `group-${item.groupChatId}` : `${item.otherUserId}-${item.listingId ?? "dm"}`}
           renderItem={({ item }) => (
             <ConversationItem item={item} onPress={() => openConversation(item)} />
           )}
@@ -169,9 +199,20 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bg,
   },
   header: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "space-between" as const,
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 16,
+  },
+  composeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.accent + "15",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
   },
   headerTitle: {
     fontSize: 28,

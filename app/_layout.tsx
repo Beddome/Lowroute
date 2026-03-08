@@ -92,9 +92,8 @@ function RootLayoutNav() {
       <Stack.Screen
         name="listing-detail"
         options={{
-          presentation: "formSheet",
-          sheetAllowedDetents: [0.85],
-          sheetGrabberVisible: true,
+          presentation: "modal",
+          gestureEnabled: false,
           headerShown: false,
           contentStyle: { backgroundColor: Colors.bgCard },
         }}
@@ -102,9 +101,8 @@ function RootLayoutNav() {
       <Stack.Screen
         name="create-listing"
         options={{
-          presentation: "formSheet",
-          sheetAllowedDetents: [0.9],
-          sheetGrabberVisible: true,
+          presentation: "modal",
+          gestureEnabled: false,
           headerShown: false,
           contentStyle: { backgroundColor: Colors.bgCard },
         }}
@@ -122,6 +120,15 @@ function RootLayoutNav() {
       <Stack.Screen
         name="conversation"
         options={{
+          headerShown: false,
+          contentStyle: { backgroundColor: Colors.bg },
+        }}
+      />
+      <Stack.Screen
+        name="new-chat"
+        options={{
+          presentation: "modal",
+          gestureEnabled: false,
           headerShown: false,
           contentStyle: { backgroundColor: Colors.bg },
         }}

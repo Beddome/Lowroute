@@ -164,11 +164,20 @@ export default function ListingDetailScreen() {
   const shippingColor = getShippingColor(listing.shippingOption);
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{ paddingBottom: insets.bottom + 30 }}
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={{ flex: 1, backgroundColor: Colors.bgCard }}>
+      <Pressable
+        style={[styles.closeButton, { top: insets.top + (Platform.OS === "web" ? 67 : 10) }]}
+        onPress={() => router.back()}
+        hitSlop={12}
+      >
+        <Ionicons name="close" size={22} color={Colors.text} />
+      </Pressable>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 30 }}
+        showsVerticalScrollIndicator={false}
+        bounces={true}
+      >
       {photos.length > 0 ? (
         <View style={styles.galleryContainer}>
           <ScrollView
@@ -367,6 +376,7 @@ export default function ListingDetailScreen() {
         )}
       </View>
     </ScrollView>
+    </View>
   );
 }
 
@@ -374,6 +384,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.bgCard,
+  },
+  closeButton: {
+    position: "absolute" as const,
+    right: 16,
+    zIndex: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.bgElevated,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   loadingContainer: {
     flex: 1,

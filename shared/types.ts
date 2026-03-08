@@ -223,8 +223,9 @@ export interface MarketplaceListing {
 export interface Message {
   id: string;
   senderId: string;
-  receiverId: string;
+  receiverId: string | null;
   listingId: string | null;
+  groupChatId: string | null;
   content: string;
   isRead: boolean;
   createdAt: string | Date;
@@ -240,6 +241,42 @@ export interface Conversation {
   lastMessage: string;
   lastMessageAt: string | Date;
   unreadCount: number;
+  isGroup?: boolean;
+  groupChatId?: string | null;
+  groupName?: string | null;
+  memberCount?: number;
+}
+
+export interface GroupChat {
+  id: string;
+  name: string | null;
+  creatorId: string;
+  createdAt: string | Date;
+  members?: GroupChatMember[];
+  memberCount?: number;
+}
+
+export interface GroupChatMember {
+  id: string;
+  groupChatId: string;
+  userId: string;
+  username?: string;
+  joinedAt: string | Date;
+}
+
+export interface FriendWithCar extends FriendWithUser {
+  activeCar?: {
+    make: string;
+    model: string;
+    year: number;
+    clearanceMode: string;
+    suspensionType: string;
+    hasFrontLip: boolean;
+    rideHeight: number | null;
+    wheelSize: number | null;
+    avatarStyle: string;
+    avatarColor: string;
+  };
 }
 
 export const SHIPPING_OPTIONS = [

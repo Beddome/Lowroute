@@ -40,10 +40,13 @@ function formatTime(date: string | Date): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + ` ${time}`;
 }
 
-function MessageBubble({ message, isOwn }: { message: Message; isOwn: boolean }) {
+function MessageBubble({ message, isOwn, isGroup }: { message: Message; isOwn: boolean; isGroup: boolean }) {
   return (
     <View style={[styles.bubbleRow, isOwn ? styles.bubbleRowOwn : styles.bubbleRowOther]}>
       <View style={[styles.bubble, isOwn ? styles.bubbleOwn : styles.bubbleOther]}>
+        {isGroup && !isOwn && message.senderUsername && (
+          <Text style={styles.senderName}>{message.senderUsername}</Text>
+        )}
         <Text style={[styles.bubbleText, isOwn ? styles.bubbleTextOwn : styles.bubbleTextOther]}>
           {message.content}
         </Text>
@@ -63,6 +66,8 @@ export default function ConversationScreen() {
     username: string;
     listingId?: string;
     listingTitle?: string;
+    groupChatId?: string;
+    groupName?: string;
   }>();
 
   const [text, setText] = useState("");
@@ -72,43 +77,72 @@ export default function ConversationScreen() {
   const otherUsername = params.username ?? "User";
   const listingId = params.listingId || undefined;
   const listingTitle = params.listingTitle;
+  const groupChatId = params.groupChatId || undefined;
+  const groupName = params.groupName || undefined;
+  const isGroup = !!groupChatId;
 
-  const queryKey = listingId
-    ? ["/api/messages", otherUserId, listingId]
-    : ["/api/messages", otherUserId];
+  const headerTitle = isGroup ? (groupName || "Group Chat") : otherUsername;
+
+  const queryKey = isGroup
+    ? ["/api/group-chats", groupChatId, "messages"]
+    : listingId
+      ? ["/api/messages", otherUserId, listingId]
+      : ["/api/messages", otherUserId];
 
   const { data: messages = [], isLoading } = useQuery<Message[]>({
     queryKey,
     queryFn: async () => {
       const base = getApiUrl();
-      const url = new URL(`/api/messages/${otherUserId}`, base);
-      if (listingId) url.searchParams.set("listingId", listingId);
+      let url: URL;
+      if (isGroup) {
+        url = new URL(`/api/group-chats/${groupChatId}/messages`, base);
+      } else {
+        url = new URL(`/api/messages/${otherUserId}`, base);
+        if (listingId) url.searchParams.set("listingId", listingId);
+      }
       const res = await fetch(url.toString(), { credentials: "include" });
       if (!res.ok) throw new Error(`${res.status}`);
       return res.json();
     },
-    enabled: !!user && !!otherUserId,
+    enabled: isGroup ? (!!user && !!groupChatId) : (!!user && !!otherUserId),
     refetchInterval: 10000,
   });
 
   useEffect(() => {
-    if (!user || !otherUserId) return;
-    apiRequest("PATCH", "/api/messages/read", {
-      otherUserId,
-      listingId: listingId ?? null,
-    }).then(() => {
-      queryClient.invalidateQueries({ queryKey: ["/api/messages/unread-count"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/messages/conversations"] });
-    }).catch(() => {});
-  }, [user, otherUserId, listingId, messages.length]);
+    if (!user) return;
+    if (isGroup) {
+      if (!groupChatId) return;
+      apiRequest("PATCH", "/api/messages/read", {
+        groupChatId,
+      }).then(() => {
+        queryClient.invalidateQueries({ queryKey: ["/api/messages/unread-count"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/messages/conversations"] });
+      }).catch(() => {});
+    } else {
+      if (!otherUserId) return;
+      apiRequest("PATCH", "/api/messages/read", {
+        otherUserId,
+        listingId: listingId ?? null,
+      }).then(() => {
+        queryClient.invalidateQueries({ queryKey: ["/api/messages/unread-count"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/messages/conversations"] });
+      }).catch(() => {});
+    }
+  }, [user, otherUserId, listingId, groupChatId, isGroup, messages.length]);
 
   const sendMutation = useMutation({
     mutationFn: async (content: string) => {
-      await apiRequest("POST", "/api/messages", {
-        receiverId: otherUserId,
-        listingId: listingId ?? null,
-        content,
-      });
+      if (isGroup) {
+        await apiRequest("POST", `/api/group-chats/${groupChatId}/messages`, {
+          content,
+        });
+      } else {
+        await apiRequest("POST", "/api/messages", {
+          receiverId: otherUserId,
+          listingId: listingId ?? null,
+          content,
+        });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey });
@@ -138,8 +172,8 @@ export default function ConversationScreen() {
           <Ionicons name="chevron-back" size={24} color={Colors.text} />
         </Pressable>
         <View style={styles.headerInfo}>
-          <Text style={styles.headerUsername} numberOfLines={1}>{otherUsername}</Text>
-          {listingTitle && (
+          <Text style={styles.headerUsername} numberOfLines={1}>{headerTitle}</Text>
+          {!isGroup && listingTitle && (
             <Text style={styles.headerListingTitle} numberOfLines={1}>{listingTitle}</Text>
           )}
         </View>
@@ -161,7 +195,7 @@ export default function ConversationScreen() {
           inverted
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <MessageBubble message={item} isOwn={item.senderId === user?.id} />
+            <MessageBubble message={item} isOwn={item.senderId === user?.id} isGroup={isGroup} />
           )}
           contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 8 }}
           showsVerticalScrollIndicator={false}
@@ -271,6 +305,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgElevated,
     borderBottomLeftRadius: 4,
   },
+  senderName: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.accent,
+    marginBottom: 2,
+  },
   bubbleText: {
     fontSize: 15,
     fontFamily: "Inter_400Regular",
@@ -289,7 +329,7 @@ const styles = StyleSheet.create({
   },
   bubbleTimeOwn: {
     color: "rgba(0,0,0,0.5)",
-    textAlign: "right",
+    textAlign: "right" as const,
   },
   bubbleTimeOther: {
     color: Colors.textMuted,

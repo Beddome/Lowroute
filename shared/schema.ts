@@ -253,11 +253,31 @@ export const messages = pgTable("messages", {
     .primaryKey()
     .default(sql`gen_random_uuid()`),
   senderId: varchar("sender_id").references(() => users.id).notNull(),
-  receiverId: varchar("receiver_id").references(() => users.id).notNull(),
+  receiverId: varchar("receiver_id"),
   listingId: varchar("listing_id").references(() => marketplaceListings.id),
+  groupChatId: varchar("group_chat_id"),
   content: text("content").notNull(),
   isRead: boolean("is_read").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const groupChats = pgTable("group_chats", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 100 }),
+  creatorId: varchar("creator_id").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const groupChatMembers = pgTable("group_chat_members", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  groupChatId: varchar("group_chat_id").references(() => groupChats.id).notNull(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  joinedAt: timestamp("joined_at").notNull().defaultNow(),
+  lastReadAt: timestamp("last_read_at").notNull().defaultNow(),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({

@@ -1363,6 +1363,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/friends/with-cars", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const friends = await storage.getFriendsWithCars(req.session.userId!);
+      res.json(friends);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch friends" });
+    }
+  });
+
   app.post("/api/friends/:id/accept", requireAuth, async (req: Request, res: Response) => {
     try {
       const result = await storage.acceptFriendRequest(req.params.id, req.session.userId!);
@@ -1744,15 +1754,111 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/messages/read", requireAuth, async (req: Request, res: Response) => {
     try {
-      const { otherUserId, listingId } = req.body;
-      if (!otherUserId) {
-        return res.status(400).json({ message: "otherUserId is required" });
+      const { otherUserId, listingId, groupChatId } = req.body;
+      if (!otherUserId && !groupChatId) {
+        return res.status(400).json({ message: "otherUserId or groupChatId is required" });
       }
-      await storage.markMessagesRead(req.session.userId!, otherUserId, listingId || null);
+      if (groupChatId) {
+        const isMember = await storage.isGroupChatMember(groupChatId, req.session.userId!);
+        if (!isMember) {
+          return res.status(403).json({ message: "Not a member of this group" });
+        }
+        await storage.markGroupMessagesRead(req.session.userId!, groupChatId);
+      } else {
+        await storage.markMessagesRead(req.session.userId!, otherUserId, listingId || null);
+      }
       res.json({ success: true });
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Failed to mark messages as read" });
+    }
+  });
+
+  // ===== GROUP CHAT ROUTES =====
+  app.post("/api/group-chats", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { name, memberIds } = req.body;
+      if (!Array.isArray(memberIds) || memberIds.length < 1) {
+        return res.status(400).json({ message: "At least one member is required" });
+      }
+      if (name && (typeof name !== "string" || name.trim().length > 100)) {
+        return res.status(400).json({ message: "Group name must be 100 characters or fewer" });
+      }
+      const group = await storage.createGroupChat(
+        name ? name.trim() : null,
+        req.session.userId!,
+        memberIds
+      );
+      res.json(group);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to create group chat" });
+    }
+  });
+
+  app.get("/api/group-chats", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const groups = await storage.getGroupChats(req.session.userId!);
+      res.json(groups);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch group chats" });
+    }
+  });
+
+  app.get("/api/group-chats/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const group = await storage.getGroupChatById(req.params.id);
+      if (!group) return res.status(404).json({ message: "Group not found" });
+      const isMember = await storage.isGroupChatMember(req.params.id, req.session.userId!);
+      if (!isMember) return res.status(403).json({ message: "Not a member" });
+      res.json(group);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch group chat" });
+    }
+  });
+
+  app.get("/api/group-chats/:id/messages", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const isMember = await storage.isGroupChatMember(req.params.id, req.session.userId!);
+      if (!isMember) return res.status(403).json({ message: "Not a member" });
+      const messages = await storage.getGroupMessages(req.params.id);
+      res.json(messages);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch group messages" });
+    }
+  });
+
+  app.post("/api/group-chats/:id/messages", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { content } = req.body;
+      if (!content || typeof content !== "string" || content.trim().length < 1 || content.trim().length > 2000) {
+        return res.status(400).json({ message: "Message must be 1-2000 characters" });
+      }
+      const isMember = await storage.isGroupChatMember(req.params.id, req.session.userId!);
+      if (!isMember) return res.status(403).json({ message: "Not a member" });
+      const msg = await storage.sendGroupMessage(req.session.userId!, req.params.id, content.trim());
+      res.json(msg);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to send group message" });
+    }
+  });
+
+  app.post("/api/group-chats/:id/members", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { userId } = req.body;
+      if (!userId) return res.status(400).json({ message: "userId is required" });
+      const isMember = await storage.isGroupChatMember(req.params.id, req.session.userId!);
+      if (!isMember) return res.status(403).json({ message: "Not a member" });
+      const member = await storage.addGroupMember(req.params.id, userId);
+      if (!member) return res.status(409).json({ message: "Already a member" });
+      res.json(member);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to add member" });
     }
   });
 

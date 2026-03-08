@@ -1044,7 +1044,7 @@ export async function sendMessage(data: { senderId: string; receiverId: string; 
 }
 
 export async function getConversations(userId: string) {
-  const rows = await db.execute(sql`
+  const dmRows = await db.execute(sql`
     WITH convos AS (
       SELECT
         CASE WHEN m.sender_id = ${userId} THEN m.receiver_id ELSE m.sender_id END as other_user_id,
@@ -1058,7 +1058,8 @@ export async function getConversations(userId: string) {
           ORDER BY m.created_at DESC
         ) as rn
       FROM messages m
-      WHERE m.sender_id = ${userId} OR m.receiver_id = ${userId}
+      WHERE (m.sender_id = ${userId} OR m.receiver_id = ${userId})
+      AND m.group_chat_id IS NULL
     )
     SELECT
       c.other_user_id,
@@ -1073,6 +1074,7 @@ export async function getConversations(userId: string) {
          WHERE m2.sender_id = c.other_user_id
          AND m2.receiver_id = ${userId}
          AND (m2.listing_id = c.listing_id OR (m2.listing_id IS NULL AND c.listing_id IS NULL))
+         AND m2.group_chat_id IS NULL
          AND m2.is_read = false),
         0
       )::int as unread_count
@@ -1082,17 +1084,71 @@ export async function getConversations(userId: string) {
     WHERE c.rn = 1
     ORDER BY c.last_message_at DESC
   `);
-  const resultRows = Array.isArray(rows) ? rows : (rows as any).rows ?? [];
-  return resultRows.map((r: any) => ({
-    otherUserId: r.other_user_id,
-    otherUsername: r.other_username,
+  const dmResults = (Array.isArray(dmRows) ? dmRows : (dmRows as any).rows ?? []);
+  const dmConversations = dmResults.map((r: any) => ({
+    otherUserId: r.other_user_id ?? "",
+    otherUsername: r.other_username ?? "",
     listingId: r.listing_id,
     listingTitle: r.listing_title,
     listingPhoto: r.listing_photos ? (typeof r.listing_photos === 'string' ? JSON.parse(r.listing_photos) : r.listing_photos)?.[0] ?? null : null,
     lastMessage: r.last_message,
     lastMessageAt: r.last_message_at,
     unreadCount: parseInt(r.unread_count) || 0,
+    isGroup: false,
+    groupChatId: null,
+    groupName: null,
+    memberCount: 0,
   }));
+
+  const groupRows = await db.execute(sql`
+    WITH group_convos AS (
+      SELECT
+        m.group_chat_id,
+        m.content as last_message,
+        m.created_at as last_message_at,
+        ROW_NUMBER() OVER (PARTITION BY m.group_chat_id ORDER BY m.created_at DESC) as rn
+      FROM messages m
+      WHERE m.group_chat_id IN (
+        SELECT group_chat_id FROM group_chat_members WHERE user_id = ${userId}
+      )
+    )
+    SELECT
+      gc.id as group_chat_id,
+      gc.name as group_name,
+      COALESCE(gconv.last_message, '') as last_message,
+      COALESCE(gconv.last_message_at, gc.created_at) as last_message_at,
+      (SELECT COUNT(*)::int FROM group_chat_members WHERE group_chat_id = gc.id) as member_count,
+      COALESCE(
+        (SELECT COUNT(*)::int FROM messages m2
+         WHERE m2.group_chat_id = gc.id
+         AND m2.sender_id != ${userId}
+         AND m2.created_at > gcm.last_read_at),
+        0
+      ) as unread_count
+    FROM group_chats gc
+    INNER JOIN group_chat_members gcm ON gcm.group_chat_id = gc.id AND gcm.user_id = ${userId}
+    LEFT JOIN group_convos gconv ON gconv.group_chat_id = gc.id AND gconv.rn = 1
+    ORDER BY last_message_at DESC
+  `);
+  const groupResults = (Array.isArray(groupRows) ? groupRows : (groupRows as any).rows ?? []);
+  const groupConversations = groupResults.map((r: any) => ({
+    otherUserId: "",
+    otherUsername: "",
+    listingId: null,
+    listingTitle: null,
+    listingPhoto: null,
+    lastMessage: r.last_message || "",
+    lastMessageAt: r.last_message_at,
+    unreadCount: parseInt(r.unread_count) || 0,
+    isGroup: true,
+    groupChatId: r.group_chat_id,
+    groupName: r.group_name,
+    memberCount: parseInt(r.member_count) || 0,
+  }));
+
+  const all = [...dmConversations, ...groupConversations];
+  all.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+  return all;
 }
 
 export async function getMessages(userId: string, otherUserId: string, listingId?: string | null) {
@@ -1140,8 +1196,177 @@ export async function markMessagesRead(userId: string, otherUserId: string, list
 export async function getUnreadCount(userId: string): Promise<number> {
   const result = await db.execute(sql`
     SELECT COUNT(*)::int as count FROM messages
-    WHERE receiver_id = ${userId} AND is_read = false
+    WHERE (receiver_id = ${userId} AND is_read = false)
+    OR (
+      group_chat_id IS NOT NULL
+      AND sender_id != ${userId}
+      AND is_read = false
+      AND group_chat_id IN (SELECT group_chat_id FROM group_chat_members WHERE user_id = ${userId})
+    )
   `);
   const resultRows = Array.isArray(result) ? result : (result as any).rows ?? [];
   return resultRows[0]?.count ?? 0;
 }
+
+export async function getFriendsWithCars(userId: string) {
+  const friends = await getAcceptedFriends(userId);
+  if (friends.length === 0) return [];
+
+  const friendIds = friends.map(f => f.friendId);
+  const cars = await db.select({
+    userId: schema.carProfiles.userId,
+    make: schema.carProfiles.make,
+    model: schema.carProfiles.model,
+    year: schema.carProfiles.year,
+    clearanceMode: schema.carProfiles.clearanceMode,
+    suspensionType: schema.carProfiles.suspensionType,
+    hasFrontLip: schema.carProfiles.hasFrontLip,
+    rideHeight: schema.carProfiles.rideHeight,
+    wheelSize: schema.carProfiles.wheelSize,
+    avatarStyle: schema.carProfiles.avatarStyle,
+    avatarColor: schema.carProfiles.avatarColor,
+    isDefault: schema.carProfiles.isDefault,
+  })
+    .from(schema.carProfiles)
+    .where(and(
+      sql`${schema.carProfiles.userId} IN ${friendIds}`,
+      eq(schema.carProfiles.isDefault, true)
+    ));
+
+  const carMap = new Map(cars.map(c => [c.userId, c]));
+
+  return friends.map(f => {
+    const car = carMap.get(f.friendId);
+    return {
+      ...f,
+      activeCar: car ? {
+        make: car.make,
+        model: car.model,
+        year: car.year,
+        clearanceMode: car.clearanceMode,
+        suspensionType: car.suspensionType,
+        hasFrontLip: car.hasFrontLip,
+        rideHeight: car.rideHeight,
+        wheelSize: car.wheelSize,
+        avatarStyle: car.avatarStyle ?? "sedan",
+        avatarColor: car.avatarColor ?? "#F97316",
+      } : undefined,
+    };
+  });
+}
+
+export async function createGroupChat(name: string | null, creatorId: string, memberIds: string[]) {
+  const [group] = await db.insert(schema.groupChats).values({
+    name: name || null,
+    creatorId,
+  }).returning();
+
+  const allMembers = [creatorId, ...memberIds.filter(id => id !== creatorId)];
+  for (const uid of allMembers) {
+    await db.insert(schema.groupChatMembers).values({
+      groupChatId: group.id,
+      userId: uid,
+    });
+  }
+
+  return group;
+}
+
+export async function getGroupChats(userId: string) {
+  const result = await db.execute(sql`
+    SELECT gc.*, 
+      (SELECT COUNT(*)::int FROM group_chat_members WHERE group_chat_id = gc.id) as member_count
+    FROM group_chats gc
+    INNER JOIN group_chat_members gcm ON gcm.group_chat_id = gc.id
+    WHERE gcm.user_id = ${userId}
+    ORDER BY gc.created_at DESC
+  `);
+  const rows = Array.isArray(result) ? result : (result as any).rows ?? [];
+  return rows.map((r: any) => ({
+    id: r.id,
+    name: r.name,
+    creatorId: r.creator_id,
+    createdAt: r.created_at,
+    memberCount: r.member_count,
+  }));
+}
+
+export async function getGroupChatById(id: string) {
+  const [group] = await db.select().from(schema.groupChats).where(eq(schema.groupChats.id, id));
+  if (!group) return null;
+
+  const members = await db.select({
+    id: schema.groupChatMembers.id,
+    groupChatId: schema.groupChatMembers.groupChatId,
+    userId: schema.groupChatMembers.userId,
+    joinedAt: schema.groupChatMembers.joinedAt,
+    username: schema.users.username,
+  })
+    .from(schema.groupChatMembers)
+    .leftJoin(schema.users, eq(schema.groupChatMembers.userId, schema.users.id))
+    .where(eq(schema.groupChatMembers.groupChatId, id));
+
+  return { ...group, members };
+}
+
+export async function isGroupChatMember(groupChatId: string, userId: string): Promise<boolean> {
+  const [row] = await db.select({ id: schema.groupChatMembers.id })
+    .from(schema.groupChatMembers)
+    .where(and(
+      eq(schema.groupChatMembers.groupChatId, groupChatId),
+      eq(schema.groupChatMembers.userId, userId)
+    ));
+  return !!row;
+}
+
+export async function getGroupMessages(groupChatId: string) {
+  const result = await db.execute(sql`
+    SELECT m.*, u.username as sender_username
+    FROM messages m
+    LEFT JOIN users u ON u.id = m.sender_id
+    WHERE m.group_chat_id = ${groupChatId}
+    ORDER BY m.created_at ASC
+    LIMIT 500
+  `);
+  const rows = Array.isArray(result) ? result : (result as any).rows ?? [];
+  return rows.map((r: any) => ({
+    id: r.id,
+    senderId: r.sender_id,
+    receiverId: r.receiver_id,
+    listingId: r.listing_id,
+    groupChatId: r.group_chat_id,
+    content: r.content,
+    isRead: r.is_read,
+    createdAt: r.created_at,
+    senderUsername: r.sender_username,
+  }));
+}
+
+export async function sendGroupMessage(senderId: string, groupChatId: string, content: string) {
+  const [msg] = await db.insert(schema.messages).values({
+    senderId,
+    groupChatId,
+    content,
+  }).returning();
+  return msg;
+}
+
+export async function addGroupMember(groupChatId: string, userId: string) {
+  const existing = await isGroupChatMember(groupChatId, userId);
+  if (existing) return null;
+  const [member] = await db.insert(schema.groupChatMembers).values({
+    groupChatId,
+    userId,
+  }).returning();
+  return member;
+}
+
+export async function markGroupMessagesRead(userId: string, groupChatId: string) {
+  await db.execute(sql`
+    UPDATE group_chat_members
+    SET last_read_at = NOW()
+    WHERE group_chat_id = ${groupChatId}
+    AND user_id = ${userId}
+  `);
+}
+

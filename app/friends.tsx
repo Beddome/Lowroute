@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,7 +20,17 @@ import { Colors } from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest, queryClient, getApiUrl } from "@/lib/query-client";
 import { fetch } from "expo/fetch";
-import type { FriendWithUser } from "@/shared/types";
+import type { FriendWithCar } from "@/shared/types";
+import CarAvatar from "@/components/CarAvatar";
+
+const FRIEND_COLOR = "#3B82F6";
+
+const CLEARANCE_MODE_COLORS: Record<string, string> = {
+  normal: "#22C55E",
+  lowered: "#EAB308",
+  very_lowered: "#F97316",
+  show_car: "#EF4444",
+};
 
 interface SearchUser {
   id: string;
@@ -40,9 +51,10 @@ export default function FriendsScreen() {
   const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [selectedFriend, setSelectedFriend] = useState<FriendWithCar | null>(null);
 
-  const { data: friends = [], isLoading: friendsLoading } = useQuery<FriendWithUser[]>({
-    queryKey: ["/api/friends"],
+  const { data: friends = [], isLoading: friendsLoading } = useQuery<FriendWithCar[]>({
+    queryKey: ["/api/friends/with-cars"],
     enabled: !!user,
   });
 
@@ -55,7 +67,7 @@ export default function FriendsScreen() {
     mutationFn: (addresseeId: string) =>
       apiRequest("POST", "/api/friends/request", { addresseeId }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/friends"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/friends/with-cars"] });
       queryClient.invalidateQueries({ queryKey: ["/api/friends/requests"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setSearchQuery("");
@@ -70,7 +82,7 @@ export default function FriendsScreen() {
   const acceptMutation = useMutation({
     mutationFn: (id: string) => apiRequest("POST", `/api/friends/${id}/accept`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/friends"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/friends/with-cars"] });
       queryClient.invalidateQueries({ queryKey: ["/api/friends/requests"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
@@ -87,7 +99,7 @@ export default function FriendsScreen() {
   const removeMutation = useMutation({
     mutationFn: (id: string) => apiRequest("DELETE", `/api/friends/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/friends"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/friends/with-cars"] });
       queryClient.invalidateQueries({ queryKey: ["/api/friends/locations"] });
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     },
@@ -125,7 +137,10 @@ export default function FriendsScreen() {
       {
         text: "Remove",
         style: "destructive",
-        onPress: () => removeMutation.mutate(friendshipId),
+        onPress: () => {
+          removeMutation.mutate(friendshipId);
+          setSelectedFriend(null);
+        },
       },
     ]);
   }, []);
@@ -252,26 +267,164 @@ export default function FriendsScreen() {
                 </View>
               ) : (
                 friends.map((friend) => (
-                  <View key={friend.id} style={s.friendItem}>
-                    <View style={s.userAvatar}>
-                      <Text style={s.userAvatarText}>
-                        {friend.username[0]?.toUpperCase()}
-                      </Text>
+                  <Pressable
+                    key={friend.id}
+                    style={({ pressed }) => [s.friendItem, pressed && { opacity: 0.8 }]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setSelectedFriend(friend);
+                    }}
+                  >
+                    {friend.activeCar ? (
+                      <CarAvatar
+                        style={friend.activeCar.avatarStyle}
+                        color={friend.activeCar.avatarColor}
+                        size={40}
+                      />
+                    ) : (
+                      <View style={s.userAvatar}>
+                        <Text style={s.userAvatarText}>
+                          {friend.username[0]?.toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.userName}>{friend.username}</Text>
+                      {friend.activeCar && (
+                        <Text style={s.friendCarSubtext}>
+                          {friend.activeCar.year} {friend.activeCar.make} {friend.activeCar.model}
+                        </Text>
+                      )}
                     </View>
-                    <Text style={[s.userName, { flex: 1 }]}>{friend.username}</Text>
-                    <Pressable
-                      hitSlop={8}
-                      onPress={() => handleRemoveFriend(friend.id, friend.username)}
-                    >
-                      <Ionicons name="person-remove-outline" size={18} color={Colors.textMuted} />
-                    </Pressable>
-                  </View>
+                    <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+                  </Pressable>
                 ))
               )}
             </View>
           </>
         }
       />
+
+      {selectedFriend && (
+        <Modal
+          visible={!!selectedFriend}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSelectedFriend(null)}
+        >
+          <Pressable style={s.popupOverlay} onPress={() => setSelectedFriend(null)}>
+            <View style={s.popupCard} onStartShouldSetResponder={() => true}>
+              <Pressable style={s.popupClose} onPress={() => setSelectedFriend(null)} hitSlop={8}>
+                <Ionicons name="close" size={18} color={Colors.textMuted} />
+              </Pressable>
+
+              <View style={s.popupHeader}>
+                {selectedFriend.activeCar ? (
+                  <CarAvatar
+                    style={selectedFriend.activeCar.avatarStyle}
+                    color={selectedFriend.activeCar.avatarColor}
+                    size={52}
+                  />
+                ) : (
+                  <View style={s.popupInitialCircle}>
+                    <Text style={s.popupInitial}>
+                      {selectedFriend.username?.[0]?.toUpperCase() ?? "?"}
+                    </Text>
+                  </View>
+                )}
+                <Text style={s.popupUsername}>
+                  {selectedFriend.username ?? "Friend"}
+                </Text>
+              </View>
+
+              {selectedFriend.activeCar && (
+                <>
+                  <View style={s.popupDivider} />
+                  <Text style={s.popupCarName}>
+                    {selectedFriend.activeCar.year} {selectedFriend.activeCar.make} {selectedFriend.activeCar.model}
+                  </Text>
+
+                  <View style={s.popupSpecsGrid}>
+                    {selectedFriend.activeCar.suspensionType && (
+                      <View style={s.popupSpecItem}>
+                        <Ionicons name="construct-outline" size={14} color={Colors.textMuted} />
+                        <Text style={s.popupSpecText}>
+                          {selectedFriend.activeCar.suspensionType === "air_ride" ? "Air Ride" : selectedFriend.activeCar.suspensionType.charAt(0).toUpperCase() + selectedFriend.activeCar.suspensionType.slice(1)}
+                        </Text>
+                      </View>
+                    )}
+                    {selectedFriend.activeCar.rideHeight != null && (
+                      <View style={s.popupSpecItem}>
+                        <Ionicons name="resize-outline" size={14} color={Colors.textMuted} />
+                        <Text style={s.popupSpecText}>
+                          {selectedFriend.activeCar.rideHeight}" ride height
+                        </Text>
+                      </View>
+                    )}
+                    {selectedFriend.activeCar.wheelSize != null && (
+                      <View style={s.popupSpecItem}>
+                        <Ionicons name="ellipse-outline" size={14} color={Colors.textMuted} />
+                        <Text style={s.popupSpecText}>
+                          {selectedFriend.activeCar.wheelSize}" wheels
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={s.popupBadges}>
+                    <View style={[s.popupBadge, { backgroundColor: (CLEARANCE_MODE_COLORS[selectedFriend.activeCar.clearanceMode] ?? FRIEND_COLOR) + "22", borderColor: CLEARANCE_MODE_COLORS[selectedFriend.activeCar.clearanceMode] ?? FRIEND_COLOR }]}>
+                      <Text style={[s.popupBadgeText, { color: CLEARANCE_MODE_COLORS[selectedFriend.activeCar.clearanceMode] ?? FRIEND_COLOR }]}>
+                        {selectedFriend.activeCar.clearanceMode === "very_lowered" ? "Very Lowered" : selectedFriend.activeCar.clearanceMode === "show_car" ? "Show Car" : selectedFriend.activeCar.clearanceMode.charAt(0).toUpperCase() + selectedFriend.activeCar.clearanceMode.slice(1)}
+                      </Text>
+                    </View>
+                    {selectedFriend.activeCar.suspensionType && selectedFriend.activeCar.suspensionType !== "stock" && (
+                      <View style={[s.popupBadge, { backgroundColor: Colors.accent + "22", borderColor: Colors.accent }]}>
+                        <Text style={[s.popupBadgeText, { color: Colors.accent }]}>
+                          {selectedFriend.activeCar.suspensionType === "air_ride" ? "Air Ride" : selectedFriend.activeCar.suspensionType.charAt(0).toUpperCase() + selectedFriend.activeCar.suspensionType.slice(1)}
+                        </Text>
+                      </View>
+                    )}
+                    {selectedFriend.activeCar.hasFrontLip && (
+                      <View style={[s.popupBadge, { backgroundColor: "#EF4444" + "22", borderColor: "#EF4444" }]}>
+                        <Text style={[s.popupBadgeText, { color: "#EF4444" }]}>
+                          Front Lip
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </>
+              )}
+
+              <View style={s.popupActions}>
+                <Pressable
+                  style={({ pressed }) => [s.popupMessageBtn, pressed && { opacity: 0.8 }]}
+                  onPress={() => {
+                    const friendRef = selectedFriend;
+                    setSelectedFriend(null);
+                    router.push({
+                      pathname: "/conversation",
+                      params: {
+                        userId: friendRef.friendId,
+                        username: friendRef.username ?? "Friend",
+                      },
+                    });
+                  }}
+                >
+                  <Ionicons name="chatbubble" size={16} color={Colors.bg} />
+                  <Text style={s.popupMessageText}>Message</Text>
+                </Pressable>
+
+                <Pressable
+                  style={({ pressed }) => [s.popupRemoveBtn, pressed && { opacity: 0.8 }]}
+                  onPress={() => handleRemoveFriend(selectedFriend.id, selectedFriend.username)}
+                >
+                  <Ionicons name="person-remove" size={16} color={Colors.error} />
+                </Pressable>
+              </View>
+            </View>
+          </Pressable>
+        </Modal>
+      )}
     </View>
   );
 }
@@ -348,6 +501,12 @@ const s = StyleSheet.create({
     fontSize: 15,
     fontFamily: "Inter_600SemiBold",
     color: Colors.text,
+  },
+  friendCarSubtext: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textMuted,
+    marginTop: 2,
   },
   addBtn: {
     width: 36,
@@ -463,5 +622,126 @@ const s = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Inter_400Regular",
     color: Colors.textMuted,
+  },
+  popupOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 32,
+  },
+  popupCard: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 20,
+    width: "100%",
+    maxWidth: 320,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.6,
+    shadowRadius: 20,
+    elevation: 25,
+  },
+  popupClose: {
+    position: "absolute" as const,
+    top: 12,
+    right: 12,
+    zIndex: 10,
+  },
+  popupHeader: {
+    alignItems: "center" as const,
+    gap: 10,
+    marginBottom: 4,
+  },
+  popupInitialCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: FRIEND_COLOR,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  popupInitial: {
+    fontSize: 22,
+    fontFamily: "Inter_700Bold",
+    color: "#fff",
+  },
+  popupUsername: {
+    fontSize: 18,
+    fontFamily: "Inter_700Bold",
+    color: Colors.text,
+  },
+  popupDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginVertical: 14,
+  },
+  popupCarName: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.text,
+    textAlign: "center" as const,
+    marginBottom: 12,
+  },
+  popupSpecsGrid: {
+    gap: 8,
+    marginBottom: 12,
+  },
+  popupSpecItem: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 8,
+  },
+  popupSpecText: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textSecondary,
+  },
+  popupBadges: {
+    flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
+    gap: 6,
+  },
+  popupBadge: {
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  popupBadgeText: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+  },
+  popupActions: {
+    flexDirection: "row" as const,
+    gap: 10,
+    marginTop: 14,
+  },
+  popupMessageBtn: {
+    flex: 1,
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    backgroundColor: Colors.accent,
+    borderRadius: 12,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  popupMessageText: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.bg,
+  },
+  popupRemoveBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: Colors.error + "18",
+    borderWidth: 1,
+    borderColor: Colors.error + "44",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
   },
 });
