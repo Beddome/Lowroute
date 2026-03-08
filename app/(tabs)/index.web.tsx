@@ -77,10 +77,10 @@ export default function MapScreenWeb() {
 
   const [showEvents, setShowEvents] = useState(true);
   const [mapBounds, setMapBounds] = useState({
-    minLat: 33.9,
-    maxLat: 34.2,
-    minLng: -118.4,
-    maxLng: -118.0,
+    minLat: 49.5,
+    maxLat: 49.9,
+    minLng: -113.0,
+    maxLng: -112.7,
   });
 
   const { data: hazards = [] } = useQuery<Hazard[]>({
@@ -147,7 +147,7 @@ export default function MapScreenWeb() {
       leafletRef.current = L;
 
       const map = L.map(mapContainerRef.current!, {
-        center: [34.0522, -118.2437],
+        center: [49.6935, -112.8418],
         zoom: 12,
         zoomControl: true,
         attributionControl: true,
@@ -529,8 +529,8 @@ export default function MapScreenWeb() {
           style={styles.fabEvent}
           onPress={() => {
             const center = mapInstanceRef.current?.getCenter();
-            const lat = center?.lat ?? 34.0522;
-            const lng = center?.lng ?? -118.2437;
+            const lat = center?.lat ?? 49.6935;
+            const lng = center?.lng ?? -112.8418;
             router.push({ pathname: "/create-event", params: { lat: String(lat), lng: String(lng) } });
           }}
         >
@@ -541,8 +541,8 @@ export default function MapScreenWeb() {
           style={styles.fab}
           onPress={() => {
             const center = mapInstanceRef.current?.getCenter();
-            const lat = center?.lat ?? 34.0522;
-            const lng = center?.lng ?? -118.2437;
+            const lat = center?.lat ?? 49.6935;
+            const lng = center?.lng ?? -112.8418;
             router.push({ pathname: "/report", params: { lat: String(lat), lng: String(lng) } });
           }}
         >

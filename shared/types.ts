@@ -1,14 +1,14 @@
 export const HAZARD_TYPES = [
-  { value: "pothole", label: "Pothole" },
-  { value: "speed_bump", label: "Speed Bump" },
-  { value: "construction", label: "Construction Zone" },
-  { value: "large_bump_dip", label: "Large Bump / Dip" },
-  { value: "raised_manhole", label: "Raised Manhole" },
-  { value: "railroad_crossing", label: "Railroad Crossing" },
-  { value: "debris", label: "Debris in Road" },
-  { value: "steep_driveway", label: "Steep Driveway Angle" },
-  { value: "flooded_road", label: "Flooded Road" },
-  { value: "other", label: "Other" },
+  { value: "pothole", label: "Pothole", icon: "ellipse-outline" },
+  { value: "speed_bump", label: "Speed Bump", icon: "remove" },
+  { value: "construction", label: "Construction Zone", icon: "construct" },
+  { value: "large_bump_dip", label: "Large Bump / Dip", icon: "swap-vertical" },
+  { value: "raised_manhole", label: "Raised Manhole", icon: "disc" },
+  { value: "railroad_crossing", label: "Railroad Crossing", icon: "train" },
+  { value: "debris", label: "Debris in Road", icon: "cube-outline" },
+  { value: "steep_driveway", label: "Steep Driveway Angle", icon: "trending-up" },
+  { value: "flooded_road", label: "Flooded Road", icon: "water" },
+  { value: "other", label: "Other", icon: "help-circle" },
 ] as const;
 
 export const SEVERITY_TIERS = [

@@ -157,9 +157,18 @@ function hazardsNearPolyline(
   });
 }
 
+interface RouteStep {
+  html_instructions: string;
+  distance: number;
+  duration: number;
+  start_location: { lat: number; lng: number };
+  end_location: { lat: number; lng: number };
+  maneuver?: string;
+}
+
 async function fetchGoogleRoutes(
   sLat: number, sLng: number, eLat: number, eLng: number
-): Promise<Array<{ geometry: string; distance: number; duration: number }>> {
+): Promise<Array<{ geometry: string; distance: number; duration: number; steps: RouteStep[] }>> {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
   if (!apiKey) throw new Error("GOOGLE_MAPS_API_KEY is not configured");
   const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${sLat},${sLng}&destination=${eLat},${eLng}&alternatives=true&key=${apiKey}`;
@@ -171,10 +180,19 @@ async function fetchGoogleRoutes(
   }
   return data.routes.map((r: any) => {
     const leg = r.legs[0];
+    const steps: RouteStep[] = (leg.steps || []).map((s: any) => ({
+      html_instructions: s.html_instructions || "",
+      distance: s.distance?.value ?? 0,
+      duration: s.duration?.value ?? 0,
+      start_location: { lat: s.start_location?.lat ?? 0, lng: s.start_location?.lng ?? 0 },
+      end_location: { lat: s.end_location?.lat ?? 0, lng: s.end_location?.lng ?? 0 },
+      maneuver: s.maneuver || undefined,
+    }));
     return {
       geometry: r.overview_polyline.points,
       distance: leg.distance.value,
       duration: leg.duration.value,
+      steps,
     };
   });
 }
@@ -488,7 +506,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const allHazards = await storage.getAllActiveHazards();
 
-      let googleRoutes: Array<{ geometry: string; distance: number; duration: number }>;
+      let googleRoutes: Array<{ geometry: string; distance: number; duration: number; steps: RouteStep[] }>;
       try {
         googleRoutes = await fetchGoogleRoutes(sLat, sLng, eLat, eLng);
       } catch (routeErr) {
@@ -523,6 +541,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           totalHazards: risk.totalHazards,
           severityCounts: risk.counts,
           waypoints: polyline,
+          steps: gRoute.steps,
         };
       });
 

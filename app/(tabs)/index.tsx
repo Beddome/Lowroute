@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import * as Haptics from "expo-haptics";
+import * as Speech from "expo-speech";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
@@ -64,6 +65,11 @@ function EventMarker({ event, onPress }: { event: AppEvent; onPress: () => void 
   );
 }
 
+function getHazardIcon(hazardType: string): string {
+  const found = HAZARD_TYPES.find((t) => t.value === hazardType);
+  return found?.icon ?? "alert-circle-outline";
+}
+
 function HazardMarker({ hazard, onPress }: { hazard: Hazard; onPress: () => void }) {
   const tier = SEVERITY_TIERS[hazard.severity - 1];
   const size = hazard.severity >= 3 ? 36 : 30;
@@ -86,7 +92,7 @@ function HazardMarker({ hazard, onPress }: { hazard: Hazard; onPress: () => void
         ]}
       >
         <Ionicons
-          name={hazard.severity >= 4 ? "skull" : hazard.severity >= 3 ? "warning" : "alert-circle-outline"}
+          name={getHazardIcon(hazard.type) as any}
           size={size * 0.55}
           color="#000"
         />
@@ -121,6 +127,15 @@ interface GeocodedLocation {
   lng: number;
 }
 
+interface RouteStep {
+  html_instructions: string;
+  distance: number;
+  duration: number;
+  start_location: { lat: number; lng: number };
+  end_location: { lat: number; lng: number };
+  maneuver?: string;
+}
+
 interface RouteOption {
   id: string;
   label: string;
@@ -133,7 +148,14 @@ interface RouteOption {
   totalHazards: number;
   hazards: Hazard[];
   waypoints: Array<{ lat: number; lng: number }>;
+  steps?: RouteStep[];
 }
+
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+const STEP_ANNOUNCE_METERS = 100;
 
 async function searchPlaces(query: string, lat?: number, lng?: number): Promise<GeoResult[]> {
   const baseUrl = getApiUrl();
@@ -180,8 +202,8 @@ export default function MapScreen() {
   const [locationGranted, setLocationGranted] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [mapRegion, setMapRegion] = useState({
-    latitude: 34.0522,
-    longitude: -118.2437,
+    latitude: 49.6935,
+    longitude: -112.8418,
     latitudeDelta: 0.05,
     longitudeDelta: 0.05,
   });
@@ -208,6 +230,15 @@ export default function MapScreen() {
   const [showEvents, setShowEvents] = useState(true);
   const [activeCarProfile, setActiveCarProfile] = useState<CarProfile | null>(null);
   const [selectedFriend, setSelectedFriend] = useState<UserLocation | null>(null);
+
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const currentStepIdxRef = useRef(0);
+  const [currentInstruction, setCurrentInstruction] = useState<string | null>(null);
+  const spokenStepsRef = useRef<Set<number>>(new Set());
+  const spokenHazardsVoiceRef = useRef<Set<string>>(new Set());
+  const speechQueueRef = useRef<string[]>([]);
+  const isSpeakingRef = useRef(false);
+  const hazardTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const { data: hazards = [] } = useQuery<Hazard[]>({
     queryKey: ["/api/hazards"],
@@ -312,6 +343,31 @@ export default function MapScreen() {
     }
   }, [currentPosition]);
 
+  const processQueue = useCallback(() => {
+    if (isSpeakingRef.current || speechQueueRef.current.length === 0) return;
+    const text = speechQueueRef.current.shift()!;
+    isSpeakingRef.current = true;
+    Speech.speak(text, {
+      rate: 0.95,
+      pitch: 1.0,
+      onDone: () => { isSpeakingRef.current = false; processQueue(); },
+      onError: () => { isSpeakingRef.current = false; processQueue(); },
+      onStopped: () => { isSpeakingRef.current = false; },
+    });
+  }, []);
+
+  const speak = useCallback((text: string, priority: boolean = false) => {
+    if (!voiceEnabled) return;
+    if (priority) {
+      Speech.stop();
+      isSpeakingRef.current = false;
+      speechQueueRef.current = [text, ...speechQueueRef.current];
+    } else {
+      speechQueueRef.current.push(text);
+    }
+    processQueue();
+  }, [voiceEnabled, processQueue]);
+
   useEffect(() => {
     if (!isNavigating || !currentPosition) return;
 
@@ -328,6 +384,42 @@ export default function MapScreen() {
     const route = routes[selectedRouteIdx];
     if (!route) return;
 
+    if (route.steps && route.steps.length > 0) {
+      const steps = route.steps;
+      let bestIdx = currentStepIdxRef.current;
+
+      for (let i = bestIdx; i < steps.length; i++) {
+        const distToEnd = getDistance(
+          currentPosition.latitude, currentPosition.longitude,
+          steps[i].end_location.lat, steps[i].end_location.lng
+        );
+        if (distToEnd < 50) {
+          bestIdx = Math.max(bestIdx, Math.min(i + 1, steps.length - 1));
+          continue;
+        }
+        break;
+      }
+
+      if (bestIdx > currentStepIdxRef.current) {
+        currentStepIdxRef.current = bestIdx;
+      }
+
+      if (bestIdx < steps.length) {
+        const step = steps[bestIdx];
+        const instruction = stripHtml(step.html_instructions);
+        setCurrentInstruction(instruction);
+
+        const distToStep = getDistance(
+          currentPosition.latitude, currentPosition.longitude,
+          step.start_location.lat, step.start_location.lng
+        );
+        if (distToStep <= STEP_ANNOUNCE_METERS && !spokenStepsRef.current.has(bestIdx)) {
+          spokenStepsRef.current.add(bestIdx);
+          speak(instruction);
+        }
+      }
+    }
+
     for (const hazard of route.hazards) {
       const dist = getDistance(
         currentPosition.latitude,
@@ -343,10 +435,16 @@ export default function MapScreen() {
             ? Haptics.NotificationFeedbackType.Error
             : Haptics.NotificationFeedbackType.Warning
         );
-        setTimeout(() => setNearbyHazard(null), 5000);
+        if (!spokenHazardsVoiceRef.current.has(hazard.id)) {
+          spokenHazardsVoiceRef.current.add(hazard.id);
+          const tierLabel = SEVERITY_TIERS[hazard.severity - 1]?.label ?? "Unknown";
+          speak(`Warning: ${tierLabel} hazard ahead. ${hazard.title}`, true);
+        }
+        const timer = setTimeout(() => setNearbyHazard(null), 5000);
+        hazardTimersRef.current.push(timer);
       }
     }
-  }, [currentPosition, isNavigating]);
+  }, [currentPosition, isNavigating, speak]);
 
   const startNavigation = useCallback(async () => {
     if (!user) {
@@ -363,22 +461,37 @@ export default function MapScreen() {
       await startTracking();
       setIsNavigating(true);
       alertedHazardsRef.current.clear();
+      currentStepIdxRef.current = 0;
+      spokenStepsRef.current.clear();
+      spokenHazardsVoiceRef.current.clear();
+      setCurrentInstruction(null);
       navStartTimeRef.current = Date.now();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      speak("Navigation started");
       startBackgroundTracking().catch(() => {});
     } catch (err) {
       Alert.alert("Location Error", "Unable to start navigation. Please ensure location permissions are granted.");
     }
-  }, [user, startTracking, startBackgroundTracking]);
+  }, [user, startTracking, startBackgroundTracking, speak]);
 
   const endNavigation = useCallback(() => {
+    Speech.stop();
+    speechQueueRef.current = [];
+    isSpeakingRef.current = false;
+    hazardTimersRef.current.forEach(clearTimeout);
+    hazardTimersRef.current = [];
+    if (voiceEnabled) Speech.speak("Navigation ended");
     setIsNavigating(false);
     setNearbyHazard(null);
+    setCurrentInstruction(null);
     alertedHazardsRef.current.clear();
+    spokenStepsRef.current.clear();
+    spokenHazardsVoiceRef.current.clear();
+    currentStepIdxRef.current = 0;
     stopTracking();
     stopBackgroundTracking().catch(() => {});
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-  }, [stopTracking, stopBackgroundTracking]);
+  }, [stopTracking, stopBackgroundTracking, voiceEnabled]);
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -484,6 +597,16 @@ export default function MapScreen() {
       calculateRoutes();
     }
   }, [originCoords, destCoords]);
+
+  useEffect(() => {
+    return () => {
+      Speech.stop();
+      speechQueueRef.current = [];
+      isSpeakingRef.current = false;
+      hazardTimersRef.current.forEach(clearTimeout);
+      hazardTimersRef.current = [];
+    };
+  }, []);
 
   const handleSaveRoute = useCallback(async () => {
     if (!user) {
@@ -699,36 +822,56 @@ export default function MapScreen() {
       {/* Navigation HUD */}
       {isNavigating && (
         <View style={[styles.navHud, { top: insets.top + topPadding + (nearbyHazard ? 80 : 12) }]}>
-          <View style={styles.navHudContent}>
-            <View style={styles.navStat}>
-              <Ionicons name="navigate" size={18} color={Colors.accent} />
-              <Text style={styles.navStatValue}>
-                {distToDestination != null ? formatDistance(distToDestination) : "--"}
-              </Text>
-              <Text style={styles.navStatLabel}>to dest</Text>
+          <View style={{ flex: 1 }}>
+            <View style={styles.navHudContent}>
+              <View style={styles.navStat}>
+                <Ionicons name="navigate" size={18} color={Colors.accent} />
+                <Text style={styles.navStatValue}>
+                  {distToDestination != null ? formatDistance(distToDestination) : "--"}
+                </Text>
+                <Text style={styles.navStatLabel}>to dest</Text>
+              </View>
+              <View style={styles.navDivider} />
+              <View style={styles.navStat}>
+                <Ionicons name="speedometer" size={18} color={Colors.accent} />
+                <Text style={styles.navStatValue}>
+                  {speed != null && speed >= 0 ? formatSpeed(speed) : "0"}
+                </Text>
+                <Text style={styles.navStatLabel}>{speedUnit}</Text>
+              </View>
+              <View style={styles.navDivider} />
+              <View style={styles.navStat}>
+                <Ionicons name="time" size={18} color={Colors.accent} />
+                <Text style={styles.navStatValue}>{navElapsedMin}</Text>
+                <Text style={styles.navStatLabel}>min</Text>
+              </View>
             </View>
-            <View style={styles.navDivider} />
-            <View style={styles.navStat}>
-              <Ionicons name="speedometer" size={18} color={Colors.accent} />
-              <Text style={styles.navStatValue}>
-                {speed != null && speed >= 0 ? formatSpeed(speed) : "0"}
-              </Text>
-              <Text style={styles.navStatLabel}>{speedUnit}</Text>
-            </View>
-            <View style={styles.navDivider} />
-            <View style={styles.navStat}>
-              <Ionicons name="time" size={18} color={Colors.accent} />
-              <Text style={styles.navStatValue}>{navElapsedMin}</Text>
-              <Text style={styles.navStatLabel}>min</Text>
-            </View>
+            {currentInstruction && (
+              <View style={styles.instructionStrip}>
+                <Ionicons name="arrow-forward" size={14} color={Colors.accent} />
+                <Text style={styles.instructionText} numberOfLines={2}>{currentInstruction}</Text>
+              </View>
+            )}
           </View>
-          <Pressable
-            style={styles.endNavBtn}
-            onPress={endNavigation}
-          >
-            <Ionicons name="stop-circle" size={20} color={Colors.white} />
-            <Text style={styles.endNavText}>End</Text>
-          </Pressable>
+          <View style={styles.navButtons}>
+            <Pressable
+              style={[styles.voiceBtn, !voiceEnabled && styles.voiceBtnMuted]}
+              onPress={() => {
+                setVoiceEnabled((v) => !v);
+                if (voiceEnabled) Speech.stop();
+              }}
+              hitSlop={8}
+            >
+              <Ionicons name={voiceEnabled ? "volume-high" : "volume-mute"} size={18} color={voiceEnabled ? Colors.accent : Colors.textMuted} />
+            </Pressable>
+            <Pressable
+              style={styles.endNavBtn}
+              onPress={endNavigation}
+            >
+              <Ionicons name="stop-circle" size={20} color={Colors.white} />
+              <Text style={styles.endNavText}>End</Text>
+            </Pressable>
+          </View>
         </View>
       )}
 
@@ -1140,21 +1283,48 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 15,
   },
-  navHudContent: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-around" },
-  navStat: { alignItems: "center", gap: 2 },
+  navHudContent: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-around" as const },
+  navStat: { alignItems: "center" as const, gap: 2 },
   navStatValue: { fontSize: 20, fontFamily: "Inter_700Bold", color: Colors.text },
   navStatLabel: { fontSize: 10, fontFamily: "Inter_400Regular", color: Colors.textMuted },
   navDivider: { width: 1, height: 30, backgroundColor: Colors.border },
+  navButtons: { alignItems: "center" as const, gap: 8 },
+  voiceBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(96,165,250,0.15)",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  voiceBtnMuted: {
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
   endNavBtn: {
     backgroundColor: Colors.tier4,
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 16,
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
     gap: 6,
   },
   endNavText: { fontSize: 13, fontFamily: "Inter_700Bold", color: Colors.white },
+  instructionStrip: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 6,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  instructionText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    color: Colors.textSecondary,
+  },
 
   topPanel: {
     position: "absolute",

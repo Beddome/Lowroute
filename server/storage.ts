@@ -310,16 +310,16 @@ export async function seedDemoHazards() {
   }).onConflictDoNothing();
 
   const sampleHazards = [
-    { lat: 34.0522, lng: -118.2437, type: "pothole" as const, severity: 3, title: "Deep Pothole", description: "Large pothole in right lane. Could bottom out low cars." },
-    { lat: 34.0532, lng: -118.2457, type: "speed_bump" as const, severity: 4, title: "Extreme Speed Bump", description: "Unmarked extremely tall speed bump. Full detour for slammed builds." },
-    { lat: 34.0512, lng: -118.2417, type: "construction" as const, severity: 3, title: "Construction Zone", description: "Metal plates and loose gravel. Lane partially blocked." },
-    { lat: 34.0542, lng: -118.2477, type: "raised_manhole" as const, severity: 2, title: "Raised Manhole", description: "Cover sits 2 inches above road surface. Approach with caution." },
-    { lat: 34.0502, lng: -118.2397, type: "railroad_crossing" as const, severity: 2, title: "Rough Railroad Crossing", description: "Uneven tracks with significant lip. Approach at angle." },
-    { lat: 34.0562, lng: -118.2497, type: "flooded_road" as const, severity: 4, title: "Flooded Underpass", description: "Standing water of unknown depth. Full detour required." },
-    { lat: 34.0488, lng: -118.238, type: "debris" as const, severity: 1, title: "Road Debris", description: "Tire fragments on shoulder. Dodgeable, watch left lane." },
-    { lat: 34.0575, lng: -118.251, type: "large_bump_dip" as const, severity: 3, title: "Severe Road Dip", description: "Deep dip at bridge approach. Bottom-out risk at speed." },
-    { lat: 34.0498, lng: -118.247, type: "steep_driveway" as const, severity: 2, title: "Steep Entry Angle", description: "Sharp angle entering the gas station. Scrape risk." },
-    { lat: 34.0518, lng: -118.249, type: "pothole" as const, severity: 1, title: "Small Pothole Cluster", description: "Several small potholes in right lane. Move left to avoid." },
+    { lat: 49.6935, lng: -112.8418, type: "pothole" as const, severity: 3, title: "Deep Pothole", description: "Large pothole in right lane. Could bottom out low cars." },
+    { lat: 49.6945, lng: -112.8438, type: "speed_bump" as const, severity: 4, title: "Extreme Speed Bump", description: "Unmarked extremely tall speed bump. Full detour for slammed builds." },
+    { lat: 49.6925, lng: -112.8398, type: "construction" as const, severity: 3, title: "Construction Zone", description: "Metal plates and loose gravel. Lane partially blocked." },
+    { lat: 49.6955, lng: -112.8458, type: "raised_manhole" as const, severity: 2, title: "Raised Manhole", description: "Cover sits 2 inches above road surface. Approach with caution." },
+    { lat: 49.6915, lng: -112.8378, type: "railroad_crossing" as const, severity: 2, title: "Rough Railroad Crossing", description: "Uneven tracks with significant lip. Approach at angle." },
+    { lat: 49.6975, lng: -112.8478, type: "flooded_road" as const, severity: 4, title: "Flooded Underpass", description: "Standing water of unknown depth. Full detour required." },
+    { lat: 49.6901, lng: -112.8361, type: "debris" as const, severity: 1, title: "Road Debris", description: "Tire fragments on shoulder. Dodgeable, watch left lane." },
+    { lat: 49.6988, lng: -112.8491, type: "large_bump_dip" as const, severity: 3, title: "Severe Road Dip", description: "Deep dip at bridge approach. Bottom-out risk at speed." },
+    { lat: 49.6911, lng: -112.8451, type: "steep_driveway" as const, severity: 2, title: "Steep Entry Angle", description: "Sharp angle entering the gas station. Scrape risk." },
+    { lat: 49.6931, lng: -112.8471, type: "pothole" as const, severity: 1, title: "Small Pothole Cluster", description: "Several small potholes in right lane. Move left to avoid." },
   ];
 
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);

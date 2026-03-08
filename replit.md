@@ -14,12 +14,14 @@ A community-powered GPS and hazard-reporting app for low-clearance vehicles (low
 
 ## Key Features
 
-- Interactive map with hazard markers colored by severity tier (1-4)
+- Interactive map with hazard markers colored by severity tier (1-4) and type-specific icons (pothole, construction, railroad, etc.)
 - **Real road-following routes** via Google Directions API with multiple alternatives, distance, and duration
 - 3 route options: Fastest, Low-Car Safe, Balanced — each with a Low Clearance Risk Score
 - **Live GPS navigation** with continuous position tracking, speed, heading display
+- **Voice navigation via Bluetooth** — turn-by-turn spoken directions using expo-speech, hazard voice warnings, mute/unmute toggle; audio routes through Bluetooth when connected
+- **Turn-by-turn instruction display** — current navigation instruction shown in HUD strip below stats
 - **Background location tracking** — navigation continues when app is minimized
-- **Hazard proximity alerts** — vibration + visual warning when within 200m of a hazard during navigation
+- **Hazard proximity alerts** — vibration + visual + voice warning when within 200m of a hazard during navigation
 - Community hazard reporting (10 hazard types, 4 severity tiers) with input validation
 - Community validation: confirm, downvote, or mark hazards as cleared
 - Confidence scoring based on community votes
@@ -153,7 +155,7 @@ Promo: POST /api/promo/redeem
 
 ## Seed Data
 
-10 sample hazards seeded around downtown Los Angeles (lat 34.05, lng -118.24) on first startup.
+10 sample hazards seeded around downtown Lethbridge, AB (lat 49.69, lng -112.84) on first startup.
 Admin user seeded on startup (configurable via env vars).
 
 ## Dependencies
@@ -164,5 +166,6 @@ Admin user seeded on startup (configurable via env vars).
 - `multer` — file upload middleware for hazard photos
 - `leaflet` — interactive web map (web platform only)
 - `expo-image-picker` — camera/gallery photo selection for hazard reports and marketplace
+- `expo-speech` — text-to-speech for voice navigation (Bluetooth-compatible)
 - `bcryptjs` — password hashing
 - `express-session` + `connect-pg-simple` — session management

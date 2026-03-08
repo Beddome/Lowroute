@@ -40,8 +40,8 @@ export default function ReportScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  const initialLat = parseFloat(lat ?? "34.0522");
-  const initialLng = parseFloat(lng ?? "-118.2437");
+  const initialLat = parseFloat(lat ?? "49.6935");
+  const initialLng = parseFloat(lng ?? "-112.8418");
   const [latitude, setLatitude] = useState(initialLat);
   const [longitude, setLongitude] = useState(initialLng);
 

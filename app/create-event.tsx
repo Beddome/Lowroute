@@ -248,8 +248,8 @@ export default function CreateEventScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Location</Text>
           <LocationPicker
-            latitude={Number.isFinite(parseFloat(latitude)) ? parseFloat(latitude) : 34.0522}
-            longitude={Number.isFinite(parseFloat(longitude)) ? parseFloat(longitude) : -118.2437}
+            latitude={Number.isFinite(parseFloat(latitude)) ? parseFloat(latitude) : 49.6935}
+            longitude={Number.isFinite(parseFloat(longitude)) ? parseFloat(longitude) : -112.8418}
             onLocationChange={(lat, lng) => {
               setLatitude(String(lat));
               setLongitude(String(lng));
