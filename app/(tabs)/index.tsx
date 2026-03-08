@@ -73,11 +73,20 @@ function getHazardIcon(hazardType: string): string {
 function HazardMarker({ hazard, onPress }: { hazard: Hazard; onPress: () => void }) {
   const tier = SEVERITY_TIERS[hazard.severity - 1];
   const size = hazard.severity >= 3 ? 36 : 30;
+  const isNative = Platform.OS !== "web";
+  const [ready, setReady] = useState(!isNative);
+
+  useEffect(() => {
+    if (!isNative) return;
+    const timer = setTimeout(() => setReady(true), 500);
+    return () => clearTimeout(timer);
+  }, [isNative]);
+
   return (
     <Marker
       coordinate={{ latitude: hazard.lat, longitude: hazard.lng }}
       onPress={onPress}
-      tracksViewChanges={false}
+      tracksViewChanges={!ready}
     >
       <View
         style={[
@@ -1015,10 +1024,10 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* Location button */}
-      {locationGranted && !isNavigating && (
+      {/* Location button - positioned below search bar, hidden when geocode dropdown open */}
+      {locationGranted && !isNavigating && geocodeResults.length === 0 && (
         <Pressable
-          style={[styles.locBtn, { bottom: bottomPanelHeight + 16, right: 16 }]}
+          style={[styles.locBtn, { top: insets.top + topPadding + 120, right: 16, zIndex: 101 }]}
           onPress={() => {
             if (userLocation) {
               mapRef.current?.animateToRegion(
