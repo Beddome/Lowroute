@@ -769,22 +769,38 @@ export default function MapScreen() {
 
         {!isNavigating && routes.map((route, i) => {
           if (i === selectedRouteIdx || !route.waypoints || route.waypoints.length < 2) return null;
+          const color = ROUTE_COLORS[i] ?? Colors.accent;
           return (
             <Polyline
-              key={`route-bg-${i}`}
+              key={`route-alt-${i}`}
               coordinates={route.waypoints.map((w) => ({ latitude: w.lat, longitude: w.lng }))}
-              strokeColor={ROUTE_COLORS[i] ?? Colors.accent}
+              strokeColor={color + "80"}
               strokeWidth={3}
-              lineDashPattern={[5, 5]}
+              tappable
+              onPress={() => {
+                setSelectedRouteIdx(i);
+                Haptics.selectionAsync();
+              }}
             />
           );
         })}
         {selectedRoute?.waypoints && selectedRoute.waypoints.length >= 2 && (
-          <Polyline
-            coordinates={selectedRoute.waypoints.map((w) => ({ latitude: w.lat, longitude: w.lng }))}
-            strokeColor={ROUTE_COLORS[selectedRouteIdx] ?? Colors.accent}
-            strokeWidth={isNavigating ? 6 : 4}
-          />
+          <>
+            {!isNavigating && (
+              <Polyline
+                key={`route-glow-${selectedRouteIdx}`}
+                coordinates={selectedRoute.waypoints.map((w) => ({ latitude: w.lat, longitude: w.lng }))}
+                strokeColor={(ROUTE_COLORS[selectedRouteIdx] ?? Colors.accent) + "40"}
+                strokeWidth={12}
+              />
+            )}
+            <Polyline
+              key={`route-selected-${selectedRouteIdx}`}
+              coordinates={selectedRoute.waypoints.map((w) => ({ latitude: w.lat, longitude: w.lng }))}
+              strokeColor={ROUTE_COLORS[selectedRouteIdx] ?? Colors.accent}
+              strokeWidth={isNavigating ? 6 : 5}
+            />
+          </>
         )}
       </MapView>
 
