@@ -577,35 +577,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       });
 
-      routes.sort((a, b) => a.estimatedMinutes - b.estimatedMinutes);
-      if (routes.length > 0) {
-        routes[0].id = "fastest";
-        routes[0].label = "Fastest";
-        routes[0].description = "Shortest travel time";
-      }
+      routes.sort((a, b) => {
+        if (a.riskScore !== b.riskScore) return a.riskScore - b.riskScore;
+        if (a.highestSeverity !== b.highestSeverity) return a.highestSeverity - b.highestSeverity;
+        if (a.totalHazards !== b.totalHazards) return a.totalHazards - b.totalHazards;
+        return a.estimatedMinutes - b.estimatedMinutes;
+      });
+
+      for (const r of routes) { r.id = ""; r.label = ""; r.description = ""; }
+
+      routes[0].id = "safest";
+      routes[0].label = "Low-Car Safe";
+      routes[0].description = routes[0].totalHazards === 0
+        ? "Clear path — no hazards detected"
+        : `Safest path — ${routes[0].totalHazards} hazard${routes[0].totalHazards !== 1 ? "s" : ""}, risk score ${routes[0].riskScore}`;
+
       if (routes.length > 1) {
-        const safest = routes.reduce((best, r) => {
-          if (r === routes[0]) return best;
-          if (r.riskScore < best.riskScore) return r;
-          if (r.riskScore === best.riskScore && r.totalHazards < best.totalHazards) return r;
-          return best;
-        }, routes[1]);
-        safest.id = "safest";
-        safest.label = "Low-Car Safe";
-        safest.description = "Lowest hazard risk for low vehicles";
+        const quickestIdx = routes.reduce((bestIdx, r, i) => {
+          if (i === 0) return bestIdx;
+          return r.estimatedMinutes < routes[bestIdx].estimatedMinutes ? i : bestIdx;
+        }, 1);
+
+        routes[quickestIdx].id = "quickest";
+        routes[quickestIdx].label = "Quickest";
+        const qRoute = routes[quickestIdx];
+        routes[quickestIdx].description = qRoute.totalHazards > 0
+          ? `${qRoute.estimatedMinutes} min — ${qRoute.totalHazards} hazard${qRoute.totalHazards !== 1 ? "s" : ""}, risk score ${qRoute.riskScore}`
+          : `${qRoute.estimatedMinutes} min — no hazards`;
 
         for (const r of routes) {
-          if (r !== routes[0] && r !== safest) {
+          if (!r.id || (r.id !== "safest" && r.id !== "quickest")) {
             r.id = "balanced";
             r.label = "Balanced";
-            r.description = "Balance between time and safety";
+            r.description = r.totalHazards > 0
+              ? `${r.totalHazards} hazard${r.totalHazards !== 1 ? "s" : ""}, risk score ${r.riskScore} · ${r.estimatedMinutes} min`
+              : `No hazards · ${r.estimatedMinutes} min`;
           }
         }
-      }
-      if (routes.length === 1) {
-        routes[0].description = routes[0].totalHazards === 0
-          ? "No hazards detected on this route"
-          : `${routes[0].totalHazards} hazard${routes[0].totalHazards !== 1 ? "s" : ""} detected`;
       }
 
       res.json({ routes, carProfile: carProfileInfo, riskMultiplier });

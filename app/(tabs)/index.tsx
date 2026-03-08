@@ -576,7 +576,7 @@ export default function MapScreen() {
         return;
       }
       setRoutes(routeList);
-      setSelectedRouteIdx(routeList.length > 1 ? 1 : 0);
+      setSelectedRouteIdx(0);
       setPanelOpen(true);
       Animated.spring(panelExpanded, { toValue: 1, useNativeDriver: false }).start();
 
@@ -1116,7 +1116,8 @@ function RoutePanel({
           const isSelected = i === selectedIdx;
           return (
             <Pressable
-              key={route.id}
+              key={`route-card-${i}`}
+              accessibilityState={{ selected: isSelected }}
               style={[
                 styles.routeCard,
                 isSelected && {

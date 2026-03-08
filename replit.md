@@ -16,7 +16,7 @@ A community-powered GPS and hazard-reporting app for low-clearance vehicles (low
 
 - Interactive map with hazard markers colored by severity tier (1-4) and type-specific icons (pothole, construction, railroad, etc.)
 - **Real road-following routes** via Google Directions API with multiple alternatives, distance, and duration
-- 3 route options: Fastest, Low-Car Safe, Balanced — each with a Low Clearance Risk Score
+- 3 route options sorted safety-first: Low-Car Safe (safest), Quickest, Balanced — sorted by risk score, then severity, then hazard count, then time
 - **Live GPS navigation** with continuous position tracking, speed, heading display
 - **Voice navigation via Bluetooth** — turn-by-turn spoken directions using expo-speech, hazard voice warnings, mute/unmute toggle; audio routes through Bluetooth when connected
 - **Turn-by-turn instruction display** — current navigation instruction shown in HUD strip below stats
@@ -48,7 +48,11 @@ Routes are fetched from Google Directions API (real road geometry), then scored 
 - Tier 3 (Major): +100 points
 - Tier 4 (No-Go): +1000 points
 
-Hazard proximity to route is calculated using point-to-segment distance (not bounding box). Only hazards with confidence >= 0.4 count.
+Scores are amplified by car profile clearance mode: Normal 1.0x, Lowered 1.3x, Very Lowered 1.6x, Show Car 2.0x.
+
+Routes are sorted safety-first: primary by riskScore (ascending), then highestSeverity, totalHazards, and finally estimatedMinutes. The safest route (index 0) is labeled "Low-Car Safe" and auto-selected. The quickest route by time (among remaining) is labeled "Quickest". Others are "Balanced".
+
+Hazard proximity to route is calculated using point-to-segment distance with cosine(lat) longitude correction. Only hazards with confidence >= 0.4 count. Buffer: 500m. Step-level polylines used for accuracy.
 
 ## Project Structure
 
