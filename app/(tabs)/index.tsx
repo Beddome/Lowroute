@@ -279,6 +279,8 @@ export default function MapScreen() {
   const [routes, setRoutes] = useState<RouteOption[]>([]);
   const [selectedRouteIdx, setSelectedRouteIdx] = useState(0);
   const [isRoutingLoading, setIsRoutingLoading] = useState(false);
+  const [searchExpanded, setSearchExpanded] = useState(false);
+  const [routePanelExpanded, setRoutePanelExpanded] = useState(false);
 
   const panelExpanded = useRef(new Animated.Value(0)).current;
   const [panelOpen, setPanelOpen] = useState(false);
@@ -807,6 +809,8 @@ export default function MapScreen() {
     setDestCoords(null);
     setRoutes([]);
     setPanelOpen(false);
+    setSearchExpanded(false);
+    setRoutePanelExpanded(false);
     Animated.spring(panelExpanded, { toValue: 0, useNativeDriver: false }).start();
   };
 
@@ -820,7 +824,7 @@ export default function MapScreen() {
 
   const navElapsedMin = isNavigating ? Math.floor((Date.now() - navStartTimeRef.current) / 60000) : 0;
 
-  const bottomPanelHeight = isNavigating ? 0 : routes.length > 0 ? (panelOpen ? 260 : 180) : 140;
+  const bottomPanelHeight = isNavigating ? 0 : routes.length > 0 ? (routePanelExpanded ? 320 : 100) : 140;
 
   return (
     <View style={styles.container}>
@@ -855,7 +859,7 @@ export default function MapScreen() {
             />
           ))}
 
-        {showEvents && events
+        {showEvents && routes.length === 0 && events
           .filter((e) => e.status !== "cancelled")
           .map((e) => (
             <EventMarker
@@ -868,7 +872,7 @@ export default function MapScreen() {
             />
           ))}
 
-        {friendLocations.map((fl) => (
+        {routes.length === 0 && friendLocations.map((fl) => (
           <FriendMarker
             key={`friend-${fl.userId}`}
             location={fl}
@@ -1045,98 +1049,143 @@ export default function MapScreen() {
             { top: insets.top + topPadding + 12, marginHorizontal: 16 },
           ]}
         >
-          {carProfiles.length >= 2 && activeCarProfile && (
+          {routes.length > 0 && !searchExpanded ? (
             <Pressable
-              style={styles.carSelectorPill}
-              onPress={() => setCarSelectorOpen(true)}
+              style={styles.collapsedSearchBar}
+              onPress={() => setSearchExpanded(true)}
             >
-              <Ionicons name="car-sport" size={14} color={Colors.accent} />
-              <Text style={styles.carSelectorText} numberOfLines={1}>
-                {activeCarProfile.year} {activeCarProfile.make} {activeCarProfile.model}
+              <Ionicons name="navigate-circle" size={20} color={Colors.accent} />
+              <Text style={styles.collapsedSearchText} numberOfLines={1}>
+                {destText || "Destination"}
               </Text>
-              <Ionicons name="chevron-down" size={14} color={Colors.textMuted} />
+              <Pressable onPress={clearRoute} style={styles.actionBtn} hitSlop={8}>
+                <Ionicons name="close" size={18} color={Colors.textSecondary} />
+              </Pressable>
             </Pressable>
-          )}
-          <View style={styles.searchCard}>
-            <View style={styles.searchRow}>
-              <View style={styles.searchDots}>
-                <View style={[styles.dot, { backgroundColor: Colors.accent }]} />
-                <View style={styles.dotLine} />
-                <View style={[styles.dot, { backgroundColor: Colors.tier4, borderRadius: 3 }]} />
+          ) : (
+            <>
+              {carProfiles.length >= 2 && activeCarProfile && routes.length === 0 && (
+                <Pressable
+                  style={styles.carSelectorPill}
+                  onPress={() => setCarSelectorOpen(true)}
+                >
+                  <Ionicons name="car-sport" size={14} color={Colors.accent} />
+                  <Text style={styles.carSelectorText} numberOfLines={1}>
+                    {activeCarProfile.year} {activeCarProfile.make} {activeCarProfile.model}
+                  </Text>
+                  <Ionicons name="chevron-down" size={14} color={Colors.textMuted} />
+                </Pressable>
+              )}
+              <View style={styles.searchCard}>
+                <View style={styles.searchRow}>
+                  <View style={styles.searchDots}>
+                    <View style={[styles.dot, { backgroundColor: Colors.accent }]} />
+                    <View style={styles.dotLine} />
+                    <View style={[styles.dot, { backgroundColor: Colors.tier4, borderRadius: 3 }]} />
+                  </View>
+                  <View style={styles.searchInputsCol}>
+                    <TextInput
+                      style={styles.searchInput}
+                      placeholder="Starting point..."
+                      placeholderTextColor={Colors.textMuted}
+                      value={originText}
+                      onChangeText={(t) => handleSearchInput(t, "origin")}
+                      onFocus={() => setActiveSearchField("origin")}
+                      returnKeyType="search"
+                    />
+                    <View style={styles.searchDivider} />
+                    <TextInput
+                      style={styles.searchInput}
+                      placeholder="Destination..."
+                      placeholderTextColor={Colors.textMuted}
+                      value={destText}
+                      onChangeText={(t) => handleSearchInput(t, "dest")}
+                      onFocus={() => setActiveSearchField("dest")}
+                      returnKeyType="search"
+                    />
+                  </View>
+                  <View style={styles.searchActions}>
+                    {routes.length > 0 ? (
+                      <Pressable onPress={() => { clearRoute(); setSearchExpanded(false); }} style={styles.actionBtn} hitSlop={8}>
+                        <Ionicons name="close" size={20} color={Colors.textSecondary} />
+                      </Pressable>
+                    ) : isRoutingLoading ? (
+                      <ActivityIndicator size="small" color={Colors.accent} />
+                    ) : (
+                      <Pressable
+                        onPress={() => {
+                          if (userLocation) {
+                            setOriginText("My Location");
+                            setOriginCoords({ lat: userLocation.latitude, lng: userLocation.longitude });
+                            mapRef.current?.animateToRegion({
+                              latitude: userLocation.latitude,
+                              longitude: userLocation.longitude,
+                              latitudeDelta: 0.02,
+                              longitudeDelta: 0.02,
+                            }, 800);
+                          }
+                        }}
+                        style={styles.actionBtn}
+                        hitSlop={8}
+                      >
+                        <Ionicons name="locate" size={20} color={Colors.accent} />
+                      </Pressable>
+                    )}
+                  </View>
+                </View>
               </View>
-              <View style={styles.searchInputsCol}>
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Starting point..."
-                  placeholderTextColor={Colors.textMuted}
-                  value={originText}
-                  onChangeText={(t) => handleSearchInput(t, "origin")}
-                  onFocus={() => setActiveSearchField("origin")}
-                  returnKeyType="search"
-                />
-                <View style={styles.searchDivider} />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Destination..."
-                  placeholderTextColor={Colors.textMuted}
-                  value={destText}
-                  onChangeText={(t) => handleSearchInput(t, "dest")}
-                  onFocus={() => setActiveSearchField("dest")}
-                  returnKeyType="search"
-                />
-              </View>
-              <View style={styles.searchActions}>
-                {routes.length > 0 ? (
-                  <Pressable onPress={clearRoute} style={styles.actionBtn} hitSlop={8}>
-                    <Ionicons name="close" size={20} color={Colors.textSecondary} />
-                  </Pressable>
-                ) : isRoutingLoading ? (
-                  <ActivityIndicator size="small" color={Colors.accent} />
-                ) : (
-                  <Pressable
-                    onPress={() => {
-                      if (userLocation) {
-                        setOriginText("My Location");
-                        setOriginCoords({ lat: userLocation.latitude, lng: userLocation.longitude });
-                        mapRef.current?.animateToRegion({
-                          latitude: userLocation.latitude,
-                          longitude: userLocation.longitude,
-                          latitudeDelta: 0.02,
-                          longitudeDelta: 0.02,
-                        }, 800);
-                      }
-                    }}
-                    style={styles.actionBtn}
-                    hitSlop={8}
-                  >
-                    <Ionicons name="locate" size={20} color={Colors.accent} />
-                  </Pressable>
-                )}
-              </View>
-            </View>
-          </View>
 
-          {geocodeResults.length > 0 && (
-            <View style={styles.geocodeDropdown}>
-              {isSearching && (
-                <View style={styles.geocodeSearching}>
-                  <ActivityIndicator size="small" color={Colors.accent} />
+              {geocodeResults.length > 0 && (
+                <View style={styles.geocodeDropdown}>
+                  {isSearching && (
+                    <View style={styles.geocodeSearching}>
+                      <ActivityIndicator size="small" color={Colors.accent} />
+                    </View>
+                  )}
+                  {geocodeResults.map((r, i) => (
+                    <Pressable
+                      key={i}
+                      style={({ pressed }) => [styles.geocodeItem, pressed && { opacity: 0.7 }]}
+                      onPress={() => selectGeoResult(r)}
+                    >
+                      <Ionicons name="location-outline" size={16} color={Colors.textMuted} />
+                      <Text style={styles.geocodeText} numberOfLines={2}>
+                        {r.description}
+                      </Text>
+                    </Pressable>
+                  ))}
                 </View>
               )}
-              {geocodeResults.map((r, i) => (
-                <Pressable
-                  key={i}
-                  style={({ pressed }) => [styles.geocodeItem, pressed && { opacity: 0.7 }]}
-                  onPress={() => selectGeoResult(r)}
-                >
-                  <Ionicons name="location-outline" size={16} color={Colors.textMuted} />
-                  <Text style={styles.geocodeText} numberOfLines={2}>
-                    {r.description}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
+            </>
           )}
+        </View>
+      )}
+
+      {/* Floating action buttons — on map edge, not inside panels */}
+      {!isNavigating && (
+        <View style={[styles.mapFabColumn, { bottom: insets.bottom + bottomPanelHeight + 90, right: 16 }]}>
+          <Pressable
+            style={[styles.mapFab, { backgroundColor: Colors.bgCard }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              const lat = userLocation?.latitude ?? mapRegion.latitude;
+              const lng = userLocation?.longitude ?? mapRegion.longitude;
+              router.push({ pathname: "/create-event", params: { lat: String(lat), lng: String(lng) } });
+            }}
+          >
+            <Ionicons name="calendar" size={18} color={Colors.accent} />
+          </Pressable>
+          <Pressable
+            style={[styles.mapFab, { backgroundColor: Colors.accent }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              const lat = userLocation?.latitude ?? mapRegion.latitude;
+              const lng = userLocation?.longitude ?? mapRegion.longitude;
+              router.push({ pathname: "/report", params: { lat: String(lat), lng: String(lng) } });
+            }}
+          >
+            <Ionicons name="warning" size={18} color={Colors.bg} />
+          </Pressable>
         </View>
       )}
 
@@ -1154,18 +1203,13 @@ export default function MapScreen() {
               onStartNav={startNavigation}
               carProfile={activeCarProfile}
               onSaveRoute={handleSaveRoute}
-              onReport={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                const lat = userLocation?.latitude ?? mapRegion.latitude;
-                const lng = userLocation?.longitude ?? mapRegion.longitude;
-                router.push({ pathname: "/report", params: { lat: String(lat), lng: String(lng) } });
+              expanded={routePanelExpanded}
+              onToggleExpand={() => {
+                setRoutePanelExpanded((v) => !v);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               }}
-              onEvent={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                const lat = userLocation?.latitude ?? mapRegion.latitude;
-                const lng = userLocation?.longitude ?? mapRegion.longitude;
-                router.push({ pathname: "/create-event", params: { lat: String(lat), lng: String(lng) } });
-              }}
+              onCarSelect={carProfiles.length >= 2 ? () => setCarSelectorOpen(true) : undefined}
+              activeCarProfile={activeCarProfile}
             />
           ) : (
             <TierLegend
@@ -1173,18 +1217,6 @@ export default function MapScreen() {
               showEvents={showEvents}
               onToggleEvents={() => setShowEvents((v) => !v)}
               eventCount={events.length}
-              onReport={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                const lat = userLocation?.latitude ?? mapRegion.latitude;
-                const lng = userLocation?.longitude ?? mapRegion.longitude;
-                router.push({ pathname: "/report", params: { lat: String(lat), lng: String(lng) } });
-              }}
-              onEvent={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                const lat = userLocation?.latitude ?? mapRegion.latitude;
-                const lng = userLocation?.longitude ?? mapRegion.longitude;
-                router.push({ pathname: "/create-event", params: { lat: String(lat), lng: String(lng) } });
-              }}
             />
           )}
         </View>
@@ -1250,8 +1282,10 @@ function RoutePanel({
   onStartNav,
   carProfile,
   onSaveRoute,
-  onReport,
-  onEvent,
+  expanded,
+  onToggleExpand,
+  onCarSelect,
+  activeCarProfile,
 }: {
   routes: RouteOption[];
   selectedIdx: number;
@@ -1259,121 +1293,131 @@ function RoutePanel({
   onStartNav: () => void;
   carProfile: CarProfile | null;
   onSaveRoute: () => void;
-  onReport: () => void;
-  onEvent: () => void;
+  expanded: boolean;
+  onToggleExpand: () => void;
+  onCarSelect?: () => void;
+  activeCarProfile: CarProfile | null;
 }) {
   const { formatRouteDistance } = useUnits();
+  const selected = routes[selectedIdx];
+  const selectedTier = selected && selected.highestSeverity > 0 ? SEVERITY_TIERS[selected.highestSeverity - 1] : null;
   return (
     <View style={styles.routePanel}>
-      <View style={styles.legendActionRow}>
-        <Pressable style={styles.legendActionBtn} onPress={onEvent}>
-          <Ionicons name="calendar" size={16} color="#fff" />
-          <Text style={styles.legendActionLabel}>Event</Text>
-        </Pressable>
-        <Pressable style={[styles.legendActionBtn, { backgroundColor: Colors.accent }]} onPress={onReport}>
-          <Ionicons name="warning" size={16} color={Colors.bg} />
-          <Text style={[styles.legendActionLabel, { color: Colors.bg }]}>Report</Text>
-        </Pressable>
-      </View>
-      <View style={styles.routePanelHeader}>
-        <Text style={styles.routePanelTitle}>Route Options</Text>
-        <Pressable
-          style={styles.startNavButton}
-          onPress={onStartNav}
-        >
-          <Ionicons name="navigate" size={16} color={Colors.bg} />
-          <Text style={styles.startNavText}>Navigate</Text>
-        </Pressable>
-      </View>
-      {carProfile && (
-        <View style={styles.carProfileBadge}>
-          <Ionicons name="car-sport" size={14} color={Colors.accent} />
-          <Text style={styles.carProfileBadgeText}>
-            Risk for: {carProfile.year} {carProfile.make} {carProfile.model}
-          </Text>
+      <Pressable style={styles.routePanelHandle} onPress={onToggleExpand}>
+        <View style={styles.routePanelDragBar} />
+      </Pressable>
+      <View style={styles.routePanelCompact}>
+        <View style={styles.routePanelCompactLeft}>
+          <View style={[styles.routeColorDot, { backgroundColor: ROUTE_COLORS[selectedIdx] ?? Colors.accent, marginRight: 8 }]} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.routeLabel} numberOfLines={1}>{selected?.label ?? "Route"}</Text>
+            <Text style={styles.routeTime} numberOfLines={1}>
+              {selected?.estimatedMinutes ?? 0} min
+              {selected?.distanceKm ? ` · ${formatRouteDistance(selected.distanceKm)}` : ""}
+              {selected?.totalHazards ? ` · ${selected.totalHazards} hazards` : ""}
+            </Text>
+          </View>
         </View>
-      )}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }}>
-        {routes.map((route, i) => {
-          const tier = route.highestSeverity > 0 ? SEVERITY_TIERS[route.highestSeverity - 1] : null;
-          const isSelected = i === selectedIdx;
-          return (
-            <Pressable
-              key={`route-card-${i}`}
-              accessibilityState={{ selected: isSelected }}
-              style={[
-                styles.routeCard,
-                isSelected && {
-                  borderColor: ROUTE_COLORS[i] ?? Colors.accent,
-                  backgroundColor: Colors.bgElevated,
-                },
-              ]}
-              onPress={() => onSelect(i)}
-            >
-              <View style={[styles.routeColorDot, { backgroundColor: ROUTE_COLORS[i] ?? Colors.accent }]} />
-              <Text style={[styles.routeLabel, isSelected && { color: Colors.text }]}>{route.label}</Text>
-              <Text style={styles.routeTime}>
-                {route.estimatedMinutes} min
-                {route.distanceKm ? ` · ${formatRouteDistance(route.distanceKm)}` : ""}
+        <Pressable style={styles.startNavButton} onPress={onStartNav}>
+          <Ionicons name="navigate" size={16} color={Colors.bg} />
+          <Text style={styles.startNavText}>Go</Text>
+        </Pressable>
+      </View>
+
+      {expanded && (
+        <View style={{ marginTop: 8 }}>
+          {onCarSelect && activeCarProfile && (
+            <Pressable style={styles.carSelectorPillInline} onPress={onCarSelect}>
+              <Ionicons name="car-sport" size={14} color={Colors.accent} />
+              <Text style={styles.carSelectorText} numberOfLines={1}>
+                {activeCarProfile.year} {activeCarProfile.make} {activeCarProfile.model}
               </Text>
-              <View style={styles.routeStats}>
-                <View style={styles.routeStat}>
-                  <Ionicons name="warning-outline" size={12} color={tier?.color ?? Colors.textMuted} />
-                  <Text style={[styles.routeStatText, { color: tier?.color ?? Colors.textMuted }]}>
-                    {route.totalHazards} hazards
-                  </Text>
-                </View>
-                {route.timePenaltyMinutes > 0 && (
-                  <View style={styles.routeStat}>
-                    <Ionicons name="time-outline" size={12} color={Colors.textMuted} />
-                    <Text style={styles.routeStatText}>+{route.timePenaltyMinutes}m risk</Text>
-                  </View>
-                )}
-              </View>
-              {tier && (
-                <View style={[styles.routeTierBadge, { backgroundColor: tier.bg, borderColor: tier.color }]}>
-                  <Text style={[styles.routeTierText, { color: tier.color }]}>
-                    T{route.highestSeverity} Max
-                  </Text>
-                </View>
-              )}
-              {route.totalHazards === 0 && (
-                <View style={[styles.routeTierBadge, { backgroundColor: "#052e16", borderColor: Colors.tier1 }]}>
-                  <Text style={[styles.routeTierText, { color: Colors.tier1 }]}>Clear</Text>
-                </View>
-              )}
+              <Ionicons name="chevron-down" size={14} color={Colors.textMuted} />
             </Pressable>
-          );
-        })}
-      </ScrollView>
-      {routes[selectedIdx] && (
-        <View style={styles.routeSummary}>
-          <View style={styles.routeSummaryItem}>
-            <Ionicons name="speedometer-outline" size={14} color={Colors.textMuted} />
-            <Text style={styles.routeSummaryText}>
-              Risk score: {routes[selectedIdx].riskScore}
-            </Text>
-          </View>
-          <View style={styles.routeSummaryItem}>
-            <Ionicons name="flag-outline" size={14} color={Colors.textMuted} />
-            <Text style={styles.routeSummaryText}>
-              {routes[selectedIdx].estimatedMinutes} min · {routes[selectedIdx].distanceKm ? `${formatRouteDistance(routes[selectedIdx].distanceKm)}` : ""}
-            </Text>
-          </View>
-          <Pressable
-            style={({ pressed }) => [styles.saveRouteBtn, pressed && { opacity: 0.7 }]}
-            onPress={onSaveRoute}
-          >
-            <Ionicons name="bookmark-outline" size={14} color={Colors.accent} />
-            <Text style={styles.saveRouteBtnText}>Save</Text>
-          </Pressable>
+          )}
+          {carProfile && !onCarSelect && (
+            <View style={styles.carProfileBadge}>
+              <Ionicons name="car-sport" size={14} color={Colors.accent} />
+              <Text style={styles.carProfileBadgeText}>
+                Risk for: {carProfile.year} {carProfile.make} {carProfile.model}
+              </Text>
+            </View>
+          )}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+            {routes.map((route, i) => {
+              const tier = route.highestSeverity > 0 ? SEVERITY_TIERS[route.highestSeverity - 1] : null;
+              const isSelected = i === selectedIdx;
+              return (
+                <Pressable
+                  key={`route-card-${i}`}
+                  accessibilityState={{ selected: isSelected }}
+                  style={[
+                    styles.routeCard,
+                    isSelected && {
+                      borderColor: ROUTE_COLORS[i] ?? Colors.accent,
+                      backgroundColor: Colors.bgElevated,
+                    },
+                  ]}
+                  onPress={() => onSelect(i)}
+                >
+                  <View style={[styles.routeColorDot, { backgroundColor: ROUTE_COLORS[i] ?? Colors.accent }]} />
+                  <Text style={[styles.routeLabel, isSelected && { color: Colors.text }]}>{route.label}</Text>
+                  <Text style={styles.routeTime}>
+                    {route.estimatedMinutes} min
+                    {route.distanceKm ? ` · ${formatRouteDistance(route.distanceKm)}` : ""}
+                  </Text>
+                  <View style={styles.routeStats}>
+                    <View style={styles.routeStat}>
+                      <Ionicons name="warning-outline" size={12} color={tier?.color ?? Colors.textMuted} />
+                      <Text style={[styles.routeStatText, { color: tier?.color ?? Colors.textMuted }]}>
+                        {route.totalHazards} hazards
+                      </Text>
+                    </View>
+                    {route.timePenaltyMinutes > 0 && (
+                      <View style={styles.routeStat}>
+                        <Ionicons name="time-outline" size={12} color={Colors.textMuted} />
+                        <Text style={styles.routeStatText}>+{route.timePenaltyMinutes}m risk</Text>
+                      </View>
+                    )}
+                  </View>
+                  {tier && (
+                    <View style={[styles.routeTierBadge, { backgroundColor: tier.bg, borderColor: tier.color }]}>
+                      <Text style={[styles.routeTierText, { color: tier.color }]}>
+                        T{route.highestSeverity} Max
+                      </Text>
+                    </View>
+                  )}
+                  {route.totalHazards === 0 && (
+                    <View style={[styles.routeTierBadge, { backgroundColor: "#052e16", borderColor: Colors.tier1 }]}>
+                      <Text style={[styles.routeTierText, { color: Colors.tier1 }]}>Clear</Text>
+                    </View>
+                  )}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+          {selected && (
+            <View style={styles.routeSummary}>
+              <View style={styles.routeSummaryItem}>
+                <Ionicons name="speedometer-outline" size={14} color={Colors.textMuted} />
+                <Text style={styles.routeSummaryText}>Risk: {selected.riskScore}</Text>
+              </View>
+              <Pressable
+                style={({ pressed }) => [styles.saveRouteBtn, pressed && { opacity: 0.7 }]}
+                onPress={onSaveRoute}
+              >
+                <Ionicons name="bookmark-outline" size={14} color={Colors.accent} />
+                <Text style={styles.saveRouteBtnText}>Save</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
       )}
     </View>
   );
 }
 
-function TierLegend({ hazards, showEvents, onToggleEvents, eventCount, routeHazardCount, onReport, onEvent }: { hazards: Hazard[]; showEvents: boolean; onToggleEvents: () => void; eventCount: number; routeHazardCount?: number; onReport: () => void; onEvent: () => void }) {
+function TierLegend({ hazards, showEvents, onToggleEvents, eventCount, routeHazardCount }: { hazards: Hazard[]; showEvents: boolean; onToggleEvents: () => void; eventCount: number; routeHazardCount?: number }) {
   const [expanded, setExpanded] = useState(false);
   const animVal = useRef(new Animated.Value(0)).current;
 
@@ -1398,16 +1442,6 @@ function TierLegend({ hazards, showEvents, onToggleEvents, eventCount, routeHaza
 
   return (
     <View style={styles.legendPanel}>
-      <View style={styles.legendActionRow}>
-        <Pressable style={styles.legendActionBtn} onPress={onEvent}>
-          <Ionicons name="calendar" size={16} color="#fff" />
-          <Text style={styles.legendActionLabel}>Event</Text>
-        </Pressable>
-        <Pressable style={[styles.legendActionBtn, { backgroundColor: Colors.accent }]} onPress={onReport}>
-          <Ionicons name="warning" size={16} color={Colors.bg} />
-          <Text style={[styles.legendActionLabel, { color: Colors.bg }]}>Report</Text>
-        </Pressable>
-      </View>
       <Pressable style={styles.legendCompact} onPress={toggleExpanded}>
         <View style={styles.legendCompactLeft}>
           <Ionicons name="warning" size={18} color={Colors.tier3} />
@@ -1645,7 +1679,74 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
 
-  routePanel: { padding: 16 },
+  collapsedSearchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.bgCard,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  collapsedSearchText: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
+    color: Colors.text,
+  },
+  routePanel: { padding: 16, paddingTop: 0 },
+  routePanelHandle: {
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  routePanelDragBar: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.textMuted + "60",
+  },
+  routePanelCompact: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  routePanelCompactLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  carSelectorPillInline: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: Colors.accent + "18",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignSelf: "flex-start",
+  },
+  mapFabColumn: {
+    position: "absolute",
+    zIndex: 102,
+    gap: 10,
+  },
+  mapFab: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
   carProfileBadge: {
     flexDirection: "row",
     alignItems: "center",
