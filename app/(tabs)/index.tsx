@@ -684,7 +684,6 @@ export default function MapScreen() {
   const navElapsedMin = isNavigating ? Math.floor((Date.now() - navStartTimeRef.current) / 60000) : 0;
 
   const bottomPanelHeight = isNavigating ? 0 : routes.length > 0 ? (panelOpen ? 260 : 180) : 140;
-  const fabBottom = bottomPanelHeight + 16;
 
   return (
     <View style={styles.container}>
@@ -980,17 +979,46 @@ export default function MapScreen() {
               onStartNav={startNavigation}
               carProfile={activeCarProfile}
               onSaveRoute={handleSaveRoute}
+              onReport={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                const lat = userLocation?.latitude ?? mapRegion.latitude;
+                const lng = userLocation?.longitude ?? mapRegion.longitude;
+                router.push({ pathname: "/report", params: { lat: String(lat), lng: String(lng) } });
+              }}
+              onEvent={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                const lat = userLocation?.latitude ?? mapRegion.latitude;
+                const lng = userLocation?.longitude ?? mapRegion.longitude;
+                router.push({ pathname: "/create-event", params: { lat: String(lat), lng: String(lng) } });
+              }}
             />
           ) : (
-            <TierLegend hazards={hazards} showEvents={showEvents} onToggleEvents={() => setShowEvents((v) => !v)} eventCount={events.length} />
+            <TierLegend
+              hazards={hazards}
+              showEvents={showEvents}
+              onToggleEvents={() => setShowEvents((v) => !v)}
+              eventCount={events.length}
+              onReport={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                const lat = userLocation?.latitude ?? mapRegion.latitude;
+                const lng = userLocation?.longitude ?? mapRegion.longitude;
+                router.push({ pathname: "/report", params: { lat: String(lat), lng: String(lng) } });
+              }}
+              onEvent={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                const lat = userLocation?.latitude ?? mapRegion.latitude;
+                const lng = userLocation?.longitude ?? mapRegion.longitude;
+                router.push({ pathname: "/create-event", params: { lat: String(lat), lng: String(lng) } });
+              }}
+            />
           )}
         </View>
       )}
 
-      {/* Location button - rendered after bottom panel so it appears on top */}
+      {/* Location button */}
       {locationGranted && !isNavigating && (
         <Pressable
-          style={[styles.locBtn, { bottom: fabBottom + 52, right: 16 }]}
+          style={[styles.locBtn, { bottom: bottomPanelHeight + 16, right: 16 }]}
           onPress={() => {
             if (userLocation) {
               mapRef.current?.animateToRegion(
@@ -1003,36 +1031,6 @@ export default function MapScreen() {
           <Ionicons name="navigate" size={20} color={Colors.text} />
         </Pressable>
       )}
-
-      {/* FABs - rendered after bottom panel so they appear on top */}
-      {!isNavigating && (
-        <View style={[styles.fabGroup, { bottom: fabBottom }]}>
-          <Pressable
-            style={styles.fabEvent}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              const lat = userLocation?.latitude ?? mapRegion.latitude;
-              const lng = userLocation?.longitude ?? mapRegion.longitude;
-              router.push({ pathname: "/create-event", params: { lat: String(lat), lng: String(lng) } });
-            }}
-          >
-            <Ionicons name="calendar" size={20} color="#fff" />
-            <Text style={styles.fabEventLabel}>Event</Text>
-          </Pressable>
-          <Pressable
-            style={styles.fab}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              const lat = userLocation?.latitude ?? mapRegion.latitude;
-              const lng = userLocation?.longitude ?? mapRegion.longitude;
-              router.push({ pathname: "/report", params: { lat: String(lat), lng: String(lng) } });
-            }}
-          >
-            <Ionicons name="warning" size={22} color={Colors.bg} />
-            <Text style={styles.fabLabel}>Report</Text>
-          </Pressable>
-        </View>
-      )}
     </View>
   );
 }
@@ -1044,6 +1042,8 @@ function RoutePanel({
   onStartNav,
   carProfile,
   onSaveRoute,
+  onReport,
+  onEvent,
 }: {
   routes: RouteOption[];
   selectedIdx: number;
@@ -1051,10 +1051,22 @@ function RoutePanel({
   onStartNav: () => void;
   carProfile: CarProfile | null;
   onSaveRoute: () => void;
+  onReport: () => void;
+  onEvent: () => void;
 }) {
   const { formatRouteDistance } = useUnits();
   return (
     <View style={styles.routePanel}>
+      <View style={styles.legendActionRow}>
+        <Pressable style={styles.legendActionBtn} onPress={onEvent}>
+          <Ionicons name="calendar" size={16} color="#fff" />
+          <Text style={styles.legendActionLabel}>Event</Text>
+        </Pressable>
+        <Pressable style={[styles.legendActionBtn, { backgroundColor: Colors.accent }]} onPress={onReport}>
+          <Ionicons name="warning" size={16} color={Colors.bg} />
+          <Text style={[styles.legendActionLabel, { color: Colors.bg }]}>Report</Text>
+        </Pressable>
+      </View>
       <View style={styles.routePanelHeader}>
         <Text style={styles.routePanelTitle}>Route Options</Text>
         <Pressable
@@ -1152,7 +1164,7 @@ function RoutePanel({
   );
 }
 
-function TierLegend({ hazards, showEvents, onToggleEvents, eventCount, routeHazardCount }: { hazards: Hazard[]; showEvents: boolean; onToggleEvents: () => void; eventCount: number; routeHazardCount?: number }) {
+function TierLegend({ hazards, showEvents, onToggleEvents, eventCount, routeHazardCount, onReport, onEvent }: { hazards: Hazard[]; showEvents: boolean; onToggleEvents: () => void; eventCount: number; routeHazardCount?: number; onReport: () => void; onEvent: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const animVal = useRef(new Animated.Value(0)).current;
 
@@ -1177,6 +1189,16 @@ function TierLegend({ hazards, showEvents, onToggleEvents, eventCount, routeHaza
 
   return (
     <View style={styles.legendPanel}>
+      <View style={styles.legendActionRow}>
+        <Pressable style={styles.legendActionBtn} onPress={onEvent}>
+          <Ionicons name="calendar" size={16} color="#fff" />
+          <Text style={styles.legendActionLabel}>Event</Text>
+        </Pressable>
+        <Pressable style={[styles.legendActionBtn, { backgroundColor: Colors.accent }]} onPress={onReport}>
+          <Ionicons name="warning" size={16} color={Colors.bg} />
+          <Text style={[styles.legendActionLabel, { color: Colors.bg }]}>Report</Text>
+        </Pressable>
+      </View>
       <Pressable style={styles.legendCompact} onPress={toggleExpanded}>
         <View style={styles.legendCompactLeft}>
           <Ionicons name="warning" size={18} color={Colors.tier3} />
@@ -1401,44 +1423,6 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
 
-  fabGroup: {
-    position: "absolute",
-    right: 16,
-    flexDirection: "column",
-    alignItems: "flex-end",
-    gap: 10,
-  },
-  fab: {
-    backgroundColor: Colors.accent,
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 10,
-  },
-  fabLabel: { color: Colors.bg, fontSize: 14, fontFamily: "Inter_700Bold" },
-  fabEvent: {
-    backgroundColor: EVENT_COLOR,
-    borderRadius: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 6,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 8,
-  },
-  fabEventLabel: { color: "#fff", fontSize: 13, fontFamily: "Inter_700Bold" },
-
   bottomPanel: {
     position: "absolute",
     bottom: 0,
@@ -1532,6 +1516,26 @@ const styles = StyleSheet.create({
   routeSummaryText: { fontSize: 12, fontFamily: "Inter_400Regular", color: Colors.textMuted },
 
   legendPanel: { paddingHorizontal: 16, paddingVertical: 12 },
+  legendActionRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 10,
+  },
+  legendActionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#7C3AED",
+    borderRadius: 12,
+    paddingVertical: 10,
+  },
+  legendActionLabel: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: "#fff",
+  },
   legendCompact: {
     flexDirection: "row",
     alignItems: "center",
