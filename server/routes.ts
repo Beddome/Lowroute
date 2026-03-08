@@ -62,26 +62,31 @@ function decodePolyline(encoded: string): Array<{ lat: number; lng: number }> {
   return points;
 }
 
-function distanceToSegment(
+function distanceToSegmentMeters(
   px: number, py: number,
   ax: number, ay: number,
   bx: number, by: number
 ): number {
+  const cosLat = Math.cos(((ax + bx + px) / 3) * Math.PI / 180);
+  const scaledPy = py * cosLat;
+  const scaledAy = ay * cosLat;
+  const scaledBy = by * cosLat;
+
   const dx = bx - ax;
-  const dy = by - ay;
+  const dy = scaledBy - scaledAy;
   const lenSq = dx * dx + dy * dy;
   if (lenSq === 0) {
     const ddx = px - ax;
-    const ddy = py - ay;
-    return Math.sqrt(ddx * ddx + ddy * ddy);
+    const ddy = scaledPy - scaledAy;
+    return Math.sqrt(ddx * ddx + ddy * ddy) * 111320;
   }
-  let t = ((px - ax) * dx + (py - ay) * dy) / lenSq;
+  let t = ((px - ax) * dx + (scaledPy - scaledAy) * dy) / lenSq;
   t = Math.max(0, Math.min(1, t));
   const projX = ax + t * dx;
-  const projY = ay + t * dy;
+  const projY = scaledAy + t * dy;
   const ddx = px - projX;
-  const ddy = py - projY;
-  return Math.sqrt(ddx * ddx + ddy * ddy);
+  const ddy = scaledPy - projY;
+  return Math.sqrt(ddx * ddx + ddy * ddy) * 111320;
 }
 
 declare module "express-session" {
@@ -128,7 +133,8 @@ function calculateRouteRisk(hazards: Array<{ severity: number; confidenceScore: 
   return { score, counts, highestTier, totalHazards };
 }
 
-const HAZARD_BUFFER_DEG = 0.0015;
+const HAZARD_BUFFER_METERS = 500;
+const HAZARD_BUFFER_DEG = 0.005;
 
 function hazardsNearPolyline(
   allHazards: Array<{ lat: number; lng: number; severity: number; confidenceScore: number; [key: string]: any }>,
@@ -138,20 +144,22 @@ function hazardsNearPolyline(
 
   const lats = polyline.map((p) => p.lat);
   const lngs = polyline.map((p) => p.lng);
+  const avgLat = lats.reduce((a, b) => a + b, 0) / lats.length;
+  const lngBuffer = HAZARD_BUFFER_DEG / Math.cos(avgLat * Math.PI / 180);
   const minLat = Math.min(...lats) - HAZARD_BUFFER_DEG;
   const maxLat = Math.max(...lats) + HAZARD_BUFFER_DEG;
-  const minLng = Math.min(...lngs) - HAZARD_BUFFER_DEG;
-  const maxLng = Math.max(...lngs) + HAZARD_BUFFER_DEG;
+  const minLng = Math.min(...lngs) - lngBuffer;
+  const maxLng = Math.max(...lngs) + lngBuffer;
 
   return allHazards.filter((h) => {
     if (h.lat < minLat || h.lat > maxLat || h.lng < minLng || h.lng > maxLng) return false;
     for (let i = 0; i < polyline.length - 1; i++) {
-      const d = distanceToSegment(
+      const d = distanceToSegmentMeters(
         h.lat, h.lng,
         polyline[i].lat, polyline[i].lng,
         polyline[i + 1].lat, polyline[i + 1].lng
       );
-      if (d < HAZARD_BUFFER_DEG) return true;
+      if (d < HAZARD_BUFFER_METERS) return true;
     }
     return false;
   });
@@ -188,8 +196,29 @@ async function fetchGoogleRoutes(
       end_location: { lat: s.end_location?.lat ?? 0, lng: s.end_location?.lng ?? 0 },
       maneuver: s.maneuver || undefined,
     }));
+
+    let detailedGeometry = "";
+    const stepPolylines = (leg.steps || [])
+      .map((s: any) => s.polyline?.points)
+      .filter(Boolean);
+    if (stepPolylines.length > 0) {
+      const allPoints: Array<{ lat: number; lng: number }> = [];
+      for (const sp of stepPolylines) {
+        const pts = decodePolyline(sp);
+        if (allPoints.length > 0 && pts.length > 0) {
+          const last = allPoints[allPoints.length - 1];
+          if (Math.abs(last.lat - pts[0].lat) < 0.00001 && Math.abs(last.lng - pts[0].lng) < 0.00001) {
+            pts.shift();
+          }
+        }
+        allPoints.push(...pts);
+      }
+      detailedGeometry = JSON.stringify(allPoints);
+    }
+
     return {
       geometry: r.overview_polyline.points,
+      detailedPoints: detailedGeometry ? JSON.parse(detailedGeometry) as Array<{ lat: number; lng: number }> : null,
       distance: leg.distance.value,
       duration: leg.duration.value,
       steps,
@@ -521,8 +550,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ];
 
       const routes = googleRoutes.slice(0, 3).map((gRoute, i) => {
-        const polyline = decodePolyline(gRoute.geometry);
-        const routeHazards = hazardsNearPolyline(allHazards, polyline);
+        const overviewPolyline = decodePolyline(gRoute.geometry);
+        const detailedPolyline = gRoute.detailedPoints && gRoute.detailedPoints.length > 0
+          ? gRoute.detailedPoints
+          : overviewPolyline;
+        const routeHazards = hazardsNearPolyline(allHazards, detailedPolyline);
         const risk = calculateRouteRisk(routeHazards, riskMultiplier);
         const label = ROUTE_LABELS[i] || { id: `route_${i}`, label: `Route ${i + 1}`, description: "Alternative route" };
         const estimatedMinutes = Math.round(gRoute.duration / 60);
@@ -540,7 +572,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           highestSeverity: risk.highestTier,
           totalHazards: risk.totalHazards,
           severityCounts: risk.counts,
-          waypoints: polyline,
+          waypoints: detailedPolyline,
           steps: gRoute.steps,
         };
       });
@@ -552,12 +584,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         routes[0].description = "Shortest travel time";
       }
       if (routes.length > 1) {
-        const safest = routes.reduce((best, r) => r.riskScore < best.riskScore ? r : best, routes[1]);
-        if (safest !== routes[0]) {
-          safest.id = "safest";
-          safest.label = "Low-Car Safe";
-          safest.description = "Lowest hazard risk for low vehicles";
+        const safest = routes.reduce((best, r) => {
+          if (r === routes[0]) return best;
+          if (r.riskScore < best.riskScore) return r;
+          if (r.riskScore === best.riskScore && r.totalHazards < best.totalHazards) return r;
+          return best;
+        }, routes[1]);
+        safest.id = "safest";
+        safest.label = "Low-Car Safe";
+        safest.description = "Lowest hazard risk for low vehicles";
+
+        for (const r of routes) {
+          if (r !== routes[0] && r !== safest) {
+            r.id = "balanced";
+            r.label = "Balanced";
+            r.description = "Balance between time and safety";
+          }
         }
+      }
+      if (routes.length === 1) {
+        routes[0].description = routes[0].totalHazards === 0
+          ? "No hazards detected on this route"
+          : `${routes[0].totalHazards} hazard${routes[0].totalHazards !== 1 ? "s" : ""} detected`;
       }
 
       res.json({ routes, carProfile: carProfileInfo, riskMultiplier });
