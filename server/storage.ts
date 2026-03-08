@@ -310,16 +310,16 @@ export async function seedDemoHazards() {
   }).onConflictDoNothing();
 
   const sampleHazards = [
-    { lat: 49.6935, lng: -112.8418, type: "pothole" as const, severity: 3, title: "Deep Pothole", description: "Large pothole in right lane. Could bottom out low cars." },
-    { lat: 49.6945, lng: -112.8438, type: "speed_bump" as const, severity: 4, title: "Extreme Speed Bump", description: "Unmarked extremely tall speed bump. Full detour for slammed builds." },
-    { lat: 49.6925, lng: -112.8398, type: "construction" as const, severity: 3, title: "Construction Zone", description: "Metal plates and loose gravel. Lane partially blocked." },
-    { lat: 49.6955, lng: -112.8458, type: "raised_manhole" as const, severity: 2, title: "Raised Manhole", description: "Cover sits 2 inches above road surface. Approach with caution." },
-    { lat: 49.6915, lng: -112.8378, type: "railroad_crossing" as const, severity: 2, title: "Rough Railroad Crossing", description: "Uneven tracks with significant lip. Approach at angle." },
-    { lat: 49.6975, lng: -112.8478, type: "flooded_road" as const, severity: 4, title: "Flooded Underpass", description: "Standing water of unknown depth. Full detour required." },
-    { lat: 49.6901, lng: -112.8361, type: "debris" as const, severity: 1, title: "Road Debris", description: "Tire fragments on shoulder. Dodgeable, watch left lane." },
-    { lat: 49.6988, lng: -112.8491, type: "large_bump_dip" as const, severity: 3, title: "Severe Road Dip", description: "Deep dip at bridge approach. Bottom-out risk at speed." },
-    { lat: 49.6911, lng: -112.8451, type: "steep_driveway" as const, severity: 2, title: "Steep Entry Angle", description: "Sharp angle entering the gas station. Scrape risk." },
-    { lat: 49.6931, lng: -112.8471, type: "pothole" as const, severity: 1, title: "Small Pothole Cluster", description: "Several small potholes in right lane. Move left to avoid." },
+    { lat: 49.6942, lng: -112.8183, type: "pothole" as const, severity: 3, title: "Deep Pothole on Mayor Magrath", description: "Large pothole in right lane on Mayor Magrath Dr S near Walmart. Could bottom out low cars." },
+    { lat: 49.7054, lng: -112.8427, type: "speed_bump" as const, severity: 4, title: "Extreme Speed Bump on 5th Ave", description: "Unmarked extremely tall speed bump on 5th Ave S near Galt Gardens. Full detour for slammed builds." },
+    { lat: 49.6788, lng: -112.8554, type: "construction" as const, severity: 3, title: "Construction on Whoop-Up Dr", description: "Metal plates and loose gravel on Whoop-Up Dr near the bridge. Lane partially blocked." },
+    { lat: 49.7121, lng: -112.8095, type: "raised_manhole" as const, severity: 2, title: "Raised Manhole on Stafford Dr", description: "Cover sits 2 inches above road surface on Stafford Dr N. Approach with caution." },
+    { lat: 49.6856, lng: -112.7943, type: "railroad_crossing" as const, severity: 2, title: "Rough Crossing on Highway 4", description: "Uneven tracks with significant lip near Highway 4 south. Approach at angle." },
+    { lat: 49.6723, lng: -112.8312, type: "flooded_road" as const, severity: 4, title: "Flooded Underpass at Scenic Dr", description: "Standing water of unknown depth under Scenic Dr bridge. Full detour required." },
+    { lat: 49.7003, lng: -112.7862, type: "debris" as const, severity: 1, title: "Road Debris on Highway 3", description: "Tire fragments on shoulder of Highway 3 east. Dodgeable, watch left lane." },
+    { lat: 49.6951, lng: -112.8682, type: "large_bump_dip" as const, severity: 3, title: "Severe Dip on University Dr", description: "Deep dip at University Dr W bridge approach. Bottom-out risk at speed." },
+    { lat: 49.7176, lng: -112.8291, type: "steep_driveway" as const, severity: 2, title: "Steep Entry at North Side Shell", description: "Sharp angle entering the Shell station on 13th St N. Scrape risk." },
+    { lat: 49.6891, lng: -112.8147, type: "pothole" as const, severity: 1, title: "Pothole Cluster on McMaster Blvd", description: "Several small potholes in right lane on McMaster Blvd W. Move left to avoid." },
   ];
 
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);

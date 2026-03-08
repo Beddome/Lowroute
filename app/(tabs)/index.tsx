@@ -683,8 +683,8 @@ export default function MapScreen() {
 
   const navElapsedMin = isNavigating ? Math.floor((Date.now() - navStartTimeRef.current) / 60000) : 0;
 
-  const bottomPanelHeight = isNavigating ? 0 : routes.length > 0 ? (panelOpen ? 260 : 180) : 80;
-  const fabBottom = insets.bottom + bottomPanelHeight + 16;
+  const bottomPanelHeight = isNavigating ? 0 : routes.length > 0 ? (panelOpen ? 260 : 180) : 140;
+  const fabBottom = bottomPanelHeight + 16;
 
   return (
     <View style={styles.container}>
@@ -966,7 +966,28 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* Location button */}
+      {/* Bottom panel */}
+      {!isNavigating && (
+        <View style={[styles.bottomPanel, { paddingBottom: insets.bottom + 80 }]} pointerEvents="box-none">
+          {routes.length > 0 ? (
+            <RoutePanel
+              routes={routes}
+              selectedIdx={selectedRouteIdx}
+              onSelect={(i) => {
+                setSelectedRouteIdx(i);
+                Haptics.selectionAsync();
+              }}
+              onStartNav={startNavigation}
+              carProfile={activeCarProfile}
+              onSaveRoute={handleSaveRoute}
+            />
+          ) : (
+            <TierLegend hazards={hazards} showEvents={showEvents} onToggleEvents={() => setShowEvents((v) => !v)} eventCount={events.length} />
+          )}
+        </View>
+      )}
+
+      {/* Location button - rendered after bottom panel so it appears on top */}
       {locationGranted && !isNavigating && (
         <Pressable
           style={[styles.locBtn, { bottom: fabBottom + 52, right: 16 }]}
@@ -983,7 +1004,7 @@ export default function MapScreen() {
         </Pressable>
       )}
 
-      {/* FABs - hidden during navigation */}
+      {/* FABs - rendered after bottom panel so they appear on top */}
       {!isNavigating && (
         <View style={[styles.fabGroup, { bottom: fabBottom }]}>
           <Pressable
@@ -1010,27 +1031,6 @@ export default function MapScreen() {
             <Ionicons name="warning" size={22} color={Colors.bg} />
             <Text style={styles.fabLabel}>Report</Text>
           </Pressable>
-        </View>
-      )}
-
-      {/* Bottom panel */}
-      {!isNavigating && (
-        <View style={[styles.bottomPanel, { paddingBottom: insets.bottom + 80 }]}>
-          {routes.length > 0 ? (
-            <RoutePanel
-              routes={routes}
-              selectedIdx={selectedRouteIdx}
-              onSelect={(i) => {
-                setSelectedRouteIdx(i);
-                Haptics.selectionAsync();
-              }}
-              onStartNav={startNavigation}
-              carProfile={activeCarProfile}
-              onSaveRoute={handleSaveRoute}
-            />
-          ) : (
-            <TierLegend hazards={hazards} showEvents={showEvents} onToggleEvents={() => setShowEvents((v) => !v)} eventCount={events.length} />
-          )}
         </View>
       )}
     </View>
@@ -1399,7 +1399,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.5,
     shadowRadius: 6,
     elevation: 8,
-    zIndex: 50,
   },
 
   fabGroup: {
@@ -1408,7 +1407,6 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     alignItems: "flex-end",
     gap: 10,
-    zIndex: 50,
   },
   fab: {
     backgroundColor: Colors.accent,
