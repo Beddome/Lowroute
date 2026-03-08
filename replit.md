@@ -8,13 +8,14 @@ A community-powered GPS and hazard-reporting app for low-clearance vehicles (low
 **Backend:** Express.js + TypeScript on port 5000
 **Database:** PostgreSQL via Drizzle ORM
 **Auth:** express-session with connect-pg-simple store, bcryptjs for password hashing
-**Routing:** OSRM (Open Source Routing Machine) via public API — real road-following routes
+**Routing:** Google Maps Directions API — real road-following routes with alternatives
+**Geocoding:** Google Places Autocomplete + Google Geocoding API (server-side, location-biased)
 **Payments:** RevenueCat SDK (react-native-purchases) — runs in Preview API Mode in Expo Go
 
 ## Key Features
 
 - Interactive map with hazard markers colored by severity tier (1-4)
-- **Real road-following routes** via OSRM with multiple alternatives, distance, and duration
+- **Real road-following routes** via Google Directions API with multiple alternatives, distance, and duration
 - 3 route options: Fastest, Low-Car Safe, Balanced — each with a Low Clearance Risk Score
 - **Live GPS navigation** with continuous position tracking, speed, heading display
 - **Background location tracking** — navigation continues when app is minimized
@@ -31,12 +32,15 @@ A community-powered GPS and hazard-reporting app for low-clearance vehicles (low
 - **Route saving & sharing** — save calculated routes to profile, view/delete saved routes, re-load on map; toggle public sharing with shareable links via native Share API
 - **Admin panel** with stats dashboard, hazard management, user role management, promo code management, event management
 - **Subscription system** with Free and Pro tiers (Pro gates live navigation + hazard alerts)
+- **Metric/Imperial toggle** — user preference persisted via AsyncStorage; affects distances, speeds, and route panel
+- **Friends system** — send/accept/decline friend requests, search users by username, live Snap Maps-style friend location pins on map (30s polling)
+- **Car Parts Marketplace** — browse/create/edit/delete listings with photos, category/condition filters, radius-based search with Haversine formula, price filtering, sorting
+- **Collapsible map legend** — compact pill showing hazard count with expand/collapse animation, events toggle always visible
 - **Security hardening**: rate limiting on auth endpoints, input validation, env-configurable admin credentials
-- Geocoding via OpenStreetMap Nominatim (free, no API key required)
 
 ## Route Safety Logic
 
-Routes are fetched from OSRM (real road geometry), then scored based on nearby hazards:
+Routes are fetched from Google Directions API (real road geometry), then scored based on nearby hazards:
 - Tier 1 (Minor): +5 points
 - Tier 2 (Caution): +20 points
 - Tier 3 (Major): +100 points
@@ -48,12 +52,13 @@ Hazard proximity to route is calculated using point-to-segment distance (not bou
 
 ```
 app/
-  _layout.tsx          # Root layout with QueryClient, AuthProvider, LocationProvider, ErrorBoundary
+  _layout.tsx          # Root layout with QueryClient, AuthProvider, LocationProvider, UnitsProvider, ErrorBoundary
   (tabs)/
     _layout.tsx        # NativeTabs (iOS 26+) or classic BlurView Tabs, conditional admin tab
-    index.tsx          # Main map screen with search, OSRM routing, hazard markers, live navigation
+    index.tsx          # Main map screen with search, Google routing, hazard/event/friend markers, live navigation
     index.web.tsx      # Web fallback for map (no react-native-maps on web)
-    profile.tsx        # User profile, reputation, badges, subscription upgrade
+    profile.tsx        # User profile, reputation, badges, subscription upgrade, units toggle, friends access
+    marketplace.tsx    # Car parts marketplace browse/search with category/radius filters
     admin.tsx          # Admin dashboard: stats, hazard mgmt, user mgmt (admin only)
   (auth)/
     _layout.tsx        # Modal stack for auth flow
@@ -65,15 +70,20 @@ app/
   car-profile.tsx      # formSheet for add/edit car profiles (garage)
   event-detail.tsx     # formSheet for event details + RSVP
   create-event.tsx     # formSheet for creating/editing events
+  friends.tsx          # formSheet for friend search, requests, and friend list management
+  listing-detail.tsx   # formSheet for marketplace listing detail with photo gallery
+  create-listing.tsx   # formSheet for creating marketplace listings with photo upload
+  route/[token].tsx    # Shared route viewer screen
 contexts/
   AuthContext.tsx      # Auth state with role + subscriptionTier
   LocationContext.tsx  # Live GPS tracking + background location via expo-task-manager
+  UnitsContext.tsx     # Metric/Imperial preference with AsyncStorage persistence
 server/
   index.ts             # Express setup with CORS, sessions
-  routes.ts            # API routes: OSRM routing, auth (rate limited), hazards (validated), admin, subscription
-  storage.ts           # Drizzle DB operations + seed data + admin ops
+  routes.ts            # API routes: Google Directions routing, auth, hazards, admin, subscription, friends, marketplace, geocoding
+  storage.ts           # Drizzle DB operations + seed data + admin ops + friends + marketplace
 shared/
-  schema.ts            # Drizzle schema: users (with role, subscriptionTier), hazards, hazard_votes
+  schema.ts            # Drizzle schema: users, hazards, hazard_votes, friendships, user_locations, marketplace_listings
   types.ts             # Frontend-safe types (MUST be used by frontend instead of schema.ts)
 constants/
   colors.ts            # Dark car-culture theme (obsidian bg, amber accent)
@@ -95,6 +105,7 @@ metro.config.js        # Custom resolver to stub react-native-maps on web
 - Hazard reports validated: coordinate bounds, severity 1-4, title 3-100 chars, description 5-500 chars
 - Bundle identifiers: `com.lowroute.app` (iOS and Android)
 - Background location configured for both iOS (UIBackgroundModes) and Android (foreground service)
+- Google Maps API key stored as `GOOGLE_MAPS_API_KEY` secret — used server-side only for Directions, Places Autocomplete, and Geocoding APIs
 
 ## Color Theme
 
@@ -116,17 +127,23 @@ metro.config.js        # Custom resolver to stub react-native-maps on web
 - `car_profiles`: id, user_id, make, model, year, ride_height, suspension_type (enum), front_lip, wheel_size, clearance_mode (enum), is_default, created_at
 - `events`: id, creator_id, title, description, event_type (enum), lat, lng, event_date, max_attendees, rsvp_count, status, created_at
 - `event_rsvps`: id, event_id, user_id, created_at
-- `saved_routes`: id, user_id, name, start_lat, start_lng, end_lat, end_lng, start_address, end_address, risk_score, car_profile_id, route_data (jsonb), created_at
+- `saved_routes`: id, user_id, name, start_lat, start_lng, end_lat, end_lng, start_address, end_address, risk_score, car_profile_id, route_data (jsonb), share_token, is_public, created_at
+- `friendships`: id, requester_id (FK users), addressee_id (FK users), status (pending/accepted/blocked), created_at
+- `user_locations`: user_id (FK users), lat, lng, updated_at
+- `marketplace_listings`: id, seller_id (FK users), title, description, price (cents), category (enum), condition (enum), lat, lng, city, photos (jsonb), status (active/sold/removed), created_at
 - `session` (auto-created by connect-pg-simple)
 
 ## API Endpoints
 
 Auth: POST /api/auth/register (rate limited), POST /api/auth/login (rate limited), POST /api/auth/logout, GET /api/auth/me
 Hazards: GET /api/hazards, POST /api/hazards (validated), GET /api/hazards/:id, POST /api/hazards/:id/vote, GET /api/hazards/nearby
-Routes: GET /api/routes (OSRM-powered)
+Routes: GET /api/routes (Google Directions API-powered)
+Geocoding: GET /api/places/autocomplete?input=...&lat=...&lng=..., GET /api/geocode?placeId=...
 Cars: GET /api/cars, POST /api/cars, PUT /api/cars/:id, DELETE /api/cars/:id
 Events: GET /api/events (bbox filter), GET /api/events/:id, POST /api/events, PUT /api/events/:id, DELETE /api/events/:id, POST /api/events/:id/rsvp
 Saved Routes: POST /api/routes/save, GET /api/routes/saved, DELETE /api/routes/saved/:id, POST /api/routes/saved/:id/share (toggle), GET /api/routes/shared/:token (public)
+Friends: GET /api/users/search?q=..., POST /api/friends/request, GET /api/friends, GET /api/friends/requests, POST /api/friends/:id/accept, POST /api/friends/:id/decline, DELETE /api/friends/:id, POST /api/location/update, GET /api/friends/locations
+Marketplace: GET /api/marketplace, POST /api/marketplace, GET /api/marketplace/:id, PUT /api/marketplace/:id, DELETE /api/marketplace/:id
 Upload: POST /api/upload (multipart, photo field, max 5MB)
 Admin: GET /api/admin/stats, GET /api/admin/users, PATCH /api/admin/users/:id/role, DELETE /api/admin/hazards/:id
 Admin Promos: POST /api/admin/promo-codes, GET /api/admin/promo-codes, PATCH /api/admin/promo-codes/:id/deactivate
@@ -146,6 +163,6 @@ Admin user seeded on startup (configurable via env vars).
 - `expo-task-manager` — background location task registration
 - `multer` — file upload middleware for hazard photos
 - `leaflet` — interactive web map (web platform only)
-- `expo-image-picker` — camera/gallery photo selection for hazard reports
+- `expo-image-picker` — camera/gallery photo selection for hazard reports and marketplace
 - `bcryptjs` — password hashing
 - `express-session` + `connect-pg-simple` — session management

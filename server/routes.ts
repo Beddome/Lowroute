@@ -157,21 +157,26 @@ function hazardsNearPolyline(
   });
 }
 
-async function fetchOSRMRoutes(
+async function fetchGoogleRoutes(
   sLat: number, sLng: number, eLat: number, eLng: number
 ): Promise<Array<{ geometry: string; distance: number; duration: number }>> {
-  const url = `https://router.project-osrm.org/route/v1/driving/${sLng},${sLat};${eLng},${eLat}?alternatives=true&overview=full&geometries=polyline`;
-  const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
-  if (!resp.ok) throw new Error(`OSRM returned ${resp.status}`);
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  if (!apiKey) throw new Error("GOOGLE_MAPS_API_KEY is not configured");
+  const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${sLat},${sLng}&destination=${eLat},${eLng}&alternatives=true&key=${apiKey}`;
+  const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  if (!resp.ok) throw new Error(`Google Directions returned ${resp.status}`);
   const data = await resp.json() as any;
-  if (data.code !== "Ok" || !data.routes?.length) {
-    throw new Error("OSRM could not find routes");
+  if (data.status !== "OK" || !data.routes?.length) {
+    throw new Error(data.error_message || `Google Directions: ${data.status}`);
   }
-  return data.routes.map((r: any) => ({
-    geometry: r.geometry,
-    distance: r.distance,
-    duration: r.duration,
-  }));
+  return data.routes.map((r: any) => {
+    const leg = r.legs[0];
+    return {
+      geometry: r.overview_polyline.points,
+      distance: leg.distance.value,
+      duration: leg.duration.value,
+    };
+  });
 }
 
 function safeUserResponse(user: any) {
@@ -483,11 +488,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const allHazards = await storage.getAllActiveHazards();
 
-      let osrmRoutes: Array<{ geometry: string; distance: number; duration: number }>;
+      let googleRoutes: Array<{ geometry: string; distance: number; duration: number }>;
       try {
-        osrmRoutes = await fetchOSRMRoutes(sLat, sLng, eLat, eLng);
-      } catch (osrmErr) {
-        console.error("OSRM fetch failed:", osrmErr);
+        googleRoutes = await fetchGoogleRoutes(sLat, sLng, eLat, eLng);
+      } catch (routeErr) {
+        console.error("Google Directions fetch failed:", routeErr);
         return res.status(502).json({ message: "Routing service temporarily unavailable. Please try again." });
       }
 
@@ -497,13 +502,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         { id: "balanced", label: "Balanced", description: "Balance between time and safety" },
       ];
 
-      const routes = osrmRoutes.slice(0, 3).map((osrmRoute, i) => {
-        const polyline = decodePolyline(osrmRoute.geometry);
+      const routes = googleRoutes.slice(0, 3).map((gRoute, i) => {
+        const polyline = decodePolyline(gRoute.geometry);
         const routeHazards = hazardsNearPolyline(allHazards, polyline);
         const risk = calculateRouteRisk(routeHazards, riskMultiplier);
         const label = ROUTE_LABELS[i] || { id: `route_${i}`, label: `Route ${i + 1}`, description: "Alternative route" };
-        const estimatedMinutes = Math.round(osrmRoute.duration / 60);
-        const distanceKm = Math.round(osrmRoute.distance / 100) / 10;
+        const estimatedMinutes = Math.round(gRoute.duration / 60);
+        const distanceKm = Math.round(gRoute.distance / 100) / 10;
 
         return {
           id: label.id,
@@ -540,6 +545,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Route calculation failed" });
+    }
+  });
+
+  app.get("/api/places/autocomplete", async (req: Request, res: Response) => {
+    try {
+      const { input, lat, lng } = req.query;
+      if (!input || typeof input !== "string" || input.trim().length < 2) {
+        return res.json([]);
+      }
+      const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+      if (!apiKey) return res.status(500).json({ message: "Maps API not configured" });
+
+      let url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(input)}&key=${apiKey}`;
+      if (lat && lng) {
+        url += `&location=${lat},${lng}&radius=50000`;
+      }
+      const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      const data = await resp.json() as any;
+      if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
+        console.error("Places API error:", data.status, data.error_message);
+        return res.json([]);
+      }
+      const results = (data.predictions || []).map((p: any) => ({
+        description: p.description,
+        placeId: p.place_id,
+      }));
+      res.json(results);
+    } catch (err) {
+      console.error("Places autocomplete error:", err);
+      res.json([]);
+    }
+  });
+
+  app.get("/api/geocode", async (req: Request, res: Response) => {
+    try {
+      const { placeId, address, lat, lng } = req.query;
+      const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+      if (!apiKey) return res.status(500).json({ message: "Maps API not configured" });
+
+      let url: string;
+      if (placeId) {
+        url = `https://maps.googleapis.com/maps/api/geocode/json?place_id=${encodeURIComponent(placeId as string)}&key=${apiKey}`;
+      } else if (address) {
+        url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address as string)}&key=${apiKey}`;
+      } else {
+        return res.status(400).json({ message: "Provide placeId or address" });
+      }
+
+      const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      const data = await resp.json() as any;
+      if (data.status !== "OK" || !data.results?.length) {
+        return res.json(null);
+      }
+      const result = data.results[0];
+      res.json({
+        formattedAddress: result.formatted_address,
+        lat: result.geometry.location.lat,
+        lng: result.geometry.location.lng,
+      });
+    } catch (err) {
+      console.error("Geocode error:", err);
+      res.status(500).json({ message: "Geocoding failed" });
     }
   });
 
@@ -1154,6 +1221,302 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Failed to update event status" });
+    }
+  });
+
+  // Friends system routes
+  app.get("/api/users/search", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { q } = req.query;
+      if (!q || typeof q !== "string" || q.trim().length < 1) {
+        return res.status(400).json({ message: "Search query is required" });
+      }
+      const users = await storage.searchUsersByUsername(q.trim(), req.session.userId!);
+      res.json(users);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Search failed" });
+    }
+  });
+
+  app.post("/api/friends/request", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { addresseeId } = req.body;
+      if (!addresseeId || typeof addresseeId !== "string") {
+        return res.status(400).json({ message: "addresseeId is required" });
+      }
+      if (addresseeId === req.session.userId) {
+        return res.status(400).json({ message: "Cannot send friend request to yourself" });
+      }
+      const addressee = await storage.getUserById(addresseeId);
+      if (!addressee) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      const friendship = await storage.sendFriendRequest(req.session.userId!, addresseeId);
+      if (!friendship) {
+        return res.status(400).json({ message: "Cannot send friend request to this user" });
+      }
+      res.json(friendship);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to send friend request" });
+    }
+  });
+
+  app.get("/api/friends", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const friends = await storage.getAcceptedFriends(req.session.userId!);
+      res.json(friends);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch friends" });
+    }
+  });
+
+  app.get("/api/friends/requests", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const requests = await storage.getPendingFriendRequests(req.session.userId!);
+      res.json(requests);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch friend requests" });
+    }
+  });
+
+  app.post("/api/friends/:id/accept", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const result = await storage.acceptFriendRequest(req.params.id, req.session.userId!);
+      if (!result) {
+        return res.status(404).json({ message: "Friend request not found or already handled" });
+      }
+      res.json(result);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to accept friend request" });
+    }
+  });
+
+  app.post("/api/friends/:id/decline", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const result = await storage.declineFriendRequest(req.params.id, req.session.userId!);
+      if (!result) {
+        return res.status(404).json({ message: "Friend request not found or already handled" });
+      }
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to decline friend request" });
+    }
+  });
+
+  app.delete("/api/friends/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const result = await storage.removeFriend(req.params.id, req.session.userId!);
+      if (!result) {
+        return res.status(404).json({ message: "Friendship not found" });
+      }
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to remove friend" });
+    }
+  });
+
+  app.post("/api/location/update", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { lat, lng } = req.body;
+      if (lat == null || lng == null) {
+        return res.status(400).json({ message: "lat and lng are required" });
+      }
+      const parsedLat = parseFloat(lat);
+      const parsedLng = parseFloat(lng);
+      if (isNaN(parsedLat) || parsedLat < -90 || parsedLat > 90) {
+        return res.status(400).json({ message: "Invalid latitude" });
+      }
+      if (isNaN(parsedLng) || parsedLng < -180 || parsedLng > 180) {
+        return res.status(400).json({ message: "Invalid longitude" });
+      }
+      const location = await storage.updateUserLocation(req.session.userId!, parsedLat, parsedLng);
+      res.json(location);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to update location" });
+    }
+  });
+
+  app.get("/api/friends/locations", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const locations = await storage.getFriendsLocations(req.session.userId!);
+      res.json(locations);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch friend locations" });
+    }
+  });
+
+  // Marketplace routes
+  app.get("/api/marketplace", async (req: Request, res: Response) => {
+    try {
+      const { category, condition, search, lat, lng, radius, priceMin, priceMax, sort } = req.query;
+      const filters: any = {};
+      if (category && typeof category === "string") filters.category = category;
+      if (condition && typeof condition === "string") filters.condition = condition;
+      if (search && typeof search === "string") filters.search = search;
+      if (lat && lng) {
+        filters.lat = parseFloat(lat as string);
+        filters.lng = parseFloat(lng as string);
+      }
+      filters.radiusMiles = radius ? parseFloat(radius as string) : 50;
+      if (priceMin) filters.priceMin = parseInt(priceMin as string);
+      if (priceMax) filters.priceMax = parseInt(priceMax as string);
+      if (sort && typeof sort === "string") filters.sort = sort;
+
+      const listings = await storage.getMarketplaceListings(filters);
+      res.json(listings);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch listings" });
+    }
+  });
+
+  app.post("/api/marketplace", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { title, description, price, category, condition, lat, lng, city, photos } = req.body;
+      if (!title || !description || price == null || !category || !condition || lat == null || lng == null) {
+        return res.status(400).json({ message: "Title, description, price, category, condition, and location are required" });
+      }
+      if (typeof title !== "string" || title.trim().length < 3 || title.trim().length > 100) {
+        return res.status(400).json({ message: "Title must be 3-100 characters" });
+      }
+      if (typeof description !== "string" || description.trim().length < 5 || description.trim().length > 2000) {
+        return res.status(400).json({ message: "Description must be 5-2000 characters" });
+      }
+      const parsedPrice = parseInt(price);
+      if (isNaN(parsedPrice) || parsedPrice < 0 || parsedPrice > 99999999) {
+        return res.status(400).json({ message: "Invalid price" });
+      }
+      const validCategories = ["wheels_tires", "suspension", "body_kits", "exhaust", "interior", "electronics", "engine", "misc"];
+      if (!validCategories.includes(category)) {
+        return res.status(400).json({ message: "Invalid category" });
+      }
+      const validConditions = ["new", "like_new", "good", "fair", "parts_only"];
+      if (!validConditions.includes(condition)) {
+        return res.status(400).json({ message: "Invalid condition" });
+      }
+      const parsedLat = parseFloat(lat);
+      const parsedLng = parseFloat(lng);
+      if (isNaN(parsedLat) || parsedLat < -90 || parsedLat > 90) {
+        return res.status(400).json({ message: "Invalid latitude" });
+      }
+      if (isNaN(parsedLng) || parsedLng < -180 || parsedLng > 180) {
+        return res.status(400).json({ message: "Invalid longitude" });
+      }
+      const listing = await storage.createMarketplaceListing({
+        sellerId: req.session.userId!,
+        title: title.trim(),
+        description: description.trim(),
+        price: parsedPrice,
+        category,
+        condition,
+        lat: parsedLat,
+        lng: parsedLng,
+        city: city || null,
+        photos: Array.isArray(photos) ? photos : [],
+      });
+      res.json(listing);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to create listing" });
+    }
+  });
+
+  app.get("/api/marketplace/:id", async (req: Request, res: Response) => {
+    try {
+      const listing = await storage.getMarketplaceListingById(req.params.id);
+      if (!listing) return res.status(404).json({ message: "Listing not found" });
+      res.json(listing);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch listing" });
+    }
+  });
+
+  app.put("/api/marketplace/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const listing = await storage.getMarketplaceListingById(req.params.id);
+      if (!listing) return res.status(404).json({ message: "Listing not found" });
+      if (listing.sellerId !== req.session.userId) {
+        return res.status(403).json({ message: "Not your listing" });
+      }
+      const { title, description, price, category, condition, photos, status } = req.body;
+      const updates: any = {};
+      if (title !== undefined) {
+        if (typeof title !== "string" || title.trim().length < 3 || title.trim().length > 100) {
+          return res.status(400).json({ message: "Title must be 3-100 characters" });
+        }
+        updates.title = title.trim();
+      }
+      if (description !== undefined) {
+        if (typeof description !== "string" || description.trim().length < 5 || description.trim().length > 2000) {
+          return res.status(400).json({ message: "Description must be 5-2000 characters" });
+        }
+        updates.description = description.trim();
+      }
+      if (price !== undefined) {
+        const parsedPrice = parseInt(price);
+        if (isNaN(parsedPrice) || parsedPrice < 0) {
+          return res.status(400).json({ message: "Invalid price" });
+        }
+        updates.price = parsedPrice;
+      }
+      if (category !== undefined) {
+        const validCategories = ["wheels_tires", "suspension", "body_kits", "exhaust", "interior", "electronics", "engine", "misc"];
+        if (!validCategories.includes(category)) {
+          return res.status(400).json({ message: "Invalid category" });
+        }
+        updates.category = category;
+      }
+      if (condition !== undefined) {
+        const validConditions = ["new", "like_new", "good", "fair", "parts_only"];
+        if (!validConditions.includes(condition)) {
+          return res.status(400).json({ message: "Invalid condition" });
+        }
+        updates.condition = condition;
+      }
+      if (photos !== undefined) {
+        if (!Array.isArray(photos)) {
+          return res.status(400).json({ message: "Photos must be an array" });
+        }
+        updates.photos = photos;
+      }
+      if (status !== undefined) {
+        const validStatuses = ["active", "sold", "removed"];
+        if (!validStatuses.includes(status)) {
+          return res.status(400).json({ message: "Invalid status" });
+        }
+        updates.status = status;
+      }
+      const updated = await storage.updateMarketplaceListing(req.params.id, updates);
+      res.json(updated);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to update listing" });
+    }
+  });
+
+  app.delete("/api/marketplace/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const listing = await storage.getMarketplaceListingById(req.params.id);
+      if (!listing) return res.status(404).json({ message: "Listing not found" });
+      const user = await storage.getUserById(req.session.userId!);
+      if (listing.sellerId !== req.session.userId && user?.role !== "admin") {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+      await storage.deleteMarketplaceListing(req.params.id);
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to delete listing" });
     }
   });
 

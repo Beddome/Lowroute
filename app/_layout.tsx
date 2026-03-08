@@ -15,6 +15,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { LocationProvider } from "@/contexts/LocationContext";
+import { UnitsProvider } from "@/contexts/UnitsContext";
 import { Colors } from "@/constants/colors";
 
 SplashScreen.preventAutoHideAsync();
@@ -90,6 +91,36 @@ function RootLayoutNav() {
           contentStyle: { backgroundColor: Colors.bgCard },
         }}
       />
+      <Stack.Screen
+        name="listing-detail"
+        options={{
+          presentation: "formSheet",
+          sheetAllowedDetents: [0.85],
+          sheetGrabberVisible: true,
+          headerShown: false,
+          contentStyle: { backgroundColor: Colors.bgCard },
+        }}
+      />
+      <Stack.Screen
+        name="create-listing"
+        options={{
+          presentation: "formSheet",
+          sheetAllowedDetents: [0.9],
+          sheetGrabberVisible: true,
+          headerShown: false,
+          contentStyle: { backgroundColor: Colors.bgCard },
+        }}
+      />
+      <Stack.Screen
+        name="friends"
+        options={{
+          presentation: "formSheet",
+          sheetAllowedDetents: [0.85],
+          sheetGrabberVisible: true,
+          headerShown: false,
+          contentStyle: { backgroundColor: Colors.bgCard },
+        }}
+      />
     </Stack>
   );
 }
@@ -116,9 +147,11 @@ export default function RootLayout() {
         <GestureHandlerRootView style={{ flex: 1 }}>
           <KeyboardProvider>
             <AuthProvider>
-              <LocationProvider>
-                <RootLayoutNav />
-              </LocationProvider>
+              <UnitsProvider>
+                <LocationProvider>
+                  <RootLayoutNav />
+                </LocationProvider>
+              </UnitsProvider>
             </AuthProvider>
           </KeyboardProvider>
         </GestureHandlerRootView>

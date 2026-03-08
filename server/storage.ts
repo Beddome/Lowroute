@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { eq, and, sql, between, desc, gte } from "drizzle-orm";
+import { eq, and, or, sql, between, desc, asc, gte, lte, ilike, ne } from "drizzle-orm";
 import * as schema from "../shared/schema";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -648,4 +648,318 @@ export async function getAllEvents() {
     .from(schema.events)
     .leftJoin(schema.users, eq(schema.events.userId, schema.users.id))
     .orderBy(desc(schema.events.date));
+}
+
+export async function searchUsersByUsername(query: string, currentUserId: string) {
+  return db.select({
+    id: schema.users.id,
+    username: schema.users.username,
+  })
+    .from(schema.users)
+    .where(and(
+      ilike(schema.users.username, `%${query}%`),
+      ne(schema.users.id, currentUserId)
+    ))
+    .limit(20);
+}
+
+export async function sendFriendRequest(requesterId: string, addresseeId: string) {
+  const [existing] = await db.select().from(schema.friendships)
+    .where(or(
+      and(eq(schema.friendships.requesterId, requesterId), eq(schema.friendships.addresseeId, addresseeId)),
+      and(eq(schema.friendships.requesterId, addresseeId), eq(schema.friendships.addresseeId, requesterId))
+    ));
+  if (existing) {
+    if (existing.status === "blocked") return null;
+    return existing;
+  }
+  const [friendship] = await db.insert(schema.friendships)
+    .values({ requesterId, addresseeId })
+    .returning();
+  return friendship;
+}
+
+export async function getAcceptedFriends(userId: string) {
+  const rows = await db.select({
+    id: schema.friendships.id,
+    requesterId: schema.friendships.requesterId,
+    addresseeId: schema.friendships.addresseeId,
+  })
+    .from(schema.friendships)
+    .where(and(
+      eq(schema.friendships.status, "accepted"),
+      or(
+        eq(schema.friendships.requesterId, userId),
+        eq(schema.friendships.addresseeId, userId)
+      )
+    ));
+
+  const friendIds = rows.map(r => r.requesterId === userId ? r.addresseeId : r.requesterId);
+  if (friendIds.length === 0) return [];
+
+  const users = await db.select({ id: schema.users.id, username: schema.users.username })
+    .from(schema.users)
+    .where(sql`${schema.users.id} IN ${friendIds}`);
+
+  const userMap = new Map(users.map(u => [u.id, u.username]));
+  return rows.map(r => {
+    const friendId = r.requesterId === userId ? r.addresseeId : r.requesterId;
+    return { id: r.id, friendId, username: userMap.get(friendId) || "Unknown" };
+  });
+}
+
+export async function getPendingFriendRequests(userId: string) {
+  return db.select({
+    id: schema.friendships.id,
+    requesterId: schema.friendships.requesterId,
+    createdAt: schema.friendships.createdAt,
+    requesterUsername: schema.users.username,
+  })
+    .from(schema.friendships)
+    .leftJoin(schema.users, eq(schema.friendships.requesterId, schema.users.id))
+    .where(and(
+      eq(schema.friendships.addresseeId, userId),
+      eq(schema.friendships.status, "pending")
+    ));
+}
+
+export async function getFriendshipById(id: string) {
+  const [f] = await db.select().from(schema.friendships).where(eq(schema.friendships.id, id));
+  return f || null;
+}
+
+export async function acceptFriendRequest(id: string, userId: string) {
+  const friendship = await getFriendshipById(id);
+  if (!friendship || friendship.addresseeId !== userId || friendship.status !== "pending") return null;
+  const [updated] = await db.update(schema.friendships)
+    .set({ status: "accepted" })
+    .where(eq(schema.friendships.id, id))
+    .returning();
+  return updated;
+}
+
+export async function declineFriendRequest(id: string, userId: string) {
+  const friendship = await getFriendshipById(id);
+  if (!friendship || friendship.addresseeId !== userId || friendship.status !== "pending") return null;
+  const [deleted] = await db.delete(schema.friendships)
+    .where(eq(schema.friendships.id, id))
+    .returning();
+  return deleted;
+}
+
+export async function removeFriend(id: string, userId: string) {
+  const friendship = await getFriendshipById(id);
+  if (!friendship) return null;
+  if (friendship.requesterId !== userId && friendship.addresseeId !== userId) return null;
+  const [deleted] = await db.delete(schema.friendships)
+    .where(eq(schema.friendships.id, id))
+    .returning();
+  return deleted;
+}
+
+export async function updateUserLocation(userId: string, lat: number, lng: number) {
+  const [existing] = await db.select().from(schema.userLocations)
+    .where(eq(schema.userLocations.userId, userId));
+  if (existing) {
+    const [updated] = await db.update(schema.userLocations)
+      .set({ lat, lng, updatedAt: new Date() })
+      .where(eq(schema.userLocations.userId, userId))
+      .returning();
+    return updated;
+  }
+  const [created] = await db.insert(schema.userLocations)
+    .values({ userId, lat, lng })
+    .returning();
+  return created;
+}
+
+export async function getFriendsLocations(userId: string) {
+  const friends = await getAcceptedFriends(userId);
+  if (friends.length === 0) return [];
+  const friendIds = friends.map(f => f.friendId);
+  const locations = await db.select({
+    userId: schema.userLocations.userId,
+    lat: schema.userLocations.lat,
+    lng: schema.userLocations.lng,
+    updatedAt: schema.userLocations.updatedAt,
+    username: schema.users.username,
+  })
+    .from(schema.userLocations)
+    .leftJoin(schema.users, eq(schema.userLocations.userId, schema.users.id))
+    .where(sql`${schema.userLocations.userId} IN ${friendIds}`);
+  return locations;
+}
+
+export async function getMarketplaceListings(filters: {
+  category?: string;
+  condition?: string;
+  search?: string;
+  lat?: number;
+  lng?: number;
+  radiusMiles?: number;
+  priceMin?: number;
+  priceMax?: number;
+  sort?: string;
+}) {
+  const conditions: any[] = [eq(schema.marketplaceListings.status, "active")];
+
+  if (filters.category) {
+    conditions.push(eq(schema.marketplaceListings.category, filters.category as any));
+  }
+  if (filters.condition) {
+    conditions.push(eq(schema.marketplaceListings.condition, filters.condition as any));
+  }
+  if (filters.search) {
+    conditions.push(
+      or(
+        ilike(schema.marketplaceListings.title, `%${filters.search}%`),
+        ilike(schema.marketplaceListings.description, `%${filters.search}%`)
+      )
+    );
+  }
+  if (filters.priceMin !== undefined) {
+    conditions.push(gte(schema.marketplaceListings.price, filters.priceMin));
+  }
+  if (filters.priceMax !== undefined) {
+    conditions.push(lte(schema.marketplaceListings.price, filters.priceMax));
+  }
+
+  if (filters.lat !== undefined && filters.lng !== undefined && filters.radiusMiles) {
+    const radiusKm = filters.radiusMiles * 1.60934;
+    const earthRadiusKm = 6371;
+    conditions.push(
+      sql`(
+        ${earthRadiusKm} * acos(
+          cos(radians(${filters.lat})) * cos(radians(${schema.marketplaceListings.lat}))
+          * cos(radians(${schema.marketplaceListings.lng}) - radians(${filters.lng}))
+          + sin(radians(${filters.lat})) * sin(radians(${schema.marketplaceListings.lat}))
+        )
+      ) <= ${radiusKm}`
+    );
+  }
+
+  let orderBy;
+  switch (filters.sort) {
+    case "price_low":
+      orderBy = asc(schema.marketplaceListings.price);
+      break;
+    case "price_high":
+      orderBy = desc(schema.marketplaceListings.price);
+      break;
+    case "nearest":
+      if (filters.lat !== undefined && filters.lng !== undefined) {
+        orderBy = sql`(
+          6371 * acos(
+            cos(radians(${filters.lat})) * cos(radians(${schema.marketplaceListings.lat}))
+            * cos(radians(${schema.marketplaceListings.lng}) - radians(${filters.lng}))
+            + sin(radians(${filters.lat})) * sin(radians(${schema.marketplaceListings.lat}))
+          )
+        ) ASC`;
+      } else {
+        orderBy = desc(schema.marketplaceListings.createdAt);
+      }
+      break;
+    default:
+      orderBy = desc(schema.marketplaceListings.createdAt);
+  }
+
+  const results = await db.select({
+    id: schema.marketplaceListings.id,
+    sellerId: schema.marketplaceListings.sellerId,
+    title: schema.marketplaceListings.title,
+    description: schema.marketplaceListings.description,
+    price: schema.marketplaceListings.price,
+    category: schema.marketplaceListings.category,
+    condition: schema.marketplaceListings.condition,
+    lat: schema.marketplaceListings.lat,
+    lng: schema.marketplaceListings.lng,
+    city: schema.marketplaceListings.city,
+    photos: schema.marketplaceListings.photos,
+    status: schema.marketplaceListings.status,
+    createdAt: schema.marketplaceListings.createdAt,
+    sellerUsername: schema.users.username,
+  })
+    .from(schema.marketplaceListings)
+    .leftJoin(schema.users, eq(schema.marketplaceListings.sellerId, schema.users.id))
+    .where(and(...conditions))
+    .orderBy(orderBy)
+    .limit(50);
+
+  return results;
+}
+
+export async function getMarketplaceListingById(id: string) {
+  const [listing] = await db.select({
+    id: schema.marketplaceListings.id,
+    sellerId: schema.marketplaceListings.sellerId,
+    title: schema.marketplaceListings.title,
+    description: schema.marketplaceListings.description,
+    price: schema.marketplaceListings.price,
+    category: schema.marketplaceListings.category,
+    condition: schema.marketplaceListings.condition,
+    lat: schema.marketplaceListings.lat,
+    lng: schema.marketplaceListings.lng,
+    city: schema.marketplaceListings.city,
+    photos: schema.marketplaceListings.photos,
+    status: schema.marketplaceListings.status,
+    createdAt: schema.marketplaceListings.createdAt,
+    sellerUsername: schema.users.username,
+  })
+    .from(schema.marketplaceListings)
+    .leftJoin(schema.users, eq(schema.marketplaceListings.sellerId, schema.users.id))
+    .where(eq(schema.marketplaceListings.id, id));
+  return listing || null;
+}
+
+export async function createMarketplaceListing(data: {
+  sellerId: string;
+  title: string;
+  description: string;
+  price: number;
+  category: string;
+  condition: string;
+  lat: number;
+  lng: number;
+  city?: string | null;
+  photos?: string[];
+}) {
+  const [listing] = await db.insert(schema.marketplaceListings).values({
+    sellerId: data.sellerId,
+    title: data.title,
+    description: data.description,
+    price: data.price,
+    category: data.category as any,
+    condition: data.condition as any,
+    lat: data.lat,
+    lng: data.lng,
+    city: data.city ?? null,
+    photos: data.photos ?? [],
+  }).returning();
+  return listing;
+}
+
+export async function updateMarketplaceListing(id: string, data: Partial<{
+  title: string;
+  description: string;
+  price: number;
+  category: string;
+  condition: string;
+  lat: number;
+  lng: number;
+  city: string | null;
+  photos: string[];
+  status: string;
+}>) {
+  const [listing] = await db.update(schema.marketplaceListings)
+    .set(data as any)
+    .where(eq(schema.marketplaceListings.id, id))
+    .returning();
+  return listing || null;
+}
+
+export async function deleteMarketplaceListing(id: string) {
+  const [deleted] = await db.delete(schema.marketplaceListings)
+    .where(eq(schema.marketplaceListings.id, id))
+    .returning();
+  return deleted || null;
 }

@@ -20,12 +20,14 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { SEVERITY_TIERS, HAZARD_TYPES, EVENT_TYPES } from "@/shared/types";
-import type { Hazard, AppEvent, CarProfile } from "@/shared/types";
+import type { Hazard, AppEvent, CarProfile, UserLocation } from "@/shared/types";
 import { getApiUrl, apiRequest, queryClient } from "@/lib/query-client";
 import { fetch } from "expo/fetch";
 import { useLocation } from "@/contexts/LocationContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUnits } from "@/contexts/UnitsContext";
 
+const FRIEND_COLOR = "#3B82F6";
 const EVENT_COLOR = "#8B5CF6";
 
 function getEventIcon(eventType: string): string {
@@ -93,10 +95,30 @@ function HazardMarker({ hazard, onPress }: { hazard: Hazard; onPress: () => void
   );
 }
 
+function FriendMarker({ location, onPress }: { location: UserLocation; onPress: () => void }) {
+  const initial = location.username?.[0]?.toUpperCase() ?? "?";
+  return (
+    <Marker
+      coordinate={{ latitude: location.lat, longitude: location.lng }}
+      onPress={onPress}
+      tracksViewChanges={false}
+    >
+      <View style={[styles.markerContainer, { width: 32, height: 32, borderRadius: 16, backgroundColor: FRIEND_COLOR, borderColor: "rgba(255,255,255,0.6)" }]}>
+        <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: "#fff" }}>{initial}</Text>
+      </View>
+    </Marker>
+  );
+}
+
 interface GeoResult {
-  display_name: string;
-  lat: string;
-  lon: string;
+  description: string;
+  placeId: string;
+}
+
+interface GeocodedLocation {
+  formattedAddress: string;
+  lat: number;
+  lng: number;
 }
 
 interface RouteOption {
@@ -113,9 +135,19 @@ interface RouteOption {
   waypoints: Array<{ lat: number; lng: number }>;
 }
 
-async function geocode(query: string): Promise<GeoResult[]> {
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`;
-  const res = await fetch(url, { headers: { "User-Agent": "LowRoute/1.0" } });
+async function searchPlaces(query: string, lat?: number, lng?: number): Promise<GeoResult[]> {
+  const baseUrl = getApiUrl();
+  let url = `${baseUrl}/api/places/autocomplete?input=${encodeURIComponent(query)}`;
+  if (lat != null && lng != null) {
+    url += `&lat=${lat}&lng=${lng}`;
+  }
+  const res = await fetch(url, { credentials: "include" });
+  return res.json();
+}
+
+async function geocodePlace(placeId: string): Promise<GeocodedLocation | null> {
+  const baseUrl = getApiUrl();
+  const res = await fetch(`${baseUrl}/api/geocode?placeId=${encodeURIComponent(placeId)}`, { credentials: "include" });
   return res.json();
 }
 
@@ -133,10 +165,6 @@ function getDistance(lat1: number, lon1: number, lat2: number, lon2: number): nu
   return R * c;
 }
 
-function formatDistance(meters: number): string {
-  if (meters < 1000) return `${Math.round(meters)}m`;
-  return `${(meters / 1000).toFixed(1)}km`;
-}
 
 const ROUTE_COLORS = ["#60A5FA", "#34D399", "#FBBF24"];
 const PROXIMITY_ALERT_METERS = 200;
@@ -147,6 +175,7 @@ export default function MapScreen() {
   const params = useLocalSearchParams<{ loadRoute?: string; startLat?: string; startLng?: string; endLat?: string; endLng?: string; startAddr?: string; endAddr?: string }>();
   const { user } = useAuth();
   const { currentPosition, heading, speed, isTracking, startTracking, stopTracking, startBackgroundTracking, stopBackgroundTracking } = useLocation();
+  const { formatDistance, formatSpeed, formatRouteDistance, speedUnit } = useUnits();
 
   const [locationGranted, setLocationGranted] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -178,6 +207,7 @@ export default function MapScreen() {
   const navStartTimeRef = useRef<number>(0);
   const [showEvents, setShowEvents] = useState(true);
   const [activeCarProfile, setActiveCarProfile] = useState<CarProfile | null>(null);
+  const [selectedFriend, setSelectedFriend] = useState<UserLocation | null>(null);
 
   const { data: hazards = [] } = useQuery<Hazard[]>({
     queryKey: ["/api/hazards"],
@@ -187,6 +217,33 @@ export default function MapScreen() {
     queryKey: ["/api/cars"],
     enabled: !!user,
   });
+
+  const { data: friendLocations = [] } = useQuery<UserLocation[]>({
+    queryKey: ["/api/friends/locations"],
+    enabled: !!user,
+    refetchInterval: 30000,
+  });
+
+  const userLocationRef = useRef(userLocation);
+  userLocationRef.current = userLocation;
+  const locationUpdateRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!user || !userLocation) return;
+    const sendLocation = () => {
+      const loc = userLocationRef.current;
+      if (!loc) return;
+      apiRequest("POST", "/api/location/update", {
+        lat: loc.latitude,
+        lng: loc.longitude,
+      }).catch(() => {});
+    };
+    sendLocation();
+    locationUpdateRef.current = setInterval(sendLocation, 30000);
+    return () => {
+      if (locationUpdateRef.current) clearInterval(locationUpdateRef.current);
+    };
+  }, [user, !!userLocation]);
 
   useEffect(() => {
     if (carProfiles.length > 0) {
@@ -337,26 +394,37 @@ export default function MapScreen() {
     setIsSearching(true);
     searchTimer.current = setTimeout(async () => {
       try {
-        const results = await geocode(text);
+        const results = await searchPlaces(
+          text,
+          userLocation?.latitude,
+          userLocation?.longitude,
+        );
         setGeocodeResults(results);
       } finally {
         setIsSearching(false);
       }
-    }, 600);
+    }, 400);
   };
 
-  const selectGeoResult = (result: GeoResult) => {
-    const coords = { lat: parseFloat(result.lat), lng: parseFloat(result.lon) };
-    const shortName = result.display_name.split(",")[0];
-    if (activeSearchField === "origin") {
-      setOriginText(shortName);
-      setOriginCoords(coords);
-    } else {
-      setDestText(shortName);
-      setDestCoords(coords);
-    }
+  const selectGeoResult = async (result: GeoResult) => {
     setGeocodeResults([]);
-    setActiveSearchField(null);
+    setIsSearching(true);
+    try {
+      const location = await geocodePlace(result.placeId);
+      if (!location) return;
+      const coords = { lat: location.lat, lng: location.lng };
+      const shortName = result.description.split(",")[0];
+      if (activeSearchField === "origin") {
+        setOriginText(shortName);
+        setOriginCoords(coords);
+      } else {
+        setDestText(shortName);
+        setDestCoords(coords);
+      }
+    } finally {
+      setIsSearching(false);
+      setActiveSearchField(null);
+    }
     Haptics.selectionAsync();
   };
 
@@ -492,7 +560,7 @@ export default function MapScreen() {
 
   const navElapsedMin = isNavigating ? Math.floor((Date.now() - navStartTimeRef.current) / 60000) : 0;
 
-  const bottomPanelHeight = isNavigating ? 0 : panelOpen ? 260 : 180;
+  const bottomPanelHeight = isNavigating ? 0 : routes.length > 0 ? (panelOpen ? 260 : 180) : 80;
   const fabBottom = insets.bottom + bottomPanelHeight + 16;
 
   return (
@@ -541,6 +609,18 @@ export default function MapScreen() {
             />
           ))}
 
+        {friendLocations.map((fl) => (
+          <FriendMarker
+            key={`friend-${fl.userId}`}
+            location={fl}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setSelectedFriend(fl);
+              setTimeout(() => setSelectedFriend(null), 3000);
+            }}
+          />
+        ))}
+
         {originCoords && !isNavigating && (
           <Marker coordinate={{ latitude: originCoords.lat, longitude: originCoords.lng }}>
             <View style={styles.originPin}>
@@ -564,7 +644,7 @@ export default function MapScreen() {
               coordinates={route.waypoints.map((w) => ({ latitude: w.lat, longitude: w.lng }))}
               strokeColor={ROUTE_COLORS[i] ?? Colors.accent}
               strokeWidth={3}
-              strokeOpacity={0.3}
+              lineDashPattern={[5, 5]}
             />
           );
         })}
@@ -576,6 +656,14 @@ export default function MapScreen() {
           />
         )}
       </MapView>
+
+      {/* Friend name tooltip */}
+      {selectedFriend && (
+        <View style={[styles.friendTooltip, { bottom: insets.bottom + bottomPanelHeight + 70 }]}>
+          <View style={styles.friendTooltipDot} />
+          <Text style={styles.friendTooltipText}>{selectedFriend.username ?? "Friend"}</Text>
+        </View>
+      )}
 
       {/* Hazard proximity alert banner */}
       {nearbyHazard && (
@@ -623,9 +711,9 @@ export default function MapScreen() {
             <View style={styles.navStat}>
               <Ionicons name="speedometer" size={18} color={Colors.accent} />
               <Text style={styles.navStatValue}>
-                {speed != null && speed >= 0 ? `${Math.round(speed * 3.6)}` : "0"}
+                {speed != null && speed >= 0 ? formatSpeed(speed) : "0"}
               </Text>
-              <Text style={styles.navStatLabel}>km/h</Text>
+              <Text style={styles.navStatLabel}>{speedUnit}</Text>
             </View>
             <View style={styles.navDivider} />
             <View style={styles.navStat}>
@@ -693,6 +781,12 @@ export default function MapScreen() {
                       if (userLocation) {
                         setOriginText("My Location");
                         setOriginCoords({ lat: userLocation.latitude, lng: userLocation.longitude });
+                        mapRef.current?.animateToRegion({
+                          latitude: userLocation.latitude,
+                          longitude: userLocation.longitude,
+                          latitudeDelta: 0.02,
+                          longitudeDelta: 0.02,
+                        }, 800);
                       }
                     }}
                     style={styles.actionBtn}
@@ -720,7 +814,7 @@ export default function MapScreen() {
                 >
                   <Ionicons name="location-outline" size={16} color={Colors.textMuted} />
                   <Text style={styles.geocodeText} numberOfLines={2}>
-                    {r.display_name}
+                    {r.description}
                   </Text>
                 </Pressable>
               ))}
@@ -815,6 +909,7 @@ function RoutePanel({
   carProfile: CarProfile | null;
   onSaveRoute: () => void;
 }) {
+  const { formatRouteDistance } = useUnits();
   return (
     <View style={styles.routePanel}>
       <View style={styles.routePanelHeader}>
@@ -855,7 +950,7 @@ function RoutePanel({
               <Text style={[styles.routeLabel, isSelected && { color: Colors.text }]}>{route.label}</Text>
               <Text style={styles.routeTime}>
                 {route.estimatedMinutes + route.timePenaltyMinutes} min
-                {route.distanceKm ? ` · ${route.distanceKm} km` : ""}
+                {route.distanceKm ? ` · ${formatRouteDistance(route.distanceKm)}` : ""}
               </Text>
               <View style={styles.routeStats}>
                 <View style={styles.routeStat}>
@@ -914,48 +1009,77 @@ function RoutePanel({
   );
 }
 
-function TierLegend({ hazards, showEvents, onToggleEvents, eventCount }: { hazards: Hazard[]; showEvents: boolean; onToggleEvents: () => void; eventCount: number }) {
+function TierLegend({ hazards, showEvents, onToggleEvents, eventCount, routeHazardCount }: { hazards: Hazard[]; showEvents: boolean; onToggleEvents: () => void; eventCount: number; routeHazardCount?: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const animVal = useRef(new Animated.Value(0)).current;
+
+  const toggleExpanded = () => {
+    Animated.timing(animVal, {
+      toValue: expanded ? 0 : 1,
+      duration: 250,
+      useNativeDriver: false,
+    }).start();
+    setExpanded(!expanded);
+    Haptics.selectionAsync();
+  };
+
+  const expandedHeight = animVal.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 220],
+  });
+
+  const hazardLabel = routeHazardCount != null
+    ? `${routeHazardCount} hazard${routeHazardCount !== 1 ? "s" : ""} on route`
+    : `${hazards.length} hazard${hazards.length !== 1 ? "s" : ""} nearby`;
+
   return (
     <View style={styles.legendPanel}>
-      <View style={styles.legendHeader}>
-        <Text style={styles.legendTitle}>Hazard Legend</Text>
-        <Text style={styles.legendCount}>{hazards.length} active reports</Text>
-      </View>
-      <View style={styles.legendGrid}>
-        {SEVERITY_TIERS.map((tier) => {
-          const count = hazards.filter((h) => h.severity === tier.tier).length;
-          return (
-            <View key={tier.tier} style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: tier.color }]}>
-                <Text style={styles.legendTierNum}>{tier.tier}</Text>
+      <Pressable style={styles.legendCompact} onPress={toggleExpanded}>
+        <View style={styles.legendCompactLeft}>
+          <Ionicons name="warning" size={18} color={Colors.tier3} />
+          <Text style={styles.legendCompactText}>{hazardLabel}</Text>
+        </View>
+        <View style={styles.legendCompactRight}>
+          <Pressable
+            onPress={(e) => { e.stopPropagation(); onToggleEvents(); }}
+            style={[styles.eventsToggleBtn, showEvents && styles.eventsToggleBtnActive]}
+            hitSlop={8}
+          >
+            <Ionicons name={showEvents ? "eye" : "eye-off"} size={14} color={showEvents ? EVENT_COLOR : Colors.textMuted} />
+          </Pressable>
+          <Ionicons name={expanded ? "chevron-down" : "chevron-up"} size={18} color={Colors.textMuted} />
+        </View>
+      </Pressable>
+      <Animated.View style={{ height: expandedHeight, overflow: "hidden" }}>
+        <View style={styles.legendGrid}>
+          {SEVERITY_TIERS.map((tier) => {
+            const count = hazards.filter((h) => h.severity === tier.tier).length;
+            return (
+              <View key={tier.tier} style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: tier.color }]}>
+                  <Text style={styles.legendTierNum}>{tier.tier}</Text>
+                </View>
+                <View style={styles.legendItemText}>
+                  <Text style={[styles.legendLabel, { color: tier.color }]}>{tier.label}</Text>
+                  <Text style={styles.legendDesc}>{tier.description}</Text>
+                </View>
+                <Text style={[styles.legendCount2, count > 0 ? { color: tier.color } : {}]}>{count}</Text>
               </View>
-              <View style={styles.legendItemText}>
-                <Text style={[styles.legendLabel, { color: tier.color }]}>{tier.label}</Text>
-                <Text style={styles.legendDesc}>{tier.description}</Text>
-              </View>
-              <Text style={[styles.legendCount2, count > 0 ? { color: tier.color } : {}]}>{count}</Text>
+            );
+          })}
+        </View>
+        <View style={styles.eventsToggleRow}>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: EVENT_COLOR }]}>
+              <Ionicons name="calendar" size={14} color="#fff" />
             </View>
-          );
-        })}
-      </View>
-      <View style={styles.eventsToggleRow}>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: EVENT_COLOR }]}>
-            <Ionicons name="calendar" size={14} color="#fff" />
-          </View>
-          <View style={styles.legendItemText}>
-            <Text style={[styles.legendLabel, { color: EVENT_COLOR }]}>Events</Text>
-            <Text style={styles.legendDesc}>{eventCount} nearby</Text>
+            <View style={styles.legendItemText}>
+              <Text style={[styles.legendLabel, { color: EVENT_COLOR }]}>Events</Text>
+              <Text style={styles.legendDesc}>{eventCount} nearby</Text>
+            </View>
           </View>
         </View>
-        <Pressable
-          onPress={onToggleEvents}
-          style={[styles.eventsToggleBtn, showEvents && styles.eventsToggleBtnActive]}
-          hitSlop={8}
-        >
-          <Ionicons name={showEvents ? "eye" : "eye-off"} size={16} color={showEvents ? EVENT_COLOR : Colors.textMuted} />
-        </Pressable>
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -1237,11 +1361,28 @@ const styles = StyleSheet.create({
   routeSummaryItem: { flexDirection: "row", alignItems: "center", gap: 6 },
   routeSummaryText: { fontSize: 12, fontFamily: "Inter_400Regular", color: Colors.textMuted },
 
-  legendPanel: { padding: 16 },
-  legendHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
-  legendTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.textSecondary, textTransform: "uppercase" as const, letterSpacing: 0.8 },
-  legendCount: { fontSize: 12, fontFamily: "Inter_400Regular", color: Colors.textMuted },
-  legendGrid: { gap: 10 },
+  legendPanel: { paddingHorizontal: 16, paddingVertical: 12 },
+  legendCompact: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  legendCompactLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  legendCompactText: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.text,
+  },
+  legendCompactRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  legendGrid: { gap: 10, marginTop: 14 },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 12 },
   legendDot: {
     width: 28,
@@ -1278,5 +1419,34 @@ const styles = StyleSheet.create({
   eventsToggleBtnActive: {
     borderColor: EVENT_COLOR,
     backgroundColor: EVENT_COLOR + "18",
+  },
+
+  friendTooltip: {
+    position: "absolute",
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: FRIEND_COLOR,
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    gap: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    elevation: 10,
+    zIndex: 200,
+  },
+  friendTooltipDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#fff",
+  },
+  friendTooltipText: {
+    fontSize: 14,
+    fontFamily: "Inter_700Bold",
+    color: "#fff",
   },
 });

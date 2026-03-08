@@ -464,6 +464,7 @@ const styles = StyleSheet.create({
   promoMsg: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     marginTop: 10,
     paddingHorizontal: 12,
@@ -474,5 +475,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontFamily: "Inter_500Medium",
+    textAlign: "center",
   },
 });

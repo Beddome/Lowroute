@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   errorCard: {
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.bgCard,
     borderRadius: 16,
     padding: 32,
     alignItems: "center",
@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
     color: Colors.bg,
   },
   card: {
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.bgCard,
     borderRadius: 16,
     padding: 24,
     borderWidth: 1,

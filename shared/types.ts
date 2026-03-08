@@ -143,6 +143,28 @@ export interface SavedRoute {
   createdAt: string | Date;
 }
 
+export interface Friendship {
+  id: string;
+  requesterId: string;
+  addresseeId: string;
+  status: "pending" | "accepted" | "blocked";
+  createdAt: string | Date;
+}
+
+export interface FriendWithUser {
+  id: string;
+  friendId: string;
+  username: string;
+}
+
+export interface UserLocation {
+  userId: string;
+  lat: number;
+  lng: number;
+  updatedAt: string | Date;
+  username?: string;
+}
+
 export const EVENT_TYPES = [
   { value: "car_meet", label: "Car Meet", icon: "people" },
   { value: "show_and_shine", label: "Show & Shine", icon: "trophy" },
@@ -165,6 +187,42 @@ export const CLEARANCE_MODES = [
   { value: "lowered", label: "Lowered", riskMultiplier: 1.3 },
   { value: "very_lowered", label: "Very Lowered", riskMultiplier: 1.6 },
   { value: "show_car", label: "Show Car", riskMultiplier: 2.0 },
+] as const;
+
+export interface MarketplaceListing {
+  id: string;
+  sellerId: string;
+  title: string;
+  description: string;
+  price: number;
+  category: "wheels_tires" | "suspension" | "body_kits" | "exhaust" | "interior" | "electronics" | "engine" | "misc";
+  condition: "new" | "like_new" | "good" | "fair" | "parts_only";
+  lat: number;
+  lng: number;
+  city: string | null;
+  photos: string[];
+  status: "active" | "sold" | "removed";
+  createdAt: string | Date;
+  sellerUsername?: string;
+}
+
+export const LISTING_CATEGORIES = [
+  { value: "wheels_tires", label: "Wheels & Tires" },
+  { value: "suspension", label: "Suspension" },
+  { value: "body_kits", label: "Body Kits" },
+  { value: "exhaust", label: "Exhaust" },
+  { value: "interior", label: "Interior" },
+  { value: "electronics", label: "Electronics" },
+  { value: "engine", label: "Engine" },
+  { value: "misc", label: "Misc" },
+] as const;
+
+export const LISTING_CONDITIONS = [
+  { value: "new", label: "New" },
+  { value: "like_new", label: "Like New" },
+  { value: "good", label: "Good" },
+  { value: "fair", label: "Fair" },
+  { value: "parts_only", label: "Parts Only" },
 ] as const;
 
 const MST_TIMEZONE = "America/Phoenix";

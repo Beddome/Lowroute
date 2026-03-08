@@ -175,6 +175,68 @@ export const savedRoutes = pgTable("saved_routes", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const friendshipStatusEnum = pgEnum("friendship_status", ["pending", "accepted", "blocked"]);
+
+export const friendships = pgTable("friendships", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  requesterId: varchar("requester_id").references(() => users.id).notNull(),
+  addresseeId: varchar("addressee_id").references(() => users.id).notNull(),
+  status: friendshipStatusEnum("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const userLocations = pgTable("user_locations", {
+  userId: varchar("user_id").primaryKey().references(() => users.id),
+  lat: doublePrecision("lat").notNull(),
+  lng: doublePrecision("lng").notNull(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const listingCategoryEnum = pgEnum("listing_category", [
+  "wheels_tires",
+  "suspension",
+  "body_kits",
+  "exhaust",
+  "interior",
+  "electronics",
+  "engine",
+  "misc",
+]);
+
+export const listingConditionEnum = pgEnum("listing_condition", [
+  "new",
+  "like_new",
+  "good",
+  "fair",
+  "parts_only",
+]);
+
+export const listingStatusEnum = pgEnum("listing_status", [
+  "active",
+  "sold",
+  "removed",
+]);
+
+export const marketplaceListings = pgTable("marketplace_listings", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  sellerId: varchar("seller_id").references(() => users.id).notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  price: integer("price").notNull(),
+  category: listingCategoryEnum("category").notNull(),
+  condition: listingConditionEnum("condition").notNull(),
+  lat: doublePrecision("lat").notNull(),
+  lng: doublePrecision("lng").notNull(),
+  city: text("city"),
+  photos: jsonb("photos").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  status: listingStatusEnum("status").notNull().default("active"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   email: true,
@@ -204,6 +266,10 @@ export type InsertEvent = typeof events.$inferInsert;
 export type EventRsvp = typeof eventRsvps.$inferSelect;
 export type SavedRoute = typeof savedRoutes.$inferSelect;
 export type InsertSavedRoute = typeof savedRoutes.$inferInsert;
+export type MarketplaceListing = typeof marketplaceListings.$inferSelect;
+export type InsertMarketplaceListing = typeof marketplaceListings.$inferInsert;
+export type Friendship = typeof friendships.$inferSelect;
+export type UserLocation = typeof userLocations.$inferSelect;
 
 export const HAZARD_TYPES = [
   { value: "pothole", label: "Pothole" },

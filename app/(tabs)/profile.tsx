@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Share,
   Alert,
+  Switch,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,6 +17,7 @@ import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUnits } from "@/contexts/UnitsContext";
 import { Colors } from "@/constants/colors";
 import { formatMSTDateClient, CarProfile, SavedRoute, SUSPENSION_TYPES, CLEARANCE_MODES } from "@/shared/types";
 import { apiRequest, queryClient } from "@/lib/query-client";
@@ -144,6 +146,7 @@ const garageStyles = StyleSheet.create({
 
 export default function ProfileScreen() {
   const { user, logout, isLoading } = useAuth();
+  const { system, toggleSystem } = useUnits();
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
@@ -477,6 +480,47 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Friends */}
+        <View style={styles.card}>
+          <Pressable
+            style={({ pressed }) => [styles.friendsRow, pressed && { opacity: 0.85 }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push("/friends");
+            }}
+          >
+            <View style={styles.friendsIconBox}>
+              <Ionicons name="people" size={20} color={Colors.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.friendsLabel}>Friends</Text>
+              <Text style={styles.friendsDesc}>Find and manage friends, share live location</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+          </Pressable>
+        </View>
+
+        {/* Settings */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Settings</Text>
+          <View style={styles.settingsRow}>
+            <Ionicons name="speedometer-outline" size={18} color={Colors.textSecondary} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.settingsLabel}>Use Metric Units</Text>
+              <Text style={styles.settingsDesc}>{system === "metric" ? "km, m, km/h" : "mi, ft, mph"}</Text>
+            </View>
+            <Switch
+              value={system === "metric"}
+              onValueChange={() => {
+                Haptics.selectionAsync();
+                toggleSystem();
+              }}
+              trackColor={{ false: Colors.bgElevated, true: Colors.accent + "66" }}
+              thumbColor={system === "metric" ? Colors.accent : Colors.textMuted}
+            />
+          </View>
+        </View>
+
         {/* Community tips */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>How to Earn XP</Text>
@@ -650,6 +694,10 @@ const styles = StyleSheet.create({
   tipText: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular", color: Colors.text },
   tipXP: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.tier1 },
 
+  settingsRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  settingsLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: Colors.text },
+  settingsDesc: { fontSize: 12, fontFamily: "Inter_400Regular", color: Colors.textMuted, marginTop: 2 },
+
   sectionCount: {
     backgroundColor: Colors.accent + "22",
     paddingHorizontal: 8,
@@ -670,4 +718,22 @@ const styles = StyleSheet.create({
   },
   savedRouteName: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: Colors.text },
   savedRouteDetail: { fontSize: 11, fontFamily: "Inter_400Regular", color: Colors.textMuted },
+
+  friendsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  friendsIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: Colors.accent + "18",
+    borderWidth: 1,
+    borderColor: Colors.accent + "44",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  friendsLabel: { fontSize: 15, fontFamily: "Inter_700Bold", color: Colors.text },
+  friendsDesc: { fontSize: 12, fontFamily: "Inter_400Regular", color: Colors.textMuted, marginTop: 2 },
 });
