@@ -170,6 +170,8 @@ export const savedRoutes = pgTable("saved_routes", {
   riskScore: integer("risk_score").notNull().default(0),
   carProfileId: varchar("car_profile_id").references(() => carProfiles.id),
   routeData: jsonb("route_data"),
+  shareToken: varchar("share_token", { length: 32 }).unique(),
+  isPublic: boolean("is_public").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

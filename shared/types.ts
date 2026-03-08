@@ -138,6 +138,8 @@ export interface SavedRoute {
   riskScore: number;
   carProfileId: string | null;
   routeData: any;
+  shareToken: string | null;
+  isPublic: boolean;
   createdAt: string | Date;
 }
 

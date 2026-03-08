@@ -28,7 +28,7 @@ A community-powered GPS and hazard-reporting app for low-clearance vehicles (low
 - **Personalized route risk scoring** — default car profile's clearance mode applies risk multipliers (1.0x normal to 2.0x show car) to route hazard penalties
 - **Hazard photo uploads** — camera/gallery photo support on hazard reports via expo-image-picker + multer; photos displayed in hazard detail
 - **Interactive web map** — Leaflet-based map on web with dark CartoDB tiles, hazard/event markers, search, routing, and right-click to report
-- **Route saving** — save calculated routes to profile, view/delete saved routes, re-load on map
+- **Route saving & sharing** — save calculated routes to profile, view/delete saved routes, re-load on map; toggle public sharing with shareable links via native Share API
 - **Admin panel** with stats dashboard, hazard management, user role management, promo code management, event management
 - **Subscription system** with Free and Pro tiers (Pro gates live navigation + hazard alerts)
 - **Security hardening**: rate limiting on auth endpoints, input validation, env-configurable admin credentials
@@ -126,7 +126,7 @@ Hazards: GET /api/hazards, POST /api/hazards (validated), GET /api/hazards/:id, 
 Routes: GET /api/routes (OSRM-powered)
 Cars: GET /api/cars, POST /api/cars, PUT /api/cars/:id, DELETE /api/cars/:id
 Events: GET /api/events (bbox filter), GET /api/events/:id, POST /api/events, PUT /api/events/:id, DELETE /api/events/:id, POST /api/events/:id/rsvp
-Saved Routes: POST /api/routes/save, GET /api/routes/saved, DELETE /api/routes/saved/:id
+Saved Routes: POST /api/routes/save, GET /api/routes/saved, DELETE /api/routes/saved/:id, POST /api/routes/saved/:id/share (toggle), GET /api/routes/shared/:token (public)
 Upload: POST /api/upload (multipart, photo field, max 5MB)
 Admin: GET /api/admin/stats, GET /api/admin/users, PATCH /api/admin/users/:id/role, DELETE /api/admin/hazards/:id
 Admin Promos: POST /api/admin/promo-codes, GET /api/admin/promo-codes, PATCH /api/admin/promo-codes/:id/deactivate

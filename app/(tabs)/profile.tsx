@@ -7,6 +7,8 @@ import {
   ScrollView,
   Platform,
   ActivityIndicator,
+  Share,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -232,6 +234,32 @@ export default function ProfileScreen() {
     },
   });
 
+  const shareRouteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/routes/saved/${id}/share`);
+      return res.json();
+    },
+    onSuccess: async (data: { shareToken: string; isPublic: boolean }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/routes/saved"] });
+      if (data.isPublic) {
+        const domain = process.env.EXPO_PUBLIC_DOMAIN || "";
+        const shareUrl = `https://${domain}/route/${data.shareToken}`;
+        try {
+          await Share.share({
+            message: `Check out my LowRoute! ${shareUrl}`,
+            url: shareUrl,
+          });
+        } catch {}
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+    },
+    onError: () => {
+      Alert.alert("Error", "Could not share route.");
+    },
+  });
+
   const earnedBadges = BADGES.filter((b) => user.reputation >= b.minRep);
   const unearned = BADGES.filter((b) => user.reputation < b.minRep);
 
@@ -343,15 +371,30 @@ export default function ProfileScreen() {
                     )}
                   </View>
                 </Pressable>
-                <Pressable
-                  hitSlop={8}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                    deleteRouteMutation.mutate(route.id);
-                  }}
-                >
-                  <Ionicons name="trash-outline" size={18} color={Colors.error} />
-                </Pressable>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                  <Pressable
+                    hitSlop={8}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      shareRouteMutation.mutate(route.id);
+                    }}
+                  >
+                    <Ionicons
+                      name={route.isPublic ? "link" : "share-outline"}
+                      size={18}
+                      color={route.isPublic ? Colors.accent : Colors.textMuted}
+                    />
+                  </Pressable>
+                  <Pressable
+                    hitSlop={8}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      deleteRouteMutation.mutate(route.id);
+                    }}
+                  >
+                    <Ionicons name="trash-outline" size={18} color={Colors.error} />
+                  </Pressable>
+                </View>
               </View>
             ))}
           </View>

@@ -597,6 +597,37 @@ export async function deleteSavedRoute(id: string) {
   return deleted || null;
 }
 
+export async function getSavedRouteByShareToken(token: string) {
+  const [route] = await db.select().from(schema.savedRoutes)
+    .where(eq(schema.savedRoutes.shareToken, token));
+  return route || null;
+}
+
+export async function toggleRouteSharing(id: string, userId: string): Promise<{ shareToken: string; isPublic: boolean } | null> {
+  const route = await getSavedRouteById(id);
+  if (!route || route.userId !== userId) return null;
+
+  if (route.isPublic && route.shareToken) {
+    const [updated] = await db.update(schema.savedRoutes)
+      .set({ isPublic: false })
+      .where(eq(schema.savedRoutes.id, id))
+      .returning();
+    return { shareToken: updated.shareToken!, isPublic: false };
+  }
+
+  const token = route.shareToken || generateShareToken();
+  const [updated] = await db.update(schema.savedRoutes)
+    .set({ isPublic: true, shareToken: token })
+    .where(eq(schema.savedRoutes.id, id))
+    .returning();
+  return { shareToken: updated.shareToken!, isPublic: true };
+}
+
+function generateShareToken(): string {
+  const crypto = require("crypto");
+  return crypto.randomBytes(12).toString("base64url");
+}
+
 export async function getAllEvents() {
   return db.select({
     id: schema.events.id,

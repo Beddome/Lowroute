@@ -597,6 +597,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/routes/saved/:id/share", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const result = await storage.toggleRouteSharing(req.params.id, req.session.userId!);
+      if (!result) return res.status(404).json({ message: "Route not found or not yours" });
+      res.json(result);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to toggle sharing" });
+    }
+  });
+
+  app.get("/api/routes/shared/:token", async (req: Request, res: Response) => {
+    try {
+      const route = await storage.getSavedRouteByShareToken(req.params.token);
+      if (!route || !route.isPublic) {
+        return res.status(404).json({ message: "Shared route not found" });
+      }
+      const user = await storage.getUserById(route.userId);
+      res.json({
+        id: route.id,
+        name: route.name,
+        startLat: route.startLat,
+        startLng: route.startLng,
+        endLat: route.endLat,
+        endLng: route.endLng,
+        startAddress: route.startAddress,
+        endAddress: route.endAddress,
+        riskScore: route.riskScore,
+        routeData: route.routeData,
+        createdAt: route.createdAt,
+        sharedBy: user?.username || "Unknown",
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch shared route" });
+    }
+  });
+
   app.post("/api/subscription", requireAuth, async (req: Request, res: Response) => {
     try {
       const { tier } = req.body;
