@@ -19,6 +19,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { apiRequest, queryClient } from "@/lib/query-client";
 import { CarProfile, SUSPENSION_TYPES, CLEARANCE_MODES } from "@/shared/types";
+import CarAvatar, { AVATAR_STYLES, AVATAR_COLORS } from "@/components/CarAvatar";
 
 export default function CarProfileScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -34,6 +35,8 @@ export default function CarProfileScreen() {
   const [wheelSize, setWheelSize] = useState("");
   const [clearanceMode, setClearanceMode] = useState<CarProfile["clearanceMode"]>("normal");
   const [isDefault, setIsDefault] = useState(false);
+  const [avatarStyle, setAvatarStyle] = useState("sedan");
+  const [avatarColor, setAvatarColor] = useState("#F97316");
 
   const { data: car, isLoading: loadingCar } = useQuery<CarProfile>({
     queryKey: ["/api/cars", id],
@@ -51,6 +54,8 @@ export default function CarProfileScreen() {
       setWheelSize(car.wheelSize != null ? String(car.wheelSize) : "");
       setClearanceMode(car.clearanceMode);
       setIsDefault(car.isDefault);
+      setAvatarStyle(car.avatarStyle ?? "sedan");
+      setAvatarColor(car.avatarColor ?? "#F97316");
     }
   }, [car]);
 
@@ -66,6 +71,8 @@ export default function CarProfileScreen() {
         wheelSize: wheelSize ? parseFloat(wheelSize) : null,
         clearanceMode,
         isDefault,
+        avatarStyle,
+        avatarColor,
       };
       if (isEditing) {
         return apiRequest("PUT", `/api/cars/${id}`, body);
@@ -142,6 +149,53 @@ export default function CarProfileScreen() {
             </Text>
           </View>
         )}
+
+        <View style={styles.avatarPreview}>
+          <CarAvatar style={avatarStyle} color={avatarColor} size={80} />
+        </View>
+
+        <Text style={styles.sectionLabel}>Car Style</Text>
+        <View style={styles.chipRow}>
+          {AVATAR_STYLES.map((s) => (
+            <Pressable
+              key={s.value}
+              style={[styles.avatarChip, avatarStyle === s.value && { backgroundColor: avatarColor + "22", borderColor: avatarColor }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setAvatarStyle(s.value);
+              }}
+            >
+              <Ionicons name={s.icon} size={18} color={avatarStyle === s.value ? avatarColor : Colors.textSecondary} />
+              <Text style={[styles.avatarChipText, avatarStyle === s.value && { color: avatarColor }]}>
+                {s.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <Text style={styles.sectionLabel}>Color</Text>
+        <View style={styles.colorRow}>
+          {AVATAR_COLORS.map((c) => (
+            <Pressable
+              key={c}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setAvatarColor(c);
+              }}
+              style={[
+                styles.colorSwatch,
+                { backgroundColor: c },
+                avatarColor === c && styles.colorSwatchActive,
+                avatarColor === c && { borderColor: c === "#FFFFFF" ? Colors.textSecondary : c },
+                c === "#FFFFFF" && { borderColor: Colors.border },
+              ]}
+            >
+              {avatarColor === c && (
+                <Ionicons name="checkmark" size={16} color={c === "#FFFFFF" || c === "#EAB308" ? "#000" : "#FFF"} />
+              )}
+            </Pressable>
+          ))}
+        </View>
 
         <Text style={styles.sectionLabel}>Vehicle Info</Text>
         <View style={styles.row}>
@@ -421,4 +475,44 @@ const styles = StyleSheet.create({
   },
   saveBtnDisabled: { opacity: 0.5 },
   saveBtnText: { color: Colors.bg, fontSize: 16, fontFamily: "Inter_700Bold" },
+  avatarPreview: {
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    marginTop: 20,
+    marginBottom: 4,
+  },
+  avatarChip: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: Colors.bgElevated,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  avatarChipText: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    color: Colors.textSecondary,
+  },
+  colorRow: {
+    flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
+    gap: 12,
+    marginBottom: 4,
+  },
+  colorSwatch: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: "transparent",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  colorSwatchActive: {
+    borderWidth: 3,
+  },
 });

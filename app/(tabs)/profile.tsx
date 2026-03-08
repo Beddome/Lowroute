@@ -21,6 +21,7 @@ import { useUnits } from "@/contexts/UnitsContext";
 import { Colors } from "@/constants/colors";
 import { formatMSTDateClient, CarProfile, SavedRoute, SUSPENSION_TYPES, CLEARANCE_MODES } from "@/shared/types";
 import { apiRequest, queryClient } from "@/lib/query-client";
+import CarAvatar from "@/components/CarAvatar";
 
 const BADGES = [
   { id: "first_report", icon: "flag" as const, label: "First Report", desc: "Submitted your first hazard", minRep: 10, color: Colors.accent },
@@ -91,7 +92,8 @@ function GarageCard({ car }: { car: CarProfile }) {
       }}
     >
       <View style={garageStyles.carHeader}>
-        <View style={{ flex: 1 }}>
+        <CarAvatar style={car.avatarStyle} color={car.avatarColor} size={44} />
+        <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={garageStyles.carName}>{car.year} {car.make} {car.model}</Text>
           {car.rideHeight != null && (
             <Text style={garageStyles.carDetail}>{car.rideHeight}" ride height</Text>

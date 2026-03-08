@@ -28,6 +28,7 @@ import { fetch } from "expo/fetch";
 import { useLocation } from "@/contexts/LocationContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUnits } from "@/contexts/UnitsContext";
+import CarAvatar from "@/components/CarAvatar";
 
 const FRIEND_COLOR = "#3B82F6";
 const EVENT_COLOR = "#8B5CF6";
@@ -128,22 +129,23 @@ const CLEARANCE_MODE_COLORS: Record<string, string> = {
 function FriendMarker({ location, onPress }: { location: UserLocation; onPress: () => void }) {
   const initial = location.username?.[0]?.toUpperCase() ?? "?";
   const hasCar = !!location.activeCar;
-  const markerBg = hasCar
-    ? CLEARANCE_MODE_COLORS[location.activeCar!.clearanceMode] ?? FRIEND_COLOR
-    : FRIEND_COLOR;
   return (
     <Marker
       coordinate={{ latitude: location.lat, longitude: location.lng }}
       onPress={onPress}
       tracksViewChanges={false}
     >
-      <View style={[styles.markerContainer, { width: 32, height: 32, borderRadius: 16, backgroundColor: markerBg, borderColor: "rgba(255,255,255,0.6)" }]}>
-        {hasCar ? (
-          <Ionicons name="car-sport" size={16} color="#fff" />
-        ) : (
+      {hasCar ? (
+        <CarAvatar
+          style={location.activeCar!.avatarStyle}
+          color={location.activeCar!.avatarColor}
+          size={36}
+        />
+      ) : (
+        <View style={[styles.markerContainer, { width: 32, height: 32, borderRadius: 16, backgroundColor: FRIEND_COLOR, borderColor: "rgba(255,255,255,0.6)" }]}>
           <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: "#fff" }}>{initial}</Text>
-        )}
-      </View>
+        </View>
+      )}
     </Marker>
   );
 }
@@ -880,7 +882,6 @@ export default function MapScreen() {
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               setSelectedFriend(fl);
-              setTimeout(() => setSelectedFriend(null), 3000);
             }}
           />
         ))}
@@ -938,16 +939,98 @@ export default function MapScreen() {
         )}
       </MapView>
 
-      {/* Friend name tooltip */}
       {selectedFriend && (
-        <View style={[styles.friendTooltip, { bottom: insets.bottom + bottomPanelHeight + 70 }]}>
-          <View style={styles.friendTooltipDot} />
-          <Text style={styles.friendTooltipText}>
-            {selectedFriend.activeCar
-              ? `${selectedFriend.username ?? "Friend"} — ${selectedFriend.activeCar.year} ${selectedFriend.activeCar.make} ${selectedFriend.activeCar.model}`
-              : (selectedFriend.username ?? "Friend")}
-          </Text>
-        </View>
+        <Modal
+          visible={!!selectedFriend}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSelectedFriend(null)}
+        >
+          <Pressable style={styles.friendPopupOverlay} onPress={() => setSelectedFriend(null)}>
+            <View style={styles.friendPopupCard}>
+              <Pressable style={styles.friendPopupClose} onPress={() => setSelectedFriend(null)} hitSlop={8}>
+                <Ionicons name="close" size={18} color={Colors.textMuted} />
+              </Pressable>
+
+              <View style={styles.friendPopupHeader}>
+                {selectedFriend.activeCar ? (
+                  <CarAvatar
+                    style={selectedFriend.activeCar.avatarStyle}
+                    color={selectedFriend.activeCar.avatarColor}
+                    size={52}
+                  />
+                ) : (
+                  <View style={styles.friendPopupInitialCircle}>
+                    <Text style={styles.friendPopupInitial}>
+                      {selectedFriend.username?.[0]?.toUpperCase() ?? "?"}
+                    </Text>
+                  </View>
+                )}
+                <Text style={styles.friendPopupUsername}>
+                  {selectedFriend.username ?? "Friend"}
+                </Text>
+              </View>
+
+              {selectedFriend.activeCar && (
+                <>
+                  <View style={styles.friendPopupDivider} />
+                  <Text style={styles.friendPopupCarName}>
+                    {selectedFriend.activeCar.year} {selectedFriend.activeCar.make} {selectedFriend.activeCar.model}
+                  </Text>
+
+                  <View style={styles.friendPopupSpecsGrid}>
+                    {selectedFriend.activeCar.suspensionType && (
+                      <View style={styles.friendPopupSpecItem}>
+                        <Ionicons name="construct-outline" size={14} color={Colors.textMuted} />
+                        <Text style={styles.friendPopupSpecText}>
+                          {selectedFriend.activeCar.suspensionType === "air_ride" ? "Air Ride" : selectedFriend.activeCar.suspensionType.charAt(0).toUpperCase() + selectedFriend.activeCar.suspensionType.slice(1)}
+                        </Text>
+                      </View>
+                    )}
+                    {selectedFriend.activeCar.rideHeight != null && (
+                      <View style={styles.friendPopupSpecItem}>
+                        <Ionicons name="resize-outline" size={14} color={Colors.textMuted} />
+                        <Text style={styles.friendPopupSpecText}>
+                          {selectedFriend.activeCar.rideHeight}" ride height
+                        </Text>
+                      </View>
+                    )}
+                    {selectedFriend.activeCar.wheelSize != null && (
+                      <View style={styles.friendPopupSpecItem}>
+                        <Ionicons name="ellipse-outline" size={14} color={Colors.textMuted} />
+                        <Text style={styles.friendPopupSpecText}>
+                          {selectedFriend.activeCar.wheelSize}" wheels
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={styles.friendPopupBadges}>
+                    <View style={[styles.friendPopupBadge, { backgroundColor: (CLEARANCE_MODE_COLORS[selectedFriend.activeCar.clearanceMode] ?? FRIEND_COLOR) + "22", borderColor: CLEARANCE_MODE_COLORS[selectedFriend.activeCar.clearanceMode] ?? FRIEND_COLOR }]}>
+                      <Text style={[styles.friendPopupBadgeText, { color: CLEARANCE_MODE_COLORS[selectedFriend.activeCar.clearanceMode] ?? FRIEND_COLOR }]}>
+                        {selectedFriend.activeCar.clearanceMode === "very_lowered" ? "Very Lowered" : selectedFriend.activeCar.clearanceMode === "show_car" ? "Show Car" : selectedFriend.activeCar.clearanceMode.charAt(0).toUpperCase() + selectedFriend.activeCar.clearanceMode.slice(1)}
+                      </Text>
+                    </View>
+                    {selectedFriend.activeCar.suspensionType && selectedFriend.activeCar.suspensionType !== "stock" && (
+                      <View style={[styles.friendPopupBadge, { backgroundColor: Colors.accent + "22", borderColor: Colors.accent }]}>
+                        <Text style={[styles.friendPopupBadgeText, { color: Colors.accent }]}>
+                          {selectedFriend.activeCar.suspensionType === "air_ride" ? "Air Ride" : selectedFriend.activeCar.suspensionType.charAt(0).toUpperCase() + selectedFriend.activeCar.suspensionType.slice(1)}
+                        </Text>
+                      </View>
+                    )}
+                    {selectedFriend.activeCar.hasFrontLip && (
+                      <View style={[styles.friendPopupBadge, { backgroundColor: "#EF4444" + "22", borderColor: "#EF4444" }]}>
+                        <Text style={[styles.friendPopupBadgeText, { color: "#EF4444" }]}>
+                          Front Lip
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </>
+              )}
+            </View>
+          </Pressable>
+        </Modal>
       )}
 
       {/* Hazard proximity alert banner */}
@@ -1071,7 +1154,7 @@ export default function MapScreen() {
                   style={styles.carSelectorPill}
                   onPress={() => setCarSelectorOpen(true)}
                 >
-                  <Ionicons name="car-sport" size={14} color={Colors.accent} />
+                  <CarAvatar style={activeCarProfile.avatarStyle} color={activeCarProfile.avatarColor} size={22} />
                   <Text style={styles.carSelectorText} numberOfLines={1}>
                     {activeCarProfile.year} {activeCarProfile.make} {activeCarProfile.model}
                   </Text>
@@ -1333,7 +1416,7 @@ function RoutePanel({
         <View style={{ marginTop: 8 }}>
           {onCarSelect && activeCarProfile && (
             <Pressable style={styles.carSelectorPillInline} onPress={onCarSelect}>
-              <Ionicons name="car-sport" size={14} color={Colors.accent} />
+              <CarAvatar style={activeCarProfile.avatarStyle} color={activeCarProfile.avatarColor} size={20} />
               <Text style={styles.carSelectorText} numberOfLines={1}>
                 {activeCarProfile.year} {activeCarProfile.make} {activeCarProfile.model}
               </Text>
@@ -1342,7 +1425,7 @@ function RoutePanel({
           )}
           {carProfile && !onCarSelect && (
             <View style={styles.carProfileBadge}>
-              <Ionicons name="car-sport" size={14} color={Colors.accent} />
+              <CarAvatar style={(carProfile as any).avatarStyle} color={(carProfile as any).avatarColor} size={20} />
               <Text style={styles.carProfileBadgeText}>
                 Risk for: {carProfile.year} {carProfile.make} {carProfile.model}
               </Text>
@@ -1908,33 +1991,96 @@ const styles = StyleSheet.create({
     backgroundColor: EVENT_COLOR + "18",
   },
 
-  friendTooltip: {
-    position: "absolute",
-    alignSelf: "center",
-    flexDirection: "row",
+  friendPopupOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
     alignItems: "center",
-    backgroundColor: FRIEND_COLOR,
-    borderRadius: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    gap: 6,
+    padding: 32,
+  },
+  friendPopupCard: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 20,
+    width: "100%",
+    maxWidth: 320,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 6,
-    elevation: 10,
-    zIndex: 200,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.6,
+    shadowRadius: 20,
+    elevation: 25,
   },
-  friendTooltipDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#fff",
+  friendPopupClose: {
+    position: "absolute" as const,
+    top: 12,
+    right: 12,
+    zIndex: 10,
   },
-  friendTooltipText: {
-    fontSize: 14,
+  friendPopupHeader: {
+    alignItems: "center" as const,
+    gap: 10,
+    marginBottom: 4,
+  },
+  friendPopupInitialCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: FRIEND_COLOR,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  friendPopupInitial: {
+    fontSize: 22,
     fontFamily: "Inter_700Bold",
     color: "#fff",
+  },
+  friendPopupUsername: {
+    fontSize: 18,
+    fontFamily: "Inter_700Bold",
+    color: Colors.text,
+  },
+  friendPopupDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginVertical: 14,
+  },
+  friendPopupCarName: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.text,
+    textAlign: "center" as const,
+    marginBottom: 12,
+  },
+  friendPopupSpecsGrid: {
+    gap: 8,
+    marginBottom: 12,
+  },
+  friendPopupSpecItem: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 8,
+  },
+  friendPopupSpecText: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textSecondary,
+  },
+  friendPopupBadges: {
+    flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
+    gap: 6,
+  },
+  friendPopupBadge: {
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  friendPopupBadgeText: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
   },
 
   carSelectorPill: {

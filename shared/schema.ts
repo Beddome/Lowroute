@@ -126,6 +126,8 @@ export const carProfiles = pgTable("car_profiles", {
   wheelSize: integer("wheel_size"),
   clearanceMode: clearanceModeEnum("clearance_mode").notNull().default("normal"),
   isDefault: boolean("is_default").notNull().default(false),
+  avatarStyle: varchar("avatar_style", { length: 20 }).notNull().default("sedan"),
+  avatarColor: varchar("avatar_color", { length: 10 }).notNull().default("#F97316"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

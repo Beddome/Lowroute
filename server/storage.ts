@@ -368,6 +368,8 @@ export async function createCarProfile(data: {
   wheelSize?: number | null;
   clearanceMode?: string;
   isDefault?: boolean;
+  avatarStyle?: string;
+  avatarColor?: string;
 }) {
   if (data.isDefault) {
     await db.update(schema.carProfiles)
@@ -385,6 +387,8 @@ export async function createCarProfile(data: {
     wheelSize: data.wheelSize ?? null,
     clearanceMode: (data.clearanceMode as any) || "normal",
     isDefault: data.isDefault ?? false,
+    avatarStyle: data.avatarStyle || "sedan",
+    avatarColor: data.avatarColor || "#F97316",
   }).returning();
   return profile;
 }
@@ -399,6 +403,8 @@ export async function updateCarProfile(id: string, data: Partial<{
   wheelSize: number | null;
   clearanceMode: string;
   isDefault: boolean;
+  avatarStyle: string;
+  avatarColor: string;
 }>) {
   if (data.isDefault) {
     const existing = await getCarProfileById(id);
@@ -808,6 +814,12 @@ export async function getFriendsLocations(userId: string) {
     carModel: schema.carProfiles.model,
     carYear: schema.carProfiles.year,
     carClearanceMode: schema.carProfiles.clearanceMode,
+    carSuspensionType: schema.carProfiles.suspensionType,
+    carHasFrontLip: schema.carProfiles.hasFrontLip,
+    carRideHeight: schema.carProfiles.rideHeight,
+    carWheelSize: schema.carProfiles.wheelSize,
+    carAvatarStyle: schema.carProfiles.avatarStyle,
+    carAvatarColor: schema.carProfiles.avatarColor,
   })
     .from(schema.userLocations)
     .leftJoin(schema.users, eq(schema.userLocations.userId, schema.users.id))
@@ -824,6 +836,12 @@ export async function getFriendsLocations(userId: string) {
       model: loc.carModel!,
       year: loc.carYear!,
       clearanceMode: loc.carClearanceMode!,
+      suspensionType: loc.carSuspensionType!,
+      hasFrontLip: loc.carHasFrontLip!,
+      rideHeight: loc.carRideHeight ?? null,
+      wheelSize: loc.carWheelSize ?? null,
+      avatarStyle: loc.carAvatarStyle!,
+      avatarColor: loc.carAvatarColor!,
     } : undefined,
   }));
 }

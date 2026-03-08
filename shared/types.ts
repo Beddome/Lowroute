@@ -104,6 +104,8 @@ export interface CarProfile {
   wheelSize: number | null;
   clearanceMode: "normal" | "lowered" | "very_lowered" | "show_car";
   isDefault: boolean;
+  avatarStyle: string;
+  avatarColor: string;
   createdAt: string | Date;
 }
 
@@ -163,7 +165,18 @@ export interface UserLocation {
   lng: number;
   updatedAt: string | Date;
   username?: string;
-  activeCar?: { make: string; model: string; year: number; clearanceMode: string };
+  activeCar?: {
+    make: string;
+    model: string;
+    year: number;
+    clearanceMode: string;
+    suspensionType: string;
+    hasFrontLip: boolean;
+    rideHeight: number | null;
+    wheelSize: number | null;
+    avatarStyle: string;
+    avatarColor: string;
+  };
 }
 
 export const EVENT_TYPES = [

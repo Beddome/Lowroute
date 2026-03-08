@@ -944,7 +944,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/cars", requireAuth, async (req: Request, res: Response) => {
     try {
-      const { make, model, year, rideHeight, suspensionType, hasFrontLip, wheelSize, clearanceMode, isDefault } = req.body;
+      const { make, model, year, rideHeight, suspensionType, hasFrontLip, wheelSize, clearanceMode, isDefault, avatarStyle, avatarColor } = req.body;
       if (!make || !model || !year) {
         return res.status(400).json({ message: "Make, model, and year are required" });
       }
@@ -977,6 +977,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         wheelSize: wheelSize ? parseInt(wheelSize) : null,
         clearanceMode: clearanceMode || "normal",
         isDefault: !!isDefault,
+        avatarStyle: avatarStyle || "sedan",
+        avatarColor: avatarColor || "#F97316",
       });
       res.json(profile);
     } catch (err) {
@@ -992,7 +994,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (existing.userId !== req.session.userId) {
         return res.status(403).json({ message: "Not your car profile" });
       }
-      const { make, model, year, rideHeight, suspensionType, hasFrontLip, wheelSize, clearanceMode, isDefault } = req.body;
+      const { make, model, year, rideHeight, suspensionType, hasFrontLip, wheelSize, clearanceMode, isDefault, avatarStyle, avatarColor } = req.body;
       const validSuspension = ["stock", "lowered", "coilovers", "air_ride", "bagged"];
       const validClearance = ["normal", "lowered", "very_lowered", "show_car"];
       const updates: any = {};
@@ -1031,6 +1033,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updates.clearanceMode = clearanceMode;
       }
       if (isDefault !== undefined) updates.isDefault = !!isDefault;
+      if (avatarStyle !== undefined) updates.avatarStyle = avatarStyle;
+      if (avatarColor !== undefined) updates.avatarColor = avatarColor;
       const profile = await storage.updateCarProfile(req.params.id, updates);
       res.json(profile);
     } catch (err) {
