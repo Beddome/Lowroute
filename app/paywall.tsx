@@ -8,6 +8,7 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  TextInput,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -60,7 +61,46 @@ export default function PaywallScreen() {
   const { user, refreshUser } = useAuth();
   const [selectedTier, setSelectedTier] = useState<string>(user?.subscriptionTier ?? "free");
   const [isLoading, setIsLoading] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoMessage, setPromoMessage] = useState<{ text: string; success: boolean } | null>(null);
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+
+  const handleRedeemPromo = async () => {
+    if (!promoCode.trim()) return;
+    if (!user) {
+      router.push("/(auth)/login");
+      return;
+    }
+    setPromoLoading(true);
+    setPromoMessage(null);
+    try {
+      const res = await apiRequest("POST", "/api/promo/redeem", { code: promoCode.trim() });
+      const data = await res.json();
+      await refreshUser();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setPromoMessage({ text: data.message, success: true });
+      setPromoCode("");
+      setTimeout(() => router.back(), 1500);
+    } catch (err: any) {
+      let msg = "Failed to redeem promo code";
+      if (err?.message) {
+        const match = err.message.match(/^\d+:\s*(.+)/);
+        if (match) {
+          try {
+            const parsed = JSON.parse(match[1]);
+            if (parsed.message) msg = parsed.message;
+          } catch {
+            msg = match[1];
+          }
+        }
+      }
+      setPromoMessage({ text: msg, success: false });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setPromoLoading(false);
+    }
+  };
 
   const handleSubscribe = async () => {
     if (!user) {
@@ -217,6 +257,51 @@ export default function PaywallScreen() {
             <Text style={styles.guaranteeText}>Built by the low-car community</Text>
           </View>
         </View>
+
+        <View style={styles.promoSection}>
+          <View style={styles.promoHeader}>
+            <Ionicons name="pricetag" size={18} color={Colors.accent} />
+            <Text style={styles.promoTitle}>Have a promo code?</Text>
+          </View>
+          <View style={styles.promoInputRow}>
+            <TextInput
+              style={styles.promoInput}
+              value={promoCode}
+              onChangeText={(t) => {
+                setPromoCode(t.toUpperCase());
+                setPromoMessage(null);
+              }}
+              placeholder="LOWPRO-XXXXXX"
+              placeholderTextColor={Colors.textMuted}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              editable={!promoLoading}
+            />
+            <Pressable
+              style={[styles.promoBtn, (!promoCode.trim() || promoLoading) && { opacity: 0.5 }]}
+              onPress={handleRedeemPromo}
+              disabled={!promoCode.trim() || promoLoading}
+            >
+              {promoLoading ? (
+                <ActivityIndicator color={Colors.bg} size="small" />
+              ) : (
+                <Ionicons name="arrow-forward" size={20} color={Colors.bg} />
+              )}
+            </Pressable>
+          </View>
+          {promoMessage && (
+            <View style={[styles.promoMsg, { backgroundColor: promoMessage.success ? Colors.tier1 + "15" : Colors.error + "15" }]}>
+              <Ionicons
+                name={promoMessage.success ? "checkmark-circle" : "alert-circle"}
+                size={16}
+                color={promoMessage.success ? Colors.tier1 : Colors.error}
+              />
+              <Text style={[styles.promoMsgText, { color: promoMessage.success ? Colors.tier1 : Colors.error }]}>
+                {promoMessage.text}
+              </Text>
+            </View>
+          )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -330,4 +415,64 @@ const styles = StyleSheet.create({
   guaranteeSection: { paddingHorizontal: 24, gap: 14, marginBottom: 20 },
   guaranteeRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   guaranteeText: { fontSize: 14, fontFamily: "Inter_400Regular", color: Colors.textSecondary },
+
+  promoSection: {
+    marginHorizontal: 16,
+    marginBottom: 24,
+    backgroundColor: Colors.bgCard,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  promoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+  promoTitle: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.text,
+  },
+  promoInputRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  promoInput: {
+    flex: 1,
+    backgroundColor: Colors.bgElevated,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.text,
+    letterSpacing: 1,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  promoBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: Colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  promoMsg: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  promoMsgText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+  },
 });

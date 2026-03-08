@@ -248,6 +248,11 @@ export default function ProfileScreen() {
                   ? "Live GPS navigation, hazard alerts, ad-free"
                   : "Upgrade for live navigation & hazard alerts"}
               </Text>
+              {user.subscriptionTier === "pro" && user.subscriptionExpiresAt && (
+                <Text style={styles.subExpiry}>
+                  Pro until {new Date(user.subscriptionExpiresAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                </Text>
+              )}
             </View>
             {user.subscriptionTier !== "pro" && (
               <Pressable
@@ -422,6 +427,7 @@ const styles = StyleSheet.create({
   },
   subBadgeText: { fontSize: 13, fontFamily: "Inter_700Bold", color: Colors.textSecondary },
   subDesc: { fontSize: 12, fontFamily: "Inter_400Regular", color: Colors.textMuted },
+  subExpiry: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: Colors.accent, marginTop: 4 },
   upgradeBtn: {
     backgroundColor: Colors.accent,
     borderRadius: 10,

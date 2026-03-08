@@ -9,6 +9,7 @@ interface AuthUser {
   reputation: number;
   role: "user" | "admin";
   subscriptionTier: "free" | "pro";
+  subscriptionExpiresAt: string | null;
 }
 
 interface AuthContextValue {

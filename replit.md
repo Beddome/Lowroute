@@ -97,9 +97,11 @@ metro.config.js        # Custom resolver to stub react-native-maps on web
 
 ## Database Tables
 
-- `users`: id, username, email, password_hash, reputation, role, subscription_tier, created_at
+- `users`: id, username, email, password_hash, reputation, role, subscription_tier, subscription_expires_at, created_at
 - `hazards`: id, user_id, lat, lng, type (enum), severity (1-4), title, description, status, upvotes, downvotes, confidence_score, created_at, expires_at
 - `hazard_votes`: id, user_id, hazard_id, vote_type (confirm/downvote/clear)
+- `promo_codes`: id, code (unique), type (7_day/30_day/permanent), max_uses, current_uses, created_by (FK users), expires_at, is_active, created_at
+- `promo_redemptions`: id, user_id (FK users), promo_code_id (FK promo_codes), redeemed_at
 - `session` (auto-created by connect-pg-simple)
 
 ## API Endpoints
@@ -108,7 +110,9 @@ Auth: POST /api/auth/register (rate limited), POST /api/auth/login (rate limited
 Hazards: GET /api/hazards, POST /api/hazards (validated), GET /api/hazards/:id, POST /api/hazards/:id/vote, GET /api/hazards/nearby
 Routes: GET /api/routes (OSRM-powered)
 Admin: GET /api/admin/stats, GET /api/admin/users, PATCH /api/admin/users/:id/role, DELETE /api/admin/hazards/:id
+Admin Promos: POST /api/admin/promo-codes, GET /api/admin/promo-codes, PATCH /api/admin/promo-codes/:id/deactivate
 Subscription: POST /api/subscription
+Promo: POST /api/promo/redeem
 
 ## Seed Data
 

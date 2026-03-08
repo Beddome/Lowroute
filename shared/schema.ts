@@ -30,6 +30,7 @@ export const users = pgTable("users", {
   reputation: integer("reputation").notNull().default(0),
   role: text("role").notNull().default("user"),
   subscriptionTier: text("subscription_tier").notNull().default("free"),
+  subscriptionExpiresAt: timestamp("subscription_expires_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -62,6 +63,29 @@ export const hazardVotes = pgTable("hazard_votes", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const promoCodes = pgTable("promo_codes", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  code: text("code").notNull().unique(),
+  type: text("type").notNull(),
+  maxUses: integer("max_uses").notNull().default(1),
+  currentUses: integer("current_uses").notNull().default(0),
+  createdBy: varchar("created_by").references(() => users.id).notNull(),
+  expiresAt: timestamp("expires_at"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const promoRedemptions = pgTable("promo_redemptions", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  promoCodeId: varchar("promo_code_id").references(() => promoCodes.id).notNull(),
+  redeemedAt: timestamp("redeemed_at").notNull().defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   email: true,
@@ -82,6 +106,8 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type Hazard = typeof hazards.$inferSelect;
 export type HazardVote = typeof hazardVotes.$inferSelect;
+export type PromoCode = typeof promoCodes.$inferSelect;
+export type PromoRedemption = typeof promoRedemptions.$inferSelect;
 
 export const HAZARD_TYPES = [
   { value: "pothole", label: "Pothole" },

@@ -199,11 +199,77 @@ export async function getHazardsNearby(lat: number, lng: number, radiusKm: numbe
     );
 }
 
-export async function updateSubscriptionTier(userId: string, tier: string) {
+export async function updateSubscriptionTier(userId: string, tier: string, expiresAt?: Date | null) {
   await db
     .update(schema.users)
-    .set({ subscriptionTier: tier })
+    .set({ subscriptionTier: tier, subscriptionExpiresAt: expiresAt ?? null })
     .where(eq(schema.users.id, userId));
+}
+
+export async function createPromoCode(data: {
+  code: string;
+  type: string;
+  maxUses: number;
+  createdBy: string;
+  expiresAt?: Date | null;
+}) {
+  const [promo] = await db.insert(schema.promoCodes).values({
+    code: data.code,
+    type: data.type,
+    maxUses: data.maxUses,
+    createdBy: data.createdBy,
+    expiresAt: data.expiresAt ?? null,
+  }).returning();
+  return promo;
+}
+
+export async function getPromoCodeByCode(code: string) {
+  const [promo] = await db.select().from(schema.promoCodes).where(eq(schema.promoCodes.code, code.toUpperCase()));
+  return promo || null;
+}
+
+export async function getAllPromoCodes() {
+  return db.select().from(schema.promoCodes).orderBy(schema.promoCodes.createdAt);
+}
+
+export async function deactivatePromoCode(id: string) {
+  const [promo] = await db.update(schema.promoCodes)
+    .set({ isActive: false })
+    .where(eq(schema.promoCodes.id, id))
+    .returning();
+  return promo || null;
+}
+
+export async function getUserRedemption(userId: string, promoCodeId: string) {
+  const [redemption] = await db.select().from(schema.promoRedemptions)
+    .where(and(
+      eq(schema.promoRedemptions.userId, userId),
+      eq(schema.promoRedemptions.promoCodeId, promoCodeId)
+    ));
+  return redemption || null;
+}
+
+export async function redeemPromoCode(userId: string, promoCodeId: string) {
+  await db.insert(schema.promoRedemptions).values({ userId, promoCodeId });
+  await db.update(schema.promoCodes)
+    .set({ currentUses: sql`${schema.promoCodes.currentUses} + 1` })
+    .where(eq(schema.promoCodes.id, promoCodeId));
+}
+
+export async function checkAndDowngradeExpiredSubscription(userId: string) {
+  const user = await getUserById(userId);
+  if (!user) return null;
+  if (
+    user.subscriptionTier === "pro" &&
+    user.subscriptionExpiresAt &&
+    new Date(user.subscriptionExpiresAt) < new Date()
+  ) {
+    await db.update(schema.users)
+      .set({ subscriptionTier: "free", subscriptionExpiresAt: null })
+      .where(eq(schema.users.id, userId));
+    return { ...user, subscriptionTier: "free", subscriptionExpiresAt: null };
+  }
+  return user;
 }
 
 export async function seedAdminUser(username: string, passwordHash: string) {

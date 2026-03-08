@@ -169,6 +169,18 @@ async function fetchOSRMRoutes(
   }));
 }
 
+function safeUserResponse(user: any) {
+  return {
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    reputation: user.reputation,
+    role: user.role,
+    subscriptionTier: user.subscriptionTier,
+    subscriptionExpiresAt: user.subscriptionExpiresAt ?? null,
+  };
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   const PgStore = ConnectPgSimple(session);
 
@@ -232,7 +244,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const passwordHash = await bcrypt.hash(password, 10);
       const user = await storage.createUser({ username, email, passwordHash });
       req.session.userId = user.id;
-      res.json({ id: user.id, username: user.username, email: user.email, reputation: user.reputation, role: user.role, subscriptionTier: user.subscriptionTier });
+      res.json(safeUserResponse(user));
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Registration failed" });
@@ -256,7 +268,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!valid) return res.status(401).json({ message: "Invalid credentials" });
 
       req.session.userId = user.id;
-      res.json({ id: user.id, username: user.username, email: user.email, reputation: user.reputation, role: user.role, subscriptionTier: user.subscriptionTier });
+      const freshUser = await storage.checkAndDowngradeExpiredSubscription(user.id);
+      res.json(safeUserResponse(freshUser ?? user));
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Login failed" });
@@ -269,9 +282,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/auth/me", async (req: Request, res: Response) => {
     if (!req.session?.userId) return res.json(null);
-    const user = await storage.getUserById(req.session.userId);
+    const user = await storage.checkAndDowngradeExpiredSubscription(req.session.userId);
     if (!user) return res.json(null);
-    res.json({ id: user.id, username: user.username, email: user.email, reputation: user.reputation, role: user.role, subscriptionTier: user.subscriptionTier });
+    res.json(safeUserResponse(user));
   });
 
   // Hazard routes
@@ -511,15 +524,115 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/subscription", requireAuth, async (req: Request, res: Response) => {
     try {
       const { tier } = req.body;
-      if (!["free", "pro"].includes(tier)) {
+      if (tier === "pro") {
+        return res.status(403).json({ message: "Pro upgrades require a subscription or promo code" });
+      }
+      if (tier !== "free") {
         return res.status(400).json({ message: "Invalid subscription tier" });
       }
-      await storage.updateSubscriptionTier(req.session.userId!, tier);
+      await storage.updateSubscriptionTier(req.session.userId!, "free", null);
       const user = await storage.getUserById(req.session.userId!);
-      res.json({ id: user!.id, username: user!.username, email: user!.email, reputation: user!.reputation, role: user!.role, subscriptionTier: user!.subscriptionTier });
+      res.json(safeUserResponse(user));
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Failed to update subscription" });
+    }
+  });
+
+  app.post("/api/admin/promo-codes", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { type, maxUses, expiresAt } = req.body;
+      if (!type || !["7_day", "30_day", "permanent"].includes(type)) {
+        return res.status(400).json({ message: "Invalid promo type. Use 7_day, 30_day, or permanent." });
+      }
+      const parsedUses = maxUses ? parseInt(maxUses) : 1;
+      const uses = isNaN(parsedUses) ? 1 : Math.max(1, Math.min(10000, parsedUses));
+      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+      let code = "LOWPRO-";
+      for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+
+      const promo = await storage.createPromoCode({
+        code,
+        type,
+        maxUses: uses,
+        createdBy: req.session.userId!,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
+      });
+      res.json(promo);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to create promo code" });
+    }
+  });
+
+  app.get("/api/admin/promo-codes", requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const codes = await storage.getAllPromoCodes();
+      res.json(codes);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch promo codes" });
+    }
+  });
+
+  app.patch("/api/admin/promo-codes/:id/deactivate", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const promo = await storage.deactivatePromoCode(req.params.id);
+      if (!promo) return res.status(404).json({ message: "Promo code not found" });
+      res.json(promo);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to deactivate promo code" });
+    }
+  });
+
+  app.post("/api/promo/redeem", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { code } = req.body;
+      if (!code || typeof code !== "string") {
+        return res.status(400).json({ message: "Promo code is required" });
+      }
+
+      const promo = await storage.getPromoCodeByCode(code.trim().toUpperCase());
+      if (!promo) return res.status(404).json({ message: "Invalid promo code" });
+      if (!promo.isActive) return res.status(400).json({ message: "This promo code is no longer active" });
+      if (promo.expiresAt && new Date(promo.expiresAt) < new Date()) {
+        return res.status(400).json({ message: "This promo code has expired" });
+      }
+      if (promo.currentUses >= promo.maxUses) {
+        return res.status(400).json({ message: "This promo code has reached its usage limit" });
+      }
+
+      const existing = await storage.getUserRedemption(req.session.userId!, promo.id);
+      if (existing) return res.status(400).json({ message: "You have already used this promo code" });
+
+      await storage.redeemPromoCode(req.session.userId!, promo.id);
+
+      const currentUser = await storage.getUserById(req.session.userId!);
+      let expiresAt: Date | null = null;
+      if (promo.type === "7_day" || promo.type === "30_day") {
+        const days = promo.type === "7_day" ? 7 : 30;
+        const baseTime = (currentUser?.subscriptionExpiresAt && new Date(currentUser.subscriptionExpiresAt) > new Date())
+          ? new Date(currentUser.subscriptionExpiresAt).getTime()
+          : Date.now();
+        expiresAt = new Date(baseTime + days * 24 * 60 * 60 * 1000);
+      }
+
+      if (currentUser?.subscriptionTier === "pro" && !currentUser.subscriptionExpiresAt && promo.type !== "permanent") {
+        expiresAt = null;
+      }
+
+      await storage.updateSubscriptionTier(req.session.userId!, "pro", expiresAt);
+      const user = await storage.getUserById(req.session.userId!);
+      res.json({
+        message: promo.type === "permanent"
+          ? "Permanent Pro access activated!"
+          : `Pro access activated for ${promo.type === "7_day" ? "7 days" : "30 days"}!`,
+        user: safeUserResponse(user),
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to redeem promo code" });
     }
   });
 

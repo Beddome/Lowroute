@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Platform,
   RefreshControl,
+  TextInput,
 } from "react-native";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -16,9 +17,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest, queryClient } from "@/lib/query-client";
-import { SEVERITY_TIERS } from "@/shared/types";
+import { SEVERITY_TIERS, PROMO_TYPES } from "@/shared/types";
+import type { PromoCode } from "@/shared/types";
 
-type Tab = "stats" | "hazards" | "users";
+type Tab = "stats" | "hazards" | "users" | "promos";
 
 interface AdminUser {
   id: string;
@@ -72,14 +74,14 @@ export default function AdminScreen() {
         <Text style={styles.headerTitle}>Admin</Text>
       </View>
       <View style={styles.tabBar}>
-        {(["stats", "hazards", "users"] as Tab[]).map((tab) => (
+        {(["stats", "hazards", "users", "promos"] as Tab[]).map((tab) => (
           <TouchableOpacity
             key={tab}
             style={[styles.tab, activeTab === tab && styles.tabActive]}
             onPress={() => setActiveTab(tab)}
           >
             <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
-              {tab === "stats" ? "Overview" : tab === "hazards" ? "Hazards" : "Users"}
+              {tab === "stats" ? "Overview" : tab === "hazards" ? "Hazards" : tab === "users" ? "Users" : "Promos"}
             </Text>
           </TouchableOpacity>
         ))}
@@ -87,6 +89,7 @@ export default function AdminScreen() {
       {activeTab === "stats" && <StatsPanel />}
       {activeTab === "hazards" && <HazardsPanel />}
       {activeTab === "users" && <UsersPanel currentUserId={user.id} />}
+      {activeTab === "promos" && <PromoCodesPanel />}
     </View>
   );
 }
@@ -306,6 +309,272 @@ function UsersPanel({ currentUserId }: { currentUserId: string }) {
     />
   );
 }
+
+function PromoCodesPanel() {
+  const [promoType, setPromoType] = useState<string>("7_day");
+  const [maxUses, setMaxUses] = useState("1");
+
+  const promosQuery = useQuery<PromoCode[]>({ queryKey: ["/api/admin/promo-codes"] });
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", "/api/admin/promo-codes", {
+        type: promoType,
+        maxUses: parseInt(maxUses) || 1,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/promo-codes"] });
+      setMaxUses("1");
+    },
+    onError: () => {
+      Alert.alert("Error", "Failed to create promo code");
+    },
+  });
+
+  const deactivateMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("PATCH", `/api/admin/promo-codes/${id}/deactivate`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/promo-codes"] });
+    },
+  });
+
+  const confirmDeactivate = (id: string, code: string) => {
+    if (Platform.OS === "web") {
+      if (confirm(`Deactivate promo code "${code}"?`)) {
+        deactivateMutation.mutate(id);
+      }
+    } else {
+      Alert.alert("Deactivate Code", `Deactivate "${code}"?`, [
+        { text: "Cancel", style: "cancel" },
+        { text: "Deactivate", style: "destructive", onPress: () => deactivateMutation.mutate(id) },
+      ]);
+    }
+  };
+
+  if (promosQuery.isLoading) {
+    return <View style={styles.centered}><ActivityIndicator color={Colors.accent} size="large" /></View>;
+  }
+
+  const promos = promosQuery.data || [];
+
+  const getStatusLabel = (p: PromoCode) => {
+    if (!p.isActive) return { text: "Inactive", color: Colors.textMuted };
+    if (p.expiresAt && new Date(p.expiresAt) < new Date()) return { text: "Expired", color: Colors.error };
+    if (p.currentUses >= p.maxUses) return { text: "Maxed", color: Colors.tier2 };
+    return { text: "Active", color: Colors.tier1 };
+  };
+
+  const typeLabel = (type: string) => PROMO_TYPES.find((t) => t.value === type)?.label ?? type;
+
+  return (
+    <FlatList
+      data={promos}
+      keyExtractor={(item) => item.id}
+      contentContainerStyle={[styles.scrollContent, promos.length === 0 && styles.centered]}
+      refreshControl={<RefreshControl refreshing={promosQuery.isRefetching} onRefresh={() => promosQuery.refetch()} tintColor={Colors.accent} />}
+      ListHeaderComponent={
+        <View style={promoStyles.createCard}>
+          <Text style={styles.sectionTitle}>Create Promo Code</Text>
+          <View style={promoStyles.typeRow}>
+            {PROMO_TYPES.map((t) => (
+              <TouchableOpacity
+                key={t.value}
+                style={[promoStyles.typeChip, promoType === t.value && promoStyles.typeChipActive]}
+                onPress={() => setPromoType(t.value)}
+              >
+                <Text style={[promoStyles.typeChipText, promoType === t.value && promoStyles.typeChipTextActive]}>
+                  {t.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <View style={promoStyles.inputRow}>
+            <Text style={promoStyles.inputLabel}>Max Uses</Text>
+            <TextInput
+              style={promoStyles.input}
+              value={maxUses}
+              onChangeText={setMaxUses}
+              keyboardType="number-pad"
+              placeholderTextColor={Colors.textMuted}
+            />
+          </View>
+          <TouchableOpacity
+            style={[promoStyles.createBtn, createMutation.isPending && { opacity: 0.6 }]}
+            onPress={() => createMutation.mutate()}
+            disabled={createMutation.isPending}
+          >
+            {createMutation.isPending ? (
+              <ActivityIndicator color={Colors.bg} size="small" />
+            ) : (
+              <>
+                <Ionicons name="add-circle" size={18} color={Colors.bg} />
+                <Text style={promoStyles.createBtnText}>Generate Code</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      }
+      ListEmptyComponent={<Text style={styles.emptyText}>No promo codes created yet</Text>}
+      renderItem={({ item }) => {
+        const status = getStatusLabel(item);
+        return (
+          <View style={promoStyles.promoCard}>
+            <View style={promoStyles.promoHeader}>
+              <Text style={promoStyles.promoCode}>{item.code}</Text>
+              <View style={[promoStyles.statusBadge, { backgroundColor: status.color + "20" }]}>
+                <Text style={[promoStyles.statusText, { color: status.color }]}>{status.text}</Text>
+              </View>
+            </View>
+            <View style={promoStyles.promoMeta}>
+              <Text style={promoStyles.promoMetaText}>{typeLabel(item.type)}</Text>
+              <Text style={promoStyles.promoMetaText}>
+                {item.currentUses}/{item.maxUses} used
+              </Text>
+              <Text style={promoStyles.promoMetaText}>
+                {new Date(item.createdAt).toLocaleDateString()}
+              </Text>
+            </View>
+            {item.isActive && (
+              <TouchableOpacity
+                style={promoStyles.deactivateBtn}
+                onPress={() => confirmDeactivate(item.id, item.code)}
+                disabled={deactivateMutation.isPending}
+              >
+                <Ionicons name="close-circle" size={16} color={Colors.error} />
+                <Text style={promoStyles.deactivateText}>Deactivate</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        );
+      }}
+    />
+  );
+}
+
+const promoStyles = StyleSheet.create({
+  createCard: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  typeRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 14,
+  },
+  typeChip: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: Colors.bgElevated,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  typeChipActive: {
+    backgroundColor: Colors.accent + "20",
+    borderColor: Colors.accent,
+  },
+  typeChipText: {
+    fontSize: 12,
+    fontWeight: "600" as const,
+    color: Colors.textMuted,
+  },
+  typeChipTextActive: {
+    color: Colors.accent,
+  },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 14,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: "600" as const,
+    color: Colors.textSecondary,
+  },
+  input: {
+    flex: 1,
+    backgroundColor: Colors.bgElevated,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: Colors.text,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  createBtn: {
+    backgroundColor: Colors.accent,
+    borderRadius: 12,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  createBtnText: {
+    fontSize: 14,
+    fontWeight: "700" as const,
+    color: Colors.bg,
+  },
+  promoCard: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  promoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  promoCode: {
+    fontSize: 16,
+    fontWeight: "700" as const,
+    color: Colors.accent,
+    letterSpacing: 1,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: "700" as const,
+  },
+  promoMeta: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  promoMetaText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  deactivateBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 10,
+    alignSelf: "flex-start",
+  },
+  deactivateText: {
+    fontSize: 12,
+    fontWeight: "600" as const,
+    color: Colors.error,
+  },
+});
 
 const styles = StyleSheet.create({
   container: {

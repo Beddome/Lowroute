@@ -70,4 +70,23 @@ export interface AuthUser {
   reputation: number;
   role: "user" | "admin";
   subscriptionTier: "free" | "pro";
+  subscriptionExpiresAt: string | Date | null;
 }
+
+export interface PromoCode {
+  id: string;
+  code: string;
+  type: "7_day" | "30_day" | "permanent";
+  maxUses: number;
+  currentUses: number;
+  createdBy: string;
+  expiresAt: string | Date | null;
+  isActive: boolean;
+  createdAt: string | Date;
+}
+
+export const PROMO_TYPES = [
+  { value: "7_day", label: "7-Day Trial", days: 7 },
+  { value: "30_day", label: "30-Day Trial", days: 30 },
+  { value: "permanent", label: "Permanent Access", days: null },
+] as const;
