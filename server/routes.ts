@@ -133,8 +133,8 @@ function calculateRouteRisk(hazards: Array<{ severity: number; confidenceScore: 
   return { score, counts, highestTier, totalHazards };
 }
 
-const HAZARD_BUFFER_METERS = 500;
-const HAZARD_BUFFER_DEG = 0.005;
+const HAZARD_BUFFER_METERS = 50;
+const HAZARD_BUFFER_DEG = 0.00045;
 
 function hazardsNearPolyline(
   allHazards: Array<{ lat: number; lng: number; severity: number; confidenceScore: number; [key: string]: any }>,
@@ -566,7 +566,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           description: label.description,
           estimatedMinutes,
           distanceKm,
-          timePenaltyMinutes: Math.round(risk.score / 10),
+          timePenaltyMinutes: Math.min(15, Math.round(Math.log2(risk.score + 1))),
           hazards: routeHazards,
           riskScore: risk.score,
           highestSeverity: risk.highestTier,

@@ -576,7 +576,7 @@ export default function MapScreenWeb() {
                     <View style={[styles.routeColorDot, { backgroundColor: ROUTE_COLORS[i] ?? Colors.accent }]} />
                     <Text style={[styles.routeLabel, isSelected && { color: Colors.text }]}>{route.label}</Text>
                     <Text style={styles.routeTime}>
-                      {route.estimatedMinutes + route.timePenaltyMinutes} min
+                      {route.estimatedMinutes} min
                       {route.distanceKm ? ` · ${route.distanceKm} km` : ""}
                     </Text>
                     <View style={styles.routeStats}>
@@ -620,7 +620,7 @@ export default function MapScreenWeb() {
                 <View style={styles.routeSummaryItem}>
                   <Ionicons name="flag-outline" size={14} color={Colors.textMuted} />
                   <Text style={styles.routeSummaryText}>
-                    {selectedRoute.estimatedMinutes} base · +{selectedRoute.timePenaltyMinutes}m risk
+                    {selectedRoute.estimatedMinutes} min · {selectedRoute.distanceKm ? `${selectedRoute.distanceKm} km` : ""}
                   </Text>
                 </View>
               </View>

@@ -1130,7 +1130,7 @@ function RoutePanel({
               <View style={[styles.routeColorDot, { backgroundColor: ROUTE_COLORS[i] ?? Colors.accent }]} />
               <Text style={[styles.routeLabel, isSelected && { color: Colors.text }]}>{route.label}</Text>
               <Text style={styles.routeTime}>
-                {route.estimatedMinutes + route.timePenaltyMinutes} min
+                {route.estimatedMinutes} min
                 {route.distanceKm ? ` · ${formatRouteDistance(route.distanceKm)}` : ""}
               </Text>
               <View style={styles.routeStats}>
@@ -1174,7 +1174,7 @@ function RoutePanel({
           <View style={styles.routeSummaryItem}>
             <Ionicons name="flag-outline" size={14} color={Colors.textMuted} />
             <Text style={styles.routeSummaryText}>
-              {routes[selectedIdx].estimatedMinutes} base · +{routes[selectedIdx].timePenaltyMinutes}m risk
+              {routes[selectedIdx].estimatedMinutes} min · {routes[selectedIdx].distanceKm ? `${formatRouteDistance(routes[selectedIdx].distanceKm)}` : ""}
             </Text>
           </View>
           <Pressable
