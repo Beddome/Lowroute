@@ -128,6 +128,7 @@ export default function CreateEventScreen() {
         contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        bounces={false}
       >
         <View style={styles.header}>
           <View style={styles.headerLeft}>
@@ -274,11 +275,11 @@ export default function CreateEventScreen() {
         <Pressable
           style={({ pressed }) => [
             styles.submitBtn,
-            (!title || !eventType || !dateStr || !timeStr || !latitude || !longitude || !description) && styles.submitBtnDisabled,
+            (!title.trim() || !eventType || !dateStr || !timeStr || !latitude || !longitude || !description.trim() || isSubmitting) && styles.submitBtnDisabled,
             pressed && { opacity: 0.85 },
           ]}
           onPress={handleSubmit}
-          disabled={isSubmitting}
+          disabled={isSubmitting || !title.trim() || !eventType || !dateStr || !timeStr || !latitude || !longitude || !description.trim()}
         >
           {isSubmitting ? (
             <ActivityIndicator color={Colors.bg} />

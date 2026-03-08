@@ -35,7 +35,7 @@ function RootLayoutNav() {
         name="report"
         options={{
           presentation: "formSheet",
-          sheetAllowedDetents: [0.85],
+          sheetAllowedDetents: [0.85, 1.0],
           sheetGrabberVisible: true,
           headerShown: false,
           contentStyle: { backgroundColor: Colors.bgCard },
@@ -85,7 +85,7 @@ function RootLayoutNav() {
         name="create-event"
         options={{
           presentation: "formSheet",
-          sheetAllowedDetents: [0.85],
+          sheetAllowedDetents: [0.85, 1.0],
           sheetGrabberVisible: true,
           headerShown: false,
           contentStyle: { backgroundColor: Colors.bgCard },
