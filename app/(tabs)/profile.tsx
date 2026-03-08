@@ -224,6 +224,41 @@ export default function ProfileScreen() {
           </View>
         )}
 
+        {/* Subscription */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Subscription</Text>
+          <View style={styles.subRow}>
+            <View style={styles.subInfo}>
+              <View style={[styles.subBadge, user.subscriptionTier === "pro" ? { backgroundColor: Colors.accent + "22", borderColor: Colors.accent } : {}]}>
+                <Ionicons
+                  name={user.subscriptionTier === "pro" ? "rocket" : "person"}
+                  size={16}
+                  color={user.subscriptionTier === "pro" ? Colors.accent : Colors.textMuted}
+                />
+                <Text style={[styles.subBadgeText, user.subscriptionTier === "pro" ? { color: Colors.accent } : {}]}>
+                  {user.subscriptionTier === "pro" ? "Pro" : "Free"}
+                </Text>
+              </View>
+              <Text style={styles.subDesc}>
+                {user.subscriptionTier === "pro"
+                  ? "Live GPS navigation, hazard alerts, ad-free"
+                  : "Upgrade for live navigation & hazard alerts"}
+              </Text>
+            </View>
+            {user.subscriptionTier !== "pro" && (
+              <Pressable
+                style={({ pressed }) => [styles.upgradeBtn, pressed && { opacity: 0.85 }]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  router.push("/paywall");
+                }}
+              >
+                <Text style={styles.upgradeBtnText}>Upgrade</Text>
+              </Pressable>
+            )}
+          </View>
+        </View>
+
         {/* Community tips */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>How to Earn XP</Text>
@@ -366,6 +401,30 @@ const styles = StyleSheet.create({
   nextBadgeName: { fontSize: 16, fontFamily: "Inter_700Bold", color: Colors.text },
   nextBadgeDesc: { fontSize: 13, fontFamily: "Inter_400Regular", color: Colors.textSecondary, marginTop: 2 },
   nextBadgeXP: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.accent, marginTop: 4 },
+
+  subRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  subInfo: { flex: 1, gap: 6 },
+  subBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: Colors.bgElevated,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  subBadgeText: { fontSize: 13, fontFamily: "Inter_700Bold", color: Colors.textSecondary },
+  subDesc: { fontSize: 12, fontFamily: "Inter_400Regular", color: Colors.textMuted },
+  upgradeBtn: {
+    backgroundColor: Colors.accent,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  upgradeBtnText: { fontSize: 13, fontFamily: "Inter_700Bold", color: Colors.bg },
 
   tipList: { gap: 10 },
   tipRow: { flexDirection: "row", alignItems: "center", gap: 12 },

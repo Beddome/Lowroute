@@ -22,6 +22,17 @@ function requireAuth(req: Request, res: Response, next: Function) {
   next();
 }
 
+async function requireAdmin(req: Request, res: Response, next: Function) {
+  if (!req.session?.userId) {
+    return res.status(401).json({ message: "Not authenticated" });
+  }
+  const user = await storage.getUserById(req.session.userId);
+  if (!user || user.role !== "admin") {
+    return res.status(403).json({ message: "Admin access required" });
+  }
+  next();
+}
+
 /**
  * Route Safety Scoring Logic:
  *
@@ -92,6 +103,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   await storage.seedDemoHazards();
+  const adminHash = await bcrypt.hash("lowroute-admin", 10);
+  await storage.seedAdminUser(adminHash);
 
   // Auth routes
   app.post("/api/auth/register", async (req: Request, res: Response) => {
@@ -111,7 +124,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const passwordHash = await bcrypt.hash(password, 10);
       const user = await storage.createUser({ username, email, passwordHash });
       req.session.userId = user.id;
-      res.json({ id: user.id, username: user.username, email: user.email, reputation: user.reputation });
+      res.json({ id: user.id, username: user.username, email: user.email, reputation: user.reputation, role: user.role, subscriptionTier: user.subscriptionTier });
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Registration failed" });
@@ -130,7 +143,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!valid) return res.status(401).json({ message: "Invalid credentials" });
 
       req.session.userId = user.id;
-      res.json({ id: user.id, username: user.username, email: user.email, reputation: user.reputation });
+      res.json({ id: user.id, username: user.username, email: user.email, reputation: user.reputation, role: user.role, subscriptionTier: user.subscriptionTier });
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Login failed" });
@@ -145,7 +158,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.session?.userId) return res.json(null);
     const user = await storage.getUserById(req.session.userId);
     if (!user) return res.json(null);
-    res.json({ id: user.id, username: user.username, email: user.email, reputation: user.reputation });
+    res.json({ id: user.id, username: user.username, email: user.email, reputation: user.reputation, role: user.role, subscriptionTier: user.subscriptionTier });
   });
 
   // Hazard routes
@@ -193,6 +206,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/hazards/nearby", async (req: Request, res: Response) => {
+    try {
+      const { lat, lng, radius } = req.query;
+      if (!lat || !lng) {
+        return res.status(400).json({ message: "lat and lng are required" });
+      }
+      const radiusKm = radius ? parseFloat(radius as string) : 0.5;
+      const hazards = await storage.getHazardsNearby(
+        parseFloat(lat as string),
+        parseFloat(lng as string),
+        radiusKm
+      );
+      res.json(hazards);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch nearby hazards" });
+    }
+  });
+
   app.get("/api/hazards/:id", async (req: Request, res: Response) => {
     const hazard = await storage.getHazardById(req.params.id);
     if (!hazard) return res.status(404).json({ message: "Not found" });
@@ -213,6 +245,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Vote failed" });
+    }
+  });
+
+  // Admin routes
+  app.get("/api/admin/users", requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const users = await storage.getAllUsers();
+      res.json(users);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  app.patch("/api/admin/users/:id/role", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { role } = req.body;
+      if (!role || !["user", "admin"].includes(role)) {
+        return res.status(400).json({ message: "Invalid role" });
+      }
+      const user = await storage.updateUserRole(req.params.id, role);
+      if (!user) return res.status(404).json({ message: "User not found" });
+      res.json(user);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to update role" });
+    }
+  });
+
+  app.delete("/api/admin/hazards/:id", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const hazard = await storage.deleteHazard(req.params.id);
+      if (!hazard) return res.status(404).json({ message: "Hazard not found" });
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to delete hazard" });
+    }
+  });
+
+  app.get("/api/admin/stats", requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const stats = await storage.getStats();
+      res.json(stats);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch stats" });
     }
   });
 
@@ -309,6 +388,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Route calculation failed" });
+    }
+  });
+
+  app.post("/api/subscription", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { tier } = req.body;
+      if (!["free", "pro"].includes(tier)) {
+        return res.status(400).json({ message: "Invalid subscription tier" });
+      }
+      await storage.updateSubscriptionTier(req.session.userId!, tier);
+      const user = await storage.getUserById(req.session.userId!);
+      res.json({ id: user!.id, username: user!.username, email: user!.email, reputation: user!.reputation, role: user!.role, subscriptionTier: user!.subscriptionTier });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to update subscription" });
     }
   });
 

@@ -9,6 +9,7 @@ import {
   Platform,
   Animated,
   ScrollView,
+  Alert,
 } from "react-native";
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from "react-native-maps";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -22,6 +23,8 @@ import { SEVERITY_TIERS, HAZARD_TYPES } from "@/shared/types";
 import type { Hazard } from "@/shared/types";
 import { getApiUrl } from "@/lib/query-client";
 import { fetch } from "expo/fetch";
+import { useLocation } from "@/contexts/LocationContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 function HazardMarker({ hazard, onPress }: { hazard: Hazard; onPress: () => void }) {
   const tier = SEVERITY_TIERS[hazard.severity - 1];
@@ -79,11 +82,33 @@ async function geocode(query: string): Promise<GeoResult[]> {
   return res.json();
 }
 
+function getDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function formatDistance(meters: number): string {
+  if (meters < 1000) return `${Math.round(meters)}m`;
+  return `${(meters / 1000).toFixed(1)}km`;
+}
+
 const ROUTE_COLORS = ["#60A5FA", "#34D399", "#FBBF24"];
+const PROXIMITY_ALERT_METERS = 200;
 
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
+  const { user } = useAuth();
+  const { currentPosition, heading, speed, isTracking, startTracking, stopTracking } = useLocation();
 
   const [locationGranted, setLocationGranted] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -109,6 +134,11 @@ export default function MapScreen() {
   const panelExpanded = useRef(new Animated.Value(0)).current;
   const [panelOpen, setPanelOpen] = useState(false);
 
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [nearbyHazard, setNearbyHazard] = useState<Hazard | null>(null);
+  const alertedHazardsRef = useRef<Set<string>>(new Set());
+  const navStartTimeRef = useRef<number>(0);
+
   const { data: hazards = [] } = useQuery<Hazard[]>({
     queryKey: ["/api/hazards"],
   });
@@ -125,6 +155,78 @@ export default function MapScreen() {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (currentPosition) {
+      setUserLocation({ latitude: currentPosition.latitude, longitude: currentPosition.longitude });
+    }
+  }, [currentPosition]);
+
+  useEffect(() => {
+    if (!isNavigating || !currentPosition) return;
+
+    mapRef.current?.animateToRegion(
+      {
+        latitude: currentPosition.latitude,
+        longitude: currentPosition.longitude,
+        latitudeDelta: 0.008,
+        longitudeDelta: 0.008,
+      },
+      300
+    );
+
+    const route = routes[selectedRouteIdx];
+    if (!route) return;
+
+    for (const hazard of route.hazards) {
+      const dist = getDistance(
+        currentPosition.latitude,
+        currentPosition.longitude,
+        hazard.lat,
+        hazard.lng
+      );
+      if (dist <= PROXIMITY_ALERT_METERS && !alertedHazardsRef.current.has(hazard.id)) {
+        alertedHazardsRef.current.add(hazard.id);
+        setNearbyHazard(hazard);
+        Haptics.notificationAsync(
+          hazard.severity >= 3
+            ? Haptics.NotificationFeedbackType.Error
+            : Haptics.NotificationFeedbackType.Warning
+        );
+        setTimeout(() => setNearbyHazard(null), 5000);
+      }
+    }
+  }, [currentPosition, isNavigating]);
+
+  const startNavigation = useCallback(async () => {
+    if (!user) {
+      router.push("/(auth)/login");
+      return;
+    }
+
+    if (user.subscriptionTier !== "pro" && user.role !== "admin") {
+      router.push("/paywall");
+      return;
+    }
+
+    try {
+      await startTracking();
+      setIsNavigating(true);
+      alertedHazardsRef.current.clear();
+      navStartTimeRef.current = Date.now();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (err) {
+      Alert.alert("Location Error", "Unable to start navigation. Please ensure location permissions are granted.");
+    }
+  }, [user, startTracking]);
+
+  const endNavigation = useCallback(() => {
+    setIsNavigating(false);
+    setNearbyHazard(null);
+    alertedHazardsRef.current.clear();
+    stopTracking();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }, [stopTracking]);
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -184,12 +286,15 @@ export default function MapScreen() {
       const centerLng = (originCoords.lng + destCoords.lng) / 2;
       const latDelta = Math.abs(originCoords.lat - destCoords.lat) * 2.5;
       const lngDelta = Math.abs(originCoords.lng - destCoords.lng) * 2.5;
-      mapRef.current?.animateToRegion({
-        latitude: centerLat,
-        longitude: centerLng,
-        latitudeDelta: Math.max(latDelta, 0.04),
-        longitudeDelta: Math.max(lngDelta, 0.04),
-      }, 800);
+      mapRef.current?.animateToRegion(
+        {
+          latitude: centerLat,
+          longitude: centerLng,
+          latitudeDelta: Math.max(latDelta, 0.04),
+          longitudeDelta: Math.max(lngDelta, 0.04),
+        },
+        800
+      );
     } catch (e) {
       console.error(e);
     } finally {
@@ -204,6 +309,7 @@ export default function MapScreen() {
   }, [originCoords, destCoords]);
 
   const clearRoute = () => {
+    if (isNavigating) endNavigation();
     setOriginText("");
     setDestText("");
     setOriginCoords(null);
@@ -216,7 +322,14 @@ export default function MapScreen() {
   const selectedRoute = routes[selectedRouteIdx] ?? null;
   const topPadding = Platform.OS === "web" ? 67 : 0;
 
-  const bottomPanelHeight = panelOpen ? 260 : 180;
+  const distToDestination =
+    destCoords && userLocation
+      ? getDistance(userLocation.latitude, userLocation.longitude, destCoords.lat, destCoords.lng)
+      : null;
+
+  const navElapsedMin = isNavigating ? Math.floor((Date.now() - navStartTimeRef.current) / 60000) : 0;
+
+  const bottomPanelHeight = isNavigating ? 0 : panelOpen ? 260 : 180;
   const fabBottom = insets.bottom + bottomPanelHeight + 16;
 
   return (
@@ -225,15 +338,18 @@ export default function MapScreen() {
         ref={mapRef}
         style={StyleSheet.absoluteFill}
         provider={PROVIDER_DEFAULT}
-        region={mapRegion}
-        onRegionChangeComplete={setMapRegion}
+        region={isNavigating ? undefined : mapRegion}
+        onRegionChangeComplete={isNavigating ? undefined : setMapRegion}
         showsUserLocation={locationGranted}
         showsMyLocationButton={false}
         showsCompass={false}
         userInterfaceStyle="dark"
+        followsUserLocation={isNavigating}
         onPress={() => {
-          setActiveSearchField(null);
-          setGeocodeResults([]);
+          if (!isNavigating) {
+            setActiveSearchField(null);
+            setGeocodeResults([]);
+          }
         }}
       >
         {hazards
@@ -249,7 +365,7 @@ export default function MapScreen() {
             />
           ))}
 
-        {originCoords && (
+        {originCoords && !isNavigating && (
           <Marker coordinate={{ latitude: originCoords.lat, longitude: originCoords.lng }}>
             <View style={styles.originPin}>
               <Ionicons name="radio-button-on" size={22} color={Colors.accent} />
@@ -268,98 +384,166 @@ export default function MapScreen() {
           <Polyline
             coordinates={selectedRoute.waypoints.map((w) => ({ latitude: w.lat, longitude: w.lng }))}
             strokeColor={ROUTE_COLORS[selectedRouteIdx] ?? Colors.accent}
-            strokeWidth={4}
-            lineDashPattern={[1]}
+            strokeWidth={isNavigating ? 6 : 4}
+            lineDashPattern={isNavigating ? undefined : [1]}
           />
         )}
       </MapView>
 
-      {/* Top search panel */}
-      <View
-        style={[
-          styles.topPanel,
-          { top: insets.top + topPadding + 12, marginHorizontal: 16 },
-        ]}
-      >
-        <View style={styles.searchCard}>
-          <View style={styles.searchRow}>
-            <View style={styles.searchDots}>
-              <View style={[styles.dot, { backgroundColor: Colors.accent }]} />
-              <View style={styles.dotLine} />
-              <View style={[styles.dot, { backgroundColor: Colors.tier4, borderRadius: 3 }]} />
-            </View>
-            <View style={styles.searchInputsCol}>
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Starting point..."
-                placeholderTextColor={Colors.textMuted}
-                value={originText}
-                onChangeText={(t) => handleSearchInput(t, "origin")}
-                onFocus={() => setActiveSearchField("origin")}
-                returnKeyType="search"
-              />
-              <View style={styles.searchDivider} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Destination..."
-                placeholderTextColor={Colors.textMuted}
-                value={destText}
-                onChangeText={(t) => handleSearchInput(t, "dest")}
-                onFocus={() => setActiveSearchField("dest")}
-                returnKeyType="search"
-              />
-            </View>
-            <View style={styles.searchActions}>
-              {routes.length > 0 ? (
-                <Pressable onPress={clearRoute} style={styles.actionBtn} hitSlop={8}>
-                  <Ionicons name="close" size={20} color={Colors.textSecondary} />
-                </Pressable>
-              ) : isRoutingLoading ? (
-                <ActivityIndicator size="small" color={Colors.accent} />
-              ) : (
-                <Pressable
-                  onPress={() => {
-                    if (userLocation) {
-                      setOriginText("My Location");
-                      setOriginCoords({ lat: userLocation.latitude, lng: userLocation.longitude });
-                    }
-                  }}
-                  style={styles.actionBtn}
-                  hitSlop={8}
-                >
-                  <Ionicons name="locate" size={20} color={Colors.accent} />
-                </Pressable>
-              )}
-            </View>
+      {/* Hazard proximity alert banner */}
+      {nearbyHazard && (
+        <View
+          style={[
+            styles.alertBanner,
+            {
+              top: insets.top + topPadding + 12,
+              backgroundColor: SEVERITY_TIERS[nearbyHazard.severity - 1]?.bg ?? Colors.bgCard,
+              borderColor: SEVERITY_TIERS[nearbyHazard.severity - 1]?.color ?? Colors.accent,
+            },
+          ]}
+        >
+          <Ionicons
+            name={nearbyHazard.severity >= 3 ? "warning" : "alert-circle"}
+            size={24}
+            color={SEVERITY_TIERS[nearbyHazard.severity - 1]?.color ?? Colors.accent}
+          />
+          <View style={styles.alertTextContainer}>
+            <Text style={[styles.alertTitle, { color: SEVERITY_TIERS[nearbyHazard.severity - 1]?.color }]}>
+              {SEVERITY_TIERS[nearbyHazard.severity - 1]?.label} Hazard Ahead
+            </Text>
+            <Text style={styles.alertDesc} numberOfLines={1}>
+              {nearbyHazard.title}
+            </Text>
           </View>
+          <Pressable onPress={() => setNearbyHazard(null)} hitSlop={8}>
+            <Ionicons name="close" size={20} color={Colors.textSecondary} />
+          </Pressable>
         </View>
+      )}
 
-        {/* Geocode results dropdown */}
-        {geocodeResults.length > 0 && (
-          <View style={styles.geocodeDropdown}>
-            {isSearching && (
-              <View style={styles.geocodeSearching}>
-                <ActivityIndicator size="small" color={Colors.accent} />
-              </View>
-            )}
-            {geocodeResults.map((r, i) => (
-              <Pressable
-                key={i}
-                style={({ pressed }) => [styles.geocodeItem, pressed && { opacity: 0.7 }]}
-                onPress={() => selectGeoResult(r)}
-              >
-                <Ionicons name="location-outline" size={16} color={Colors.textMuted} />
-                <Text style={styles.geocodeText} numberOfLines={2}>
-                  {r.display_name}
-                </Text>
-              </Pressable>
-            ))}
+      {/* Navigation HUD */}
+      {isNavigating && (
+        <View style={[styles.navHud, { top: insets.top + topPadding + (nearbyHazard ? 80 : 12) }]}>
+          <View style={styles.navHudContent}>
+            <View style={styles.navStat}>
+              <Ionicons name="navigate" size={18} color={Colors.accent} />
+              <Text style={styles.navStatValue}>
+                {distToDestination != null ? formatDistance(distToDestination) : "--"}
+              </Text>
+              <Text style={styles.navStatLabel}>to dest</Text>
+            </View>
+            <View style={styles.navDivider} />
+            <View style={styles.navStat}>
+              <Ionicons name="speedometer" size={18} color={Colors.accent} />
+              <Text style={styles.navStatValue}>
+                {speed != null && speed >= 0 ? `${Math.round(speed * 3.6)}` : "0"}
+              </Text>
+              <Text style={styles.navStatLabel}>km/h</Text>
+            </View>
+            <View style={styles.navDivider} />
+            <View style={styles.navStat}>
+              <Ionicons name="time" size={18} color={Colors.accent} />
+              <Text style={styles.navStatValue}>{navElapsedMin}</Text>
+              <Text style={styles.navStatLabel}>min</Text>
+            </View>
           </View>
-        )}
-      </View>
+          <Pressable
+            style={styles.endNavBtn}
+            onPress={endNavigation}
+          >
+            <Ionicons name="stop-circle" size={20} color={Colors.white} />
+            <Text style={styles.endNavText}>End</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* Top search panel - hidden during navigation */}
+      {!isNavigating && (
+        <View
+          style={[
+            styles.topPanel,
+            { top: insets.top + topPadding + 12, marginHorizontal: 16 },
+          ]}
+        >
+          <View style={styles.searchCard}>
+            <View style={styles.searchRow}>
+              <View style={styles.searchDots}>
+                <View style={[styles.dot, { backgroundColor: Colors.accent }]} />
+                <View style={styles.dotLine} />
+                <View style={[styles.dot, { backgroundColor: Colors.tier4, borderRadius: 3 }]} />
+              </View>
+              <View style={styles.searchInputsCol}>
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Starting point..."
+                  placeholderTextColor={Colors.textMuted}
+                  value={originText}
+                  onChangeText={(t) => handleSearchInput(t, "origin")}
+                  onFocus={() => setActiveSearchField("origin")}
+                  returnKeyType="search"
+                />
+                <View style={styles.searchDivider} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Destination..."
+                  placeholderTextColor={Colors.textMuted}
+                  value={destText}
+                  onChangeText={(t) => handleSearchInput(t, "dest")}
+                  onFocus={() => setActiveSearchField("dest")}
+                  returnKeyType="search"
+                />
+              </View>
+              <View style={styles.searchActions}>
+                {routes.length > 0 ? (
+                  <Pressable onPress={clearRoute} style={styles.actionBtn} hitSlop={8}>
+                    <Ionicons name="close" size={20} color={Colors.textSecondary} />
+                  </Pressable>
+                ) : isRoutingLoading ? (
+                  <ActivityIndicator size="small" color={Colors.accent} />
+                ) : (
+                  <Pressable
+                    onPress={() => {
+                      if (userLocation) {
+                        setOriginText("My Location");
+                        setOriginCoords({ lat: userLocation.latitude, lng: userLocation.longitude });
+                      }
+                    }}
+                    style={styles.actionBtn}
+                    hitSlop={8}
+                  >
+                    <Ionicons name="locate" size={20} color={Colors.accent} />
+                  </Pressable>
+                )}
+              </View>
+            </View>
+          </View>
+
+          {geocodeResults.length > 0 && (
+            <View style={styles.geocodeDropdown}>
+              {isSearching && (
+                <View style={styles.geocodeSearching}>
+                  <ActivityIndicator size="small" color={Colors.accent} />
+                </View>
+              )}
+              {geocodeResults.map((r, i) => (
+                <Pressable
+                  key={i}
+                  style={({ pressed }) => [styles.geocodeItem, pressed && { opacity: 0.7 }]}
+                  onPress={() => selectGeoResult(r)}
+                >
+                  <Ionicons name="location-outline" size={16} color={Colors.textMuted} />
+                  <Text style={styles.geocodeText} numberOfLines={2}>
+                    {r.display_name}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </View>
+      )}
 
       {/* Location button */}
-      {locationGranted && (
+      {locationGranted && !isNavigating && (
         <Pressable
           style={[styles.locBtn, { bottom: fabBottom + 52, right: 16 }]}
           onPress={() => {
@@ -375,35 +559,40 @@ export default function MapScreen() {
         </Pressable>
       )}
 
-      {/* Report FAB */}
-      <Pressable
-        style={[styles.fab, { bottom: fabBottom }]}
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          const lat = userLocation?.latitude ?? mapRegion.latitude;
-          const lng = userLocation?.longitude ?? mapRegion.longitude;
-          router.push({ pathname: "/report", params: { lat: String(lat), lng: String(lng) } });
-        }}
-      >
-        <Ionicons name="warning" size={22} color={Colors.bg} />
-        <Text style={styles.fabLabel}>Report</Text>
-      </Pressable>
+      {/* Report FAB - hidden during navigation */}
+      {!isNavigating && (
+        <Pressable
+          style={[styles.fab, { bottom: fabBottom }]}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            const lat = userLocation?.latitude ?? mapRegion.latitude;
+            const lng = userLocation?.longitude ?? mapRegion.longitude;
+            router.push({ pathname: "/report", params: { lat: String(lat), lng: String(lng) } });
+          }}
+        >
+          <Ionicons name="warning" size={22} color={Colors.bg} />
+          <Text style={styles.fabLabel}>Report</Text>
+        </Pressable>
+      )}
 
       {/* Bottom panel */}
-      <View style={[styles.bottomPanel, { paddingBottom: insets.bottom + 80 }]}>
-        {routes.length > 0 ? (
-          <RoutePanel
-            routes={routes}
-            selectedIdx={selectedRouteIdx}
-            onSelect={(i) => {
-              setSelectedRouteIdx(i);
-              Haptics.selectionAsync();
-            }}
-          />
-        ) : (
-          <TierLegend hazards={hazards} />
-        )}
-      </View>
+      {!isNavigating && (
+        <View style={[styles.bottomPanel, { paddingBottom: insets.bottom + 80 }]}>
+          {routes.length > 0 ? (
+            <RoutePanel
+              routes={routes}
+              selectedIdx={selectedRouteIdx}
+              onSelect={(i) => {
+                setSelectedRouteIdx(i);
+                Haptics.selectionAsync();
+              }}
+              onStartNav={startNavigation}
+            />
+          ) : (
+            <TierLegend hazards={hazards} />
+          )}
+        </View>
+      )}
     </View>
   );
 }
@@ -412,14 +601,25 @@ function RoutePanel({
   routes,
   selectedIdx,
   onSelect,
+  onStartNav,
 }: {
   routes: RouteOption[];
   selectedIdx: number;
   onSelect: (i: number) => void;
+  onStartNav: () => void;
 }) {
   return (
     <View style={styles.routePanel}>
-      <Text style={styles.routePanelTitle}>Route Options</Text>
+      <View style={styles.routePanelHeader}>
+        <Text style={styles.routePanelTitle}>Route Options</Text>
+        <Pressable
+          style={styles.startNavButton}
+          onPress={onStartNav}
+        >
+          <Ionicons name="navigate" size={16} color={Colors.bg} />
+          <Text style={styles.startNavText}>Navigate</Text>
+        </Pressable>
+      </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }}>
         {routes.map((route, i) => {
           const tier = route.highestSeverity > 0 ? SEVERITY_TIERS[route.highestSeverity - 1] : null;
@@ -535,6 +735,62 @@ const styles = StyleSheet.create({
   originPin: { alignItems: "center", justifyContent: "center" },
   destPin: { alignItems: "center", justifyContent: "center" },
 
+  alertBanner: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 2,
+    gap: 12,
+    zIndex: 200,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    elevation: 20,
+  },
+  alertTextContainer: { flex: 1 },
+  alertTitle: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  alertDesc: { fontSize: 13, fontFamily: "Inter_400Regular", color: Colors.textSecondary, marginTop: 2 },
+
+  navHud: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    zIndex: 150,
+    backgroundColor: Colors.bgCard,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    elevation: 15,
+  },
+  navHudContent: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-around" },
+  navStat: { alignItems: "center", gap: 2 },
+  navStatValue: { fontSize: 20, fontFamily: "Inter_700Bold", color: Colors.text },
+  navStatLabel: { fontSize: 10, fontFamily: "Inter_400Regular", color: Colors.textMuted },
+  navDivider: { width: 1, height: 30, backgroundColor: Colors.border },
+  endNavBtn: {
+    backgroundColor: Colors.tier4,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  endNavText: { fontSize: 13, fontFamily: "Inter_700Bold", color: Colors.white },
+
   topPanel: {
     position: "absolute",
     left: 0,
@@ -646,68 +902,64 @@ const styles = StyleSheet.create({
   },
 
   routePanel: { padding: 16 },
-  routePanelTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.textSecondary, textTransform: "uppercase", letterSpacing: 0.8 },
+  routePanelHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  routePanelTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.textSecondary, textTransform: "uppercase" as const, letterSpacing: 0.8 },
+  startNavButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: Colors.accent,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  startNavText: { fontSize: 13, fontFamily: "Inter_700Bold", color: Colors.bg },
   routeCard: {
     width: 130,
     marginRight: 10,
-    backgroundColor: Colors.bgElevated,
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 2,
+    borderRadius: 12,
+    borderWidth: 1,
     borderColor: Colors.border,
-    gap: 4,
+    backgroundColor: Colors.bgCard,
+    padding: 12,
+    gap: 6,
   },
-  routeColorDot: { width: 8, height: 8, borderRadius: 4, marginBottom: 2 },
-  routeLabel: { fontSize: 14, fontFamily: "Inter_700Bold", color: Colors.textSecondary },
-  routeTime: { fontSize: 20, fontFamily: "Inter_700Bold", color: Colors.text },
-  routeStats: { gap: 2, marginTop: 2 },
+  routeColorDot: { width: 10, height: 10, borderRadius: 5 },
+  routeLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: Colors.textSecondary },
+  routeTime: { fontSize: 18, fontFamily: "Inter_700Bold", color: Colors.text },
+  routeStats: { gap: 4, marginTop: 4 },
   routeStat: { flexDirection: "row", alignItems: "center", gap: 4 },
   routeStatText: { fontSize: 11, fontFamily: "Inter_400Regular", color: Colors.textMuted },
   routeTierBadge: {
-    marginTop: 6,
     alignSelf: "flex-start",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
     borderWidth: 1,
+    marginTop: 4,
   },
-  routeTierText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
-  routeSummary: {
-    flexDirection: "row",
-    gap: 16,
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
+  routeTierText: { fontSize: 11, fontFamily: "Inter_700Bold" },
+
+  routeSummary: { flexDirection: "row", gap: 16, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
   routeSummaryItem: { flexDirection: "row", alignItems: "center", gap: 6 },
   routeSummaryText: { fontSize: 12, fontFamily: "Inter_400Regular", color: Colors.textMuted },
 
   legendPanel: { padding: 16 },
-  legendHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
-  legendTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.textSecondary, textTransform: "uppercase", letterSpacing: 0.8 },
+  legendHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
+  legendTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.textSecondary, textTransform: "uppercase" as const, letterSpacing: 0.8 },
   legendCount: { fontSize: 12, fontFamily: "Inter_400Regular", color: Colors.textMuted },
-  legendGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  legendItem: {
-    flex: 1,
-    minWidth: "44%",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: Colors.bgElevated,
-    borderRadius: 10,
-    padding: 8,
-  },
+  legendGrid: { gap: 10 },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 12 },
   legendDot: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
   },
-  legendTierNum: { fontSize: 12, fontFamily: "Inter_700Bold", color: "#000" },
+  legendTierNum: { fontSize: 13, fontFamily: "Inter_700Bold", color: "#000" },
   legendItemText: { flex: 1 },
-  legendLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  legendDesc: { fontSize: 10, fontFamily: "Inter_400Regular", color: Colors.textMuted },
-  legendCount2: { fontSize: 14, fontFamily: "Inter_700Bold", color: Colors.textMuted },
+  legendLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  legendDesc: { fontSize: 12, fontFamily: "Inter_400Regular", color: Colors.textMuted },
+  legendCount2: { fontSize: 16, fontFamily: "Inter_700Bold", color: Colors.textMuted },
 });

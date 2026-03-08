@@ -28,6 +28,8 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   reputation: integer("reputation").notNull().default(0),
+  role: text("role").notNull().default("user"),
+  subscriptionTier: text("subscription_tier").notNull().default("free"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

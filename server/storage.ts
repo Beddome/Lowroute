@@ -131,6 +131,94 @@ export async function getAllActiveHazards() {
   return db.select().from(schema.hazards).where(eq(schema.hazards.status, "active"));
 }
 
+export async function getAllUsers() {
+  return db.select({
+    id: schema.users.id,
+    username: schema.users.username,
+    email: schema.users.email,
+    reputation: schema.users.reputation,
+    role: schema.users.role,
+    subscriptionTier: schema.users.subscriptionTier,
+    createdAt: schema.users.createdAt,
+  }).from(schema.users);
+}
+
+export async function updateUserRole(userId: string, role: string) {
+  const [user] = await db
+    .update(schema.users)
+    .set({ role })
+    .where(eq(schema.users.id, userId))
+    .returning({
+      id: schema.users.id,
+      username: schema.users.username,
+      email: schema.users.email,
+      reputation: schema.users.reputation,
+      role: schema.users.role,
+      subscriptionTier: schema.users.subscriptionTier,
+      createdAt: schema.users.createdAt,
+    });
+  return user || null;
+}
+
+export async function deleteHazard(hazardId: string) {
+  await db.delete(schema.hazardVotes).where(eq(schema.hazardVotes.hazardId, hazardId));
+  const [deleted] = await db.delete(schema.hazards).where(eq(schema.hazards.id, hazardId)).returning();
+  return deleted || null;
+}
+
+export async function getStats() {
+  const [userCount] = await db.select({ count: sql<number>`count(*)::int` }).from(schema.users);
+  const [hazardCount] = await db.select({ count: sql<number>`count(*)::int` }).from(schema.hazards);
+  const severityCounts = await db
+    .select({
+      severity: schema.hazards.severity,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(schema.hazards)
+    .where(eq(schema.hazards.status, "active"))
+    .groupBy(schema.hazards.severity);
+
+  return {
+    totalUsers: userCount?.count ?? 0,
+    totalHazards: hazardCount?.count ?? 0,
+    hazardsBySeverity: severityCounts,
+  };
+}
+
+export async function getHazardsNearby(lat: number, lng: number, radiusKm: number) {
+  const degBuffer = radiusKm / 111;
+  return db
+    .select()
+    .from(schema.hazards)
+    .where(
+      and(
+        between(schema.hazards.lat, lat - degBuffer, lat + degBuffer),
+        between(schema.hazards.lng, lng - degBuffer, lng + degBuffer),
+        eq(schema.hazards.status, "active")
+      )
+    );
+}
+
+export async function updateSubscriptionTier(userId: string, tier: string) {
+  await db
+    .update(schema.users)
+    .set({ subscriptionTier: tier })
+    .where(eq(schema.users.id, userId));
+}
+
+export async function seedAdminUser(passwordHash: string) {
+  const existing = await getUserByUsername("admin");
+  if (existing) return existing;
+  const [admin] = await db.insert(schema.users).values({
+    username: "admin",
+    email: "admin@lowroute.app",
+    passwordHash,
+    reputation: 1000,
+    role: "admin",
+  }).returning();
+  return admin;
+}
+
 export async function seedDemoHazards() {
   const [count] = await db.select({ count: sql<number>`count(*)::int` }).from(schema.hazards);
   if ((count?.count ?? 0) > 0) return;

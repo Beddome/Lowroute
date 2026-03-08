@@ -68,4 +68,6 @@ export interface AuthUser {
   username: string;
   email: string;
   reputation: number;
+  role: "user" | "admin";
+  subscriptionTier: "free" | "pro";
 }

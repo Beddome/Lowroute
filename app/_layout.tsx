@@ -14,6 +14,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { LocationProvider } from "@/contexts/LocationContext";
 import { Colors } from "@/constants/colors";
 
 SplashScreen.preventAutoHideAsync();
@@ -49,6 +50,16 @@ function RootLayoutNav() {
           contentStyle: { backgroundColor: Colors.bgCard },
         }}
       />
+      <Stack.Screen
+        name="paywall"
+        options={{
+          presentation: "formSheet",
+          sheetAllowedDetents: [0.9],
+          sheetGrabberVisible: true,
+          headerShown: false,
+          contentStyle: { backgroundColor: Colors.bg },
+        }}
+      />
     </Stack>
   );
 }
@@ -75,7 +86,9 @@ export default function RootLayout() {
         <GestureHandlerRootView style={{ flex: 1 }}>
           <KeyboardProvider>
             <AuthProvider>
-              <RootLayoutNav />
+              <LocationProvider>
+                <RootLayoutNav />
+              </LocationProvider>
             </AuthProvider>
           </KeyboardProvider>
         </GestureHandlerRootView>
