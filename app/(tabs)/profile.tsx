@@ -170,7 +170,7 @@ export default function ProfileScreen() {
   if (!user) {
     return (
       <View style={[styles.container, { paddingTop: topPad }]}>
-        <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 100 }} showsVerticalScrollIndicator={false} bounces={true} alwaysBounceVertical={true}>
           <View style={styles.guestContainer}>
             <View style={styles.guestIconContainer}>
               <Ionicons name="car-sport" size={60} color={Colors.accent} />
