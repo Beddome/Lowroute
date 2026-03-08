@@ -55,6 +55,7 @@ export const users = pgTable("users", {
   role: text("role").notNull().default("user"),
   subscriptionTier: text("subscription_tier").notNull().default("free"),
   subscriptionExpiresAt: timestamp("subscription_expires_at"),
+  shareLocation: boolean("share_location").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -191,6 +192,7 @@ export const userLocations = pgTable("user_locations", {
   userId: varchar("user_id").primaryKey().references(() => users.id),
   lat: doublePrecision("lat").notNull(),
   lng: doublePrecision("lng").notNull(),
+  activeCarId: varchar("active_car_id").references(() => carProfiles.id),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 

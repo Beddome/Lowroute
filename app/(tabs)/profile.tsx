@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -159,6 +159,76 @@ export default function ProfileScreen() {
     }
   };
 
+  const [shareLocation, setShareLocation] = useState<boolean>(user?.shareLocation ?? true);
+
+  useEffect(() => {
+    if (user) setShareLocation(user.shareLocation ?? true);
+  }, [user?.shareLocation]);
+
+  const locationSharingMutation = useMutation({
+    mutationFn: async (value: boolean) => {
+      await apiRequest("PATCH", "/api/settings/location-sharing", { shareLocation: value });
+    },
+    onMutate: async (newValue: boolean) => {
+      const previousValue = shareLocation;
+      return { previousValue };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      Haptics.selectionAsync();
+    },
+    onError: (_err, _newValue, context) => {
+      if (context?.previousValue !== undefined) {
+        setShareLocation(context.previousValue);
+      }
+      Alert.alert("Error", "Could not update location sharing setting.");
+    },
+  });
+
+  const { data: cars } = useQuery<CarProfile[]>({
+    queryKey: ["/api/cars"],
+    enabled: !!user,
+  });
+
+  const { data: savedRoutes = [] } = useQuery<SavedRoute[]>({
+    queryKey: ["/api/routes/saved"],
+    enabled: !!user,
+  });
+
+  const deleteRouteMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/routes/saved/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/routes/saved"] });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+  });
+
+  const shareRouteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/routes/saved/${id}/share`);
+      return res.json();
+    },
+    onSuccess: async (data: { shareToken: string; isPublic: boolean }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/routes/saved"] });
+      if (data.isPublic) {
+        const domain = process.env.EXPO_PUBLIC_DOMAIN || "";
+        const shareUrl = `https://${domain}/route/${data.shareToken}`;
+        try {
+          await Share.share({
+            message: `Check out my LowRoute! ${shareUrl}`,
+            url: shareUrl,
+          });
+        } catch {}
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+    },
+    onError: () => {
+      Alert.alert("Error", "Could not share route.");
+    },
+  });
+
   if (isLoading) {
     return (
       <View style={[styles.container, { paddingTop: topPad, alignItems: "center", justifyContent: "center" }]}>
@@ -218,50 +288,6 @@ export default function ProfileScreen() {
       </View>
     );
   }
-
-  const { data: cars } = useQuery<CarProfile[]>({
-    queryKey: ["/api/cars"],
-    enabled: !!user,
-  });
-
-  const { data: savedRoutes = [] } = useQuery<SavedRoute[]>({
-    queryKey: ["/api/routes/saved"],
-    enabled: !!user,
-  });
-
-  const deleteRouteMutation = useMutation({
-    mutationFn: (id: string) => apiRequest("DELETE", `/api/routes/saved/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/routes/saved"] });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    },
-  });
-
-  const shareRouteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await apiRequest("POST", `/api/routes/saved/${id}/share`);
-      return res.json();
-    },
-    onSuccess: async (data: { shareToken: string; isPublic: boolean }) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/routes/saved"] });
-      if (data.isPublic) {
-        const domain = process.env.EXPO_PUBLIC_DOMAIN || "";
-        const shareUrl = `https://${domain}/route/${data.shareToken}`;
-        try {
-          await Share.share({
-            message: `Check out my LowRoute! ${shareUrl}`,
-            url: shareUrl,
-          });
-        } catch {}
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } else {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      }
-    },
-    onError: () => {
-      Alert.alert("Error", "Could not share route.");
-    },
-  });
 
   const earnedBadges = BADGES.filter((b) => user.reputation >= b.minRep);
   const unearned = BADGES.filter((b) => user.reputation < b.minRep);
@@ -517,6 +543,22 @@ export default function ProfileScreen() {
               }}
               trackColor={{ false: Colors.bgElevated, true: Colors.accent + "66" }}
               thumbColor={system === "metric" ? Colors.accent : Colors.textMuted}
+            />
+          </View>
+          <View style={[styles.settingsRow, { marginTop: 16 }]}>
+            <Ionicons name="location-outline" size={18} color={Colors.textSecondary} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.settingsLabel}>Share Live Location</Text>
+              <Text style={styles.settingsDesc}>Show your location to friends on the map</Text>
+            </View>
+            <Switch
+              value={shareLocation}
+              onValueChange={(val) => {
+                setShareLocation(val);
+                locationSharingMutation.mutate(val);
+              }}
+              trackColor={{ false: Colors.bgElevated, true: Colors.accent + "66" }}
+              thumbColor={shareLocation ? Colors.accent : Colors.textMuted}
             />
           </View>
         </View>

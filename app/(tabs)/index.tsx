@@ -10,6 +10,7 @@ import {
   Animated,
   ScrollView,
   Alert,
+  Modal,
 } from "react-native";
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from "react-native-maps";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -117,16 +118,31 @@ function HazardMarker({ hazard, onPress }: { hazard: Hazard; onPress: () => void
   );
 }
 
+const CLEARANCE_MODE_COLORS: Record<string, string> = {
+  normal: "#22C55E",
+  lowered: "#EAB308",
+  very_lowered: "#F97316",
+  show_car: "#EF4444",
+};
+
 function FriendMarker({ location, onPress }: { location: UserLocation; onPress: () => void }) {
   const initial = location.username?.[0]?.toUpperCase() ?? "?";
+  const hasCar = !!location.activeCar;
+  const markerBg = hasCar
+    ? CLEARANCE_MODE_COLORS[location.activeCar!.clearanceMode] ?? FRIEND_COLOR
+    : FRIEND_COLOR;
   return (
     <Marker
       coordinate={{ latitude: location.lat, longitude: location.lng }}
       onPress={onPress}
       tracksViewChanges={false}
     >
-      <View style={[styles.markerContainer, { width: 32, height: 32, borderRadius: 16, backgroundColor: FRIEND_COLOR, borderColor: "rgba(255,255,255,0.6)" }]}>
-        <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: "#fff" }}>{initial}</Text>
+      <View style={[styles.markerContainer, { width: 32, height: 32, borderRadius: 16, backgroundColor: markerBg, borderColor: "rgba(255,255,255,0.6)" }]}>
+        {hasCar ? (
+          <Ionicons name="car-sport" size={16} color="#fff" />
+        ) : (
+          <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: "#fff" }}>{initial}</Text>
+        )}
       </View>
     </Marker>
   );
@@ -273,7 +289,9 @@ export default function MapScreen() {
   const navStartTimeRef = useRef<number>(0);
   const [showEvents, setShowEvents] = useState(true);
   const [activeCarProfile, setActiveCarProfile] = useState<CarProfile | null>(null);
+  const activeCarProfileRef = useRef<CarProfile | null>(null);
   const [selectedFriend, setSelectedFriend] = useState<UserLocation | null>(null);
+  const [carSelectorOpen, setCarSelectorOpen] = useState(false);
 
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const currentStepIdxRef = useRef(0);
@@ -307,6 +325,10 @@ export default function MapScreen() {
   const locationUpdateRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
+    activeCarProfileRef.current = activeCarProfile;
+  }, [activeCarProfile]);
+
+  useEffect(() => {
     if (!user || !userLocation) return;
     const sendLocation = () => {
       const loc = userLocationRef.current;
@@ -314,6 +336,7 @@ export default function MapScreen() {
       apiRequest("POST", "/api/location/update", {
         lat: loc.latitude,
         lng: loc.longitude,
+        activeCarId: activeCarProfileRef.current?.id,
       }).catch(() => {});
     };
     sendLocation();
@@ -913,7 +936,11 @@ export default function MapScreen() {
       {selectedFriend && (
         <View style={[styles.friendTooltip, { bottom: insets.bottom + bottomPanelHeight + 70 }]}>
           <View style={styles.friendTooltipDot} />
-          <Text style={styles.friendTooltipText}>{selectedFriend.username ?? "Friend"}</Text>
+          <Text style={styles.friendTooltipText}>
+            {selectedFriend.activeCar
+              ? `${selectedFriend.username ?? "Friend"} — ${selectedFriend.activeCar.year} ${selectedFriend.activeCar.make} ${selectedFriend.activeCar.model}`
+              : (selectedFriend.username ?? "Friend")}
+          </Text>
         </View>
       )}
 
@@ -1018,6 +1045,18 @@ export default function MapScreen() {
             { top: insets.top + topPadding + 12, marginHorizontal: 16 },
           ]}
         >
+          {carProfiles.length >= 2 && activeCarProfile && (
+            <Pressable
+              style={styles.carSelectorPill}
+              onPress={() => setCarSelectorOpen(true)}
+            >
+              <Ionicons name="car-sport" size={14} color={Colors.accent} />
+              <Text style={styles.carSelectorText} numberOfLines={1}>
+                {activeCarProfile.year} {activeCarProfile.make} {activeCarProfile.model}
+              </Text>
+              <Ionicons name="chevron-down" size={14} color={Colors.textMuted} />
+            </Pressable>
+          )}
           <View style={styles.searchCard}>
             <View style={styles.searchRow}>
               <View style={styles.searchDots}>
@@ -1167,6 +1206,39 @@ export default function MapScreen() {
           <Ionicons name="navigate" size={20} color={Colors.text} />
         </Pressable>
       )}
+
+      <Modal
+        visible={carSelectorOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCarSelectorOpen(false)}
+      >
+        <Pressable style={styles.carModalOverlay} onPress={() => setCarSelectorOpen(false)}>
+          <View style={styles.carModalContent}>
+            <Text style={styles.carModalTitle}>Select Vehicle</Text>
+            {carProfiles.map((car) => {
+              const isActive = activeCarProfile?.id === car.id;
+              return (
+                <Pressable
+                  key={car.id}
+                  style={[styles.carModalItem, isActive && styles.carModalItemActive]}
+                  onPress={() => {
+                    setActiveCarProfile(car);
+                    setCarSelectorOpen(false);
+                    Haptics.selectionAsync();
+                  }}
+                >
+                  <Ionicons name="car-sport" size={18} color={isActive ? Colors.accent : Colors.textSecondary} />
+                  <Text style={[styles.carModalItemText, isActive && { color: Colors.accent }]}>
+                    {car.year} {car.make} {car.model}
+                  </Text>
+                  {isActive && <Ionicons name="checkmark-circle" size={18} color={Colors.accent} />}
+                </Pressable>
+              );
+            })}
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -1755,5 +1827,66 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Inter_700Bold",
     color: "#fff",
+  },
+
+  carSelectorPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: Colors.bgCard,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 6,
+    alignSelf: "flex-start",
+  },
+  carSelectorText: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.text,
+    maxWidth: 180,
+  },
+
+  carModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 32,
+  },
+  carModalContent: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 16,
+    width: "100%",
+    maxWidth: 340,
+  },
+  carModalTitle: {
+    fontSize: 16,
+    fontFamily: "Inter_700Bold",
+    color: Colors.text,
+    marginBottom: 12,
+  },
+  carModalItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginBottom: 4,
+  },
+  carModalItemActive: {
+    backgroundColor: Colors.accent + "18",
+  },
+  carModalItemText: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
+    color: Colors.text,
   },
 });

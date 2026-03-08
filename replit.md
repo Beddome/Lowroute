@@ -36,7 +36,8 @@ A community-powered GPS and hazard-reporting app for low-clearance vehicles (low
 - **Admin panel** with stats dashboard, hazard management, user role management, promo code management, event management
 - **Subscription system** with Free and Pro tiers (Pro gates live navigation + hazard alerts)
 - **Metric/Imperial toggle** — user preference persisted via AsyncStorage; affects distances, speeds, and route panel
-- **Friends system** — send/accept/decline friend requests, search users by username, live Snap Maps-style friend location pins on map (30s polling)
+- **Friends system** — send/accept/decline friend requests, search users by username, live Snap Maps-style friend location pins on map (30s polling); location sharing toggle in profile settings; friend markers show car avatar with clearance-mode-colored background when friend has an active car
+- **Car selector on map** — when user has 2+ cars in their garage, a compact pill above route inputs lets them switch active vehicle for route scoring and friend visibility
 - **Car Parts Marketplace** — browse/create/edit/delete listings with photos, category/condition filters, radius-based search with Haversine formula, price filtering, sorting
 - **Collapsible map legend** — compact pill showing hazard count with expand/collapse animation, events toggle always visible
 - **Security hardening**: rate limiting on auth endpoints, input validation, env-configurable admin credentials

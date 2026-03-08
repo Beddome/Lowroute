@@ -163,6 +163,7 @@ export interface UserLocation {
   lng: number;
   updatedAt: string | Date;
   username?: string;
+  activeCar?: { make: string; model: string; year: number; clearanceMode: string };
 }
 
 export const EVENT_TYPES = [

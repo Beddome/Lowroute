@@ -235,6 +235,7 @@ function safeUserResponse(user: any) {
     role: user.role,
     subscriptionTier: user.subscriptionTier,
     subscriptionExpiresAt: user.subscriptionExpiresAt ?? null,
+    shareLocation: user.shareLocation ?? true,
   };
 }
 
@@ -1399,7 +1400,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/location/update", requireAuth, async (req: Request, res: Response) => {
     try {
-      const { lat, lng } = req.body;
+      const user = await storage.getUserById(req.session.userId!);
+      if (!user || !user.shareLocation) {
+        await storage.deleteUserLocation(req.session.userId!);
+        return res.json({ hidden: true });
+      }
+      const { lat, lng, activeCarId } = req.body;
       if (lat == null || lng == null) {
         return res.status(400).json({ message: "lat and lng are required" });
       }
@@ -1411,7 +1417,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isNaN(parsedLng) || parsedLng < -180 || parsedLng > 180) {
         return res.status(400).json({ message: "Invalid longitude" });
       }
-      const location = await storage.updateUserLocation(req.session.userId!, parsedLat, parsedLng);
+      const location = await storage.updateUserLocation(req.session.userId!, parsedLat, parsedLng, activeCarId || null);
       res.json(location);
     } catch (err) {
       console.error(err);
@@ -1426,6 +1432,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Failed to fetch friend locations" });
+    }
+  });
+
+  app.patch("/api/settings/location-sharing", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { shareLocation } = req.body;
+      if (typeof shareLocation !== "boolean") {
+        return res.status(400).json({ message: "shareLocation must be a boolean" });
+      }
+      const user = await storage.updateUserShareLocation(req.session.userId!, shareLocation);
+      if (!shareLocation) {
+        await storage.deleteUserLocation(req.session.userId!);
+      }
+      res.json(safeUserResponse(user));
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to update location sharing setting" });
     }
   });
 

@@ -764,20 +764,33 @@ export async function removeFriend(id: string, userId: string) {
   return deleted;
 }
 
-export async function updateUserLocation(userId: string, lat: number, lng: number) {
+export async function updateUserLocation(userId: string, lat: number, lng: number, activeCarId: string | null = null) {
   const [existing] = await db.select().from(schema.userLocations)
     .where(eq(schema.userLocations.userId, userId));
   if (existing) {
     const [updated] = await db.update(schema.userLocations)
-      .set({ lat, lng, updatedAt: new Date() })
+      .set({ lat, lng, activeCarId, updatedAt: new Date() })
       .where(eq(schema.userLocations.userId, userId))
       .returning();
     return updated;
   }
   const [created] = await db.insert(schema.userLocations)
-    .values({ userId, lat, lng })
+    .values({ userId, lat, lng, activeCarId })
     .returning();
   return created;
+}
+
+export async function deleteUserLocation(userId: string) {
+  await db.delete(schema.userLocations)
+    .where(eq(schema.userLocations.userId, userId));
+}
+
+export async function updateUserShareLocation(userId: string, shareLocation: boolean) {
+  const [updated] = await db.update(schema.users)
+    .set({ shareLocation })
+    .where(eq(schema.users.id, userId))
+    .returning();
+  return updated;
 }
 
 export async function getFriendsLocations(userId: string) {
@@ -790,11 +803,29 @@ export async function getFriendsLocations(userId: string) {
     lng: schema.userLocations.lng,
     updatedAt: schema.userLocations.updatedAt,
     username: schema.users.username,
+    activeCarId: schema.userLocations.activeCarId,
+    carMake: schema.carProfiles.make,
+    carModel: schema.carProfiles.model,
+    carYear: schema.carProfiles.year,
+    carClearanceMode: schema.carProfiles.clearanceMode,
   })
     .from(schema.userLocations)
     .leftJoin(schema.users, eq(schema.userLocations.userId, schema.users.id))
-    .where(sql`${schema.userLocations.userId} IN ${friendIds}`);
-  return locations;
+    .leftJoin(schema.carProfiles, eq(schema.userLocations.activeCarId, schema.carProfiles.id))
+    .where(sql`${schema.userLocations.userId} IN ${friendIds} AND ${schema.users.shareLocation} = true`);
+  return locations.map(loc => ({
+    userId: loc.userId,
+    lat: loc.lat,
+    lng: loc.lng,
+    updatedAt: loc.updatedAt,
+    username: loc.username,
+    activeCar: loc.activeCarId ? {
+      make: loc.carMake!,
+      model: loc.carModel!,
+      year: loc.carYear!,
+      clearanceMode: loc.carClearanceMode!,
+    } : undefined,
+  }));
 }
 
 export async function getMarketplaceListings(filters: {

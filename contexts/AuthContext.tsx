@@ -10,6 +10,7 @@ interface AuthUser {
   role: "user" | "admin";
   subscriptionTier: "free" | "pro";
   subscriptionExpiresAt: string | null;
+  shareLocation: boolean;
 }
 
 interface AuthContextValue {
