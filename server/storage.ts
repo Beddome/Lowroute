@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { eq, and, sql, between } from "drizzle-orm";
+import { eq, and, sql, between, desc, gte } from "drizzle-orm";
 import * as schema from "../shared/schema";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -64,12 +64,13 @@ export async function createHazard(data: {
   severity: number;
   title: string;
   description: string;
+  photoUrl?: string | null;
 }) {
   const now = new Date();
   const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
   const [hazard] = await db
     .insert(schema.hazards)
-    .values({ ...data, expiresAt })
+    .values({ ...data, photoUrl: data.photoUrl ?? null, expiresAt })
     .returning();
   return hazard;
 }
@@ -169,6 +170,7 @@ export async function deleteHazard(hazardId: string) {
 export async function getStats() {
   const [userCount] = await db.select({ count: sql<number>`count(*)::int` }).from(schema.users);
   const [hazardCount] = await db.select({ count: sql<number>`count(*)::int` }).from(schema.hazards);
+  const [eventCount] = await db.select({ count: sql<number>`count(*)::int` }).from(schema.events);
   const severityCounts = await db
     .select({
       severity: schema.hazards.severity,
@@ -181,6 +183,7 @@ export async function getStats() {
   return {
     totalUsers: userCount?.count ?? 0,
     totalHazards: hazardCount?.count ?? 0,
+    totalEvents: eventCount?.count ?? 0,
     hazardsBySeverity: severityCounts,
   };
 }
@@ -330,4 +333,255 @@ export async function seedDemoHazards() {
       expiresAt,
     });
   }
+}
+
+export async function getCarProfilesByUser(userId: string) {
+  return db.select().from(schema.carProfiles).where(eq(schema.carProfiles.userId, userId));
+}
+
+export async function getDefaultCarProfile(userId: string) {
+  const [profile] = await db.select().from(schema.carProfiles)
+    .where(and(eq(schema.carProfiles.userId, userId), eq(schema.carProfiles.isDefault, true)));
+  return profile || null;
+}
+
+export async function getCarProfileById(id: string) {
+  const [profile] = await db.select().from(schema.carProfiles).where(eq(schema.carProfiles.id, id));
+  return profile || null;
+}
+
+export async function createCarProfile(data: {
+  userId: string;
+  make: string;
+  model: string;
+  year: number;
+  rideHeight?: number | null;
+  suspensionType?: string;
+  hasFrontLip?: boolean;
+  wheelSize?: number | null;
+  clearanceMode?: string;
+  isDefault?: boolean;
+}) {
+  if (data.isDefault) {
+    await db.update(schema.carProfiles)
+      .set({ isDefault: false })
+      .where(eq(schema.carProfiles.userId, data.userId));
+  }
+  const [profile] = await db.insert(schema.carProfiles).values({
+    userId: data.userId,
+    make: data.make,
+    model: data.model,
+    year: data.year,
+    rideHeight: data.rideHeight ?? null,
+    suspensionType: (data.suspensionType as any) || "stock",
+    hasFrontLip: data.hasFrontLip ?? false,
+    wheelSize: data.wheelSize ?? null,
+    clearanceMode: (data.clearanceMode as any) || "normal",
+    isDefault: data.isDefault ?? false,
+  }).returning();
+  return profile;
+}
+
+export async function updateCarProfile(id: string, data: Partial<{
+  make: string;
+  model: string;
+  year: number;
+  rideHeight: number | null;
+  suspensionType: string;
+  hasFrontLip: boolean;
+  wheelSize: number | null;
+  clearanceMode: string;
+  isDefault: boolean;
+}>) {
+  if (data.isDefault) {
+    const existing = await getCarProfileById(id);
+    if (existing) {
+      await db.update(schema.carProfiles)
+        .set({ isDefault: false })
+        .where(eq(schema.carProfiles.userId, existing.userId));
+    }
+  }
+  const [profile] = await db.update(schema.carProfiles).set(data as any).where(eq(schema.carProfiles.id, id)).returning();
+  return profile || null;
+}
+
+export async function deleteCarProfile(id: string) {
+  const [deleted] = await db.delete(schema.carProfiles).where(eq(schema.carProfiles.id, id)).returning();
+  return deleted || null;
+}
+
+export async function setDefaultCarProfile(userId: string, profileId: string) {
+  await db.update(schema.carProfiles)
+    .set({ isDefault: false })
+    .where(eq(schema.carProfiles.userId, userId));
+  await db.update(schema.carProfiles)
+    .set({ isDefault: true })
+    .where(and(eq(schema.carProfiles.id, profileId), eq(schema.carProfiles.userId, userId)));
+}
+
+export async function getEventsByBbox(minLat: number, maxLat: number, minLng: number, maxLng: number) {
+  return db.select({
+    id: schema.events.id,
+    userId: schema.events.userId,
+    title: schema.events.title,
+    description: schema.events.description,
+    eventType: schema.events.eventType,
+    lat: schema.events.lat,
+    lng: schema.events.lng,
+    date: schema.events.date,
+    endDate: schema.events.endDate,
+    maxAttendees: schema.events.maxAttendees,
+    rsvpCount: schema.events.rsvpCount,
+    status: schema.events.status,
+    createdAt: schema.events.createdAt,
+    creatorUsername: schema.users.username,
+  })
+    .from(schema.events)
+    .leftJoin(schema.users, eq(schema.events.userId, schema.users.id))
+    .where(
+      and(
+        between(schema.events.lat, minLat, maxLat),
+        between(schema.events.lng, minLng, maxLng),
+      )
+    );
+}
+
+export async function getEventById(id: string) {
+  const [event] = await db.select({
+    id: schema.events.id,
+    userId: schema.events.userId,
+    title: schema.events.title,
+    description: schema.events.description,
+    eventType: schema.events.eventType,
+    lat: schema.events.lat,
+    lng: schema.events.lng,
+    date: schema.events.date,
+    endDate: schema.events.endDate,
+    maxAttendees: schema.events.maxAttendees,
+    rsvpCount: schema.events.rsvpCount,
+    status: schema.events.status,
+    createdAt: schema.events.createdAt,
+    creatorUsername: schema.users.username,
+  })
+    .from(schema.events)
+    .leftJoin(schema.users, eq(schema.events.userId, schema.users.id))
+    .where(eq(schema.events.id, id));
+  return event || null;
+}
+
+export async function createEvent(data: {
+  userId: string;
+  title: string;
+  description: string;
+  eventType: string;
+  lat: number;
+  lng: number;
+  date: Date;
+  endDate?: Date | null;
+  maxAttendees?: number | null;
+}) {
+  const [event] = await db.insert(schema.events).values({
+    userId: data.userId,
+    title: data.title,
+    description: data.description,
+    eventType: data.eventType as any,
+    lat: data.lat,
+    lng: data.lng,
+    date: data.date,
+    endDate: data.endDate ?? null,
+    maxAttendees: data.maxAttendees ?? null,
+  }).returning();
+  return event;
+}
+
+export async function updateEvent(id: string, data: Partial<{
+  title: string;
+  description: string;
+  eventType: string;
+  date: Date;
+  endDate: Date | null;
+  maxAttendees: number | null;
+  status: string;
+}>) {
+  const [event] = await db.update(schema.events).set(data as any).where(eq(schema.events.id, id)).returning();
+  return event || null;
+}
+
+export async function deleteEvent(id: string) {
+  await db.delete(schema.eventRsvps).where(eq(schema.eventRsvps.eventId, id));
+  const [deleted] = await db.delete(schema.events).where(eq(schema.events.id, id)).returning();
+  return deleted || null;
+}
+
+export async function toggleRsvp(userId: string, eventId: string) {
+  return await db.transaction(async (tx) => {
+    const [existing] = await tx.select().from(schema.eventRsvps)
+      .where(and(eq(schema.eventRsvps.userId, userId), eq(schema.eventRsvps.eventId, eventId)));
+
+    if (existing) {
+      await tx.delete(schema.eventRsvps).where(eq(schema.eventRsvps.id, existing.id));
+      const [{ count }] = await tx.select({ count: sql<number>`count(*)::int` })
+        .from(schema.eventRsvps).where(eq(schema.eventRsvps.eventId, eventId));
+      await tx.update(schema.events).set({ rsvpCount: count }).where(eq(schema.events.id, eventId));
+      return { rsvped: false };
+    } else {
+      await tx.insert(schema.eventRsvps).values({ userId, eventId });
+      const [{ count }] = await tx.select({ count: sql<number>`count(*)::int` })
+        .from(schema.eventRsvps).where(eq(schema.eventRsvps.eventId, eventId));
+      await tx.update(schema.events).set({ rsvpCount: count }).where(eq(schema.events.id, eventId));
+      return { rsvped: true };
+    }
+  });
+}
+
+export async function getUserRsvp(userId: string, eventId: string) {
+  const [rsvp] = await db.select().from(schema.eventRsvps)
+    .where(and(eq(schema.eventRsvps.userId, userId), eq(schema.eventRsvps.eventId, eventId)));
+  return !!rsvp;
+}
+
+export async function getUpcomingEvents(limit = 20) {
+  return db.select({
+    id: schema.events.id,
+    userId: schema.events.userId,
+    title: schema.events.title,
+    description: schema.events.description,
+    eventType: schema.events.eventType,
+    lat: schema.events.lat,
+    lng: schema.events.lng,
+    date: schema.events.date,
+    endDate: schema.events.endDate,
+    maxAttendees: schema.events.maxAttendees,
+    rsvpCount: schema.events.rsvpCount,
+    status: schema.events.status,
+    createdAt: schema.events.createdAt,
+    creatorUsername: schema.users.username,
+  })
+    .from(schema.events)
+    .leftJoin(schema.users, eq(schema.events.userId, schema.users.id))
+    .where(gte(schema.events.date, new Date()))
+    .orderBy(schema.events.date)
+    .limit(limit);
+}
+
+export async function getAllEvents() {
+  return db.select({
+    id: schema.events.id,
+    userId: schema.events.userId,
+    title: schema.events.title,
+    description: schema.events.description,
+    eventType: schema.events.eventType,
+    lat: schema.events.lat,
+    lng: schema.events.lng,
+    date: schema.events.date,
+    endDate: schema.events.endDate,
+    maxAttendees: schema.events.maxAttendees,
+    rsvpCount: schema.events.rsvpCount,
+    status: schema.events.status,
+    createdAt: schema.events.createdAt,
+    creatorUsername: schema.users.username,
+  })
+    .from(schema.events)
+    .leftJoin(schema.users, eq(schema.events.userId, schema.users.id))
+    .orderBy(desc(schema.events.date));
 }

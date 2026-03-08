@@ -20,6 +20,30 @@ export const hazardStatusEnum = pgEnum("hazard_status", ["active", "cleared"]);
 
 export const voteTypeEnum = pgEnum("vote_type", ["confirm", "downvote", "clear"]);
 
+export const suspensionTypeEnum = pgEnum("suspension_type", [
+  "stock",
+  "lowered",
+  "coilovers",
+  "air_ride",
+  "bagged",
+]);
+
+export const clearanceModeEnum = pgEnum("clearance_mode", [
+  "normal",
+  "lowered",
+  "very_lowered",
+  "show_car",
+]);
+
+export const eventTypeEnum = pgEnum("event_type", [
+  "car_meet",
+  "show_and_shine",
+  "cruise",
+  "photo_spot",
+  "shop_garage",
+  "warning",
+]);
+
 export const users = pgTable("users", {
   id: varchar("id")
     .primaryKey()
@@ -49,6 +73,7 @@ export const hazards = pgTable("hazards", {
   upvotes: integer("upvotes").notNull().default(0),
   downvotes: integer("downvotes").notNull().default(0),
   confidenceScore: real("confidence_score").notNull().default(0.5),
+  photoUrl: text("photo_url"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   expiresAt: timestamp("expires_at"),
 });
@@ -86,6 +111,50 @@ export const promoRedemptions = pgTable("promo_redemptions", {
   redeemedAt: timestamp("redeemed_at").notNull().defaultNow(),
 });
 
+export const carProfiles = pgTable("car_profiles", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  make: text("make").notNull(),
+  model: text("model").notNull(),
+  year: integer("year").notNull(),
+  rideHeight: real("ride_height"),
+  suspensionType: suspensionTypeEnum("suspension_type").notNull().default("stock"),
+  hasFrontLip: boolean("has_front_lip").notNull().default(false),
+  wheelSize: integer("wheel_size"),
+  clearanceMode: clearanceModeEnum("clearance_mode").notNull().default("normal"),
+  isDefault: boolean("is_default").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const events = pgTable("events", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  eventType: eventTypeEnum("event_type").notNull(),
+  lat: real("lat").notNull(),
+  lng: real("lng").notNull(),
+  date: timestamp("date").notNull(),
+  endDate: timestamp("end_date"),
+  maxAttendees: integer("max_attendees"),
+  rsvpCount: integer("rsvp_count").notNull().default(0),
+  status: text("status").notNull().default("upcoming"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const eventRsvps = pgTable("event_rsvps", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  eventId: varchar("event_id").references(() => events.id).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   email: true,
@@ -108,6 +177,11 @@ export type Hazard = typeof hazards.$inferSelect;
 export type HazardVote = typeof hazardVotes.$inferSelect;
 export type PromoCode = typeof promoCodes.$inferSelect;
 export type PromoRedemption = typeof promoRedemptions.$inferSelect;
+export type CarProfile = typeof carProfiles.$inferSelect;
+export type InsertCarProfile = typeof carProfiles.$inferInsert;
+export type Event = typeof events.$inferSelect;
+export type InsertEvent = typeof events.$inferInsert;
+export type EventRsvp = typeof eventRsvps.$inferSelect;
 
 export const HAZARD_TYPES = [
   { value: "pothole", label: "Pothole" },
@@ -155,4 +229,28 @@ export const SEVERITY_TIERS = [
     bg: "#450a0a",
     detail: "Road inaccessible for low vehicles. Routing will avoid this road.",
   },
+] as const;
+
+export const EVENT_TYPES = [
+  { value: "car_meet", label: "Car Meet", icon: "people" },
+  { value: "show_and_shine", label: "Show & Shine", icon: "trophy" },
+  { value: "cruise", label: "Cruise", icon: "car-sport" },
+  { value: "photo_spot", label: "Photo Spot", icon: "camera" },
+  { value: "shop_garage", label: "Shop / Garage", icon: "build" },
+  { value: "warning", label: "Road Warning", icon: "warning" },
+] as const;
+
+export const SUSPENSION_TYPES = [
+  { value: "stock", label: "Stock" },
+  { value: "lowered", label: "Lowered Springs" },
+  { value: "coilovers", label: "Coilovers" },
+  { value: "air_ride", label: "Air Ride" },
+  { value: "bagged", label: "Bagged" },
+] as const;
+
+export const CLEARANCE_MODES = [
+  { value: "normal", label: "Normal", riskMultiplier: 1.0 },
+  { value: "lowered", label: "Lowered", riskMultiplier: 1.3 },
+  { value: "very_lowered", label: "Very Lowered", riskMultiplier: 1.6 },
+  { value: "show_car", label: "Show Car", riskMultiplier: 2.0 },
 ] as const;

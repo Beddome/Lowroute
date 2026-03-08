@@ -60,6 +60,36 @@ function RootLayoutNav() {
           contentStyle: { backgroundColor: Colors.bg },
         }}
       />
+      <Stack.Screen
+        name="car-profile"
+        options={{
+          presentation: "formSheet",
+          sheetAllowedDetents: [0.85],
+          sheetGrabberVisible: true,
+          headerShown: false,
+          contentStyle: { backgroundColor: Colors.bgCard },
+        }}
+      />
+      <Stack.Screen
+        name="event-detail"
+        options={{
+          presentation: "formSheet",
+          sheetAllowedDetents: [0.75],
+          sheetGrabberVisible: true,
+          headerShown: false,
+          contentStyle: { backgroundColor: Colors.bgCard },
+        }}
+      />
+      <Stack.Screen
+        name="create-event"
+        options={{
+          presentation: "formSheet",
+          sheetAllowedDetents: [0.85],
+          sheetGrabberVisible: true,
+          headerShown: false,
+          contentStyle: { backgroundColor: Colors.bgCard },
+        }}
+      />
     </Stack>
   );
 }

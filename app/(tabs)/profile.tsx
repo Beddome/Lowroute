@@ -12,9 +12,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { Colors } from "@/constants/colors";
-import { formatMSTDateClient } from "@/shared/types";
+import { formatMSTDateClient, CarProfile, SUSPENSION_TYPES, CLEARANCE_MODES } from "@/shared/types";
 
 const BADGES = [
   { id: "first_report", icon: "flag" as const, label: "First Report", desc: "Submitted your first hazard", minRep: 10, color: Colors.accent },
@@ -70,6 +71,72 @@ const repStyles = StyleSheet.create({
     borderRadius: 4,
   },
   nextLevel: { fontSize: 12, fontFamily: "Inter_400Regular", color: Colors.textMuted, marginTop: 6 },
+});
+
+function GarageCard({ car }: { car: CarProfile }) {
+  const suspLabel = SUSPENSION_TYPES.find((s) => s.value === car.suspensionType)?.label ?? car.suspensionType;
+  const clearLabel = CLEARANCE_MODES.find((c) => c.value === car.clearanceMode)?.label ?? car.clearanceMode;
+
+  return (
+    <Pressable
+      style={({ pressed }) => [garageStyles.carCard, pressed && { opacity: 0.85 }]}
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        router.push(`/car-profile?id=${car.id}`);
+      }}
+    >
+      <View style={garageStyles.carHeader}>
+        <View style={{ flex: 1 }}>
+          <Text style={garageStyles.carName}>{car.year} {car.make} {car.model}</Text>
+          {car.rideHeight != null && (
+            <Text style={garageStyles.carDetail}>{car.rideHeight}" ride height</Text>
+          )}
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+      </View>
+      <View style={garageStyles.badgeRow}>
+        <View style={garageStyles.badge}>
+          <Text style={garageStyles.badgeText}>{suspLabel}</Text>
+        </View>
+        <View style={garageStyles.badge}>
+          <Text style={garageStyles.badgeText}>{clearLabel}</Text>
+        </View>
+        {car.isDefault && (
+          <View style={[garageStyles.badge, garageStyles.defaultBadge]}>
+            <Text style={[garageStyles.badgeText, { color: Colors.accent }]}>Default</Text>
+          </View>
+        )}
+      </View>
+    </Pressable>
+  );
+}
+
+const garageStyles = StyleSheet.create({
+  carCard: {
+    backgroundColor: Colors.bgElevated,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 12,
+    marginBottom: 8,
+  },
+  carHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+  carName: { fontSize: 15, fontFamily: "Inter_700Bold", color: Colors.text },
+  carDetail: { fontSize: 12, fontFamily: "Inter_400Regular", color: Colors.textSecondary, marginTop: 2 },
+  badgeRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
+  badge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: Colors.bgCard,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  defaultBadge: {
+    backgroundColor: Colors.accent + "18",
+    borderColor: Colors.accent + "44",
+  },
+  badgeText: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: Colors.textSecondary },
 });
 
 export default function ProfileScreen() {
@@ -146,6 +213,11 @@ export default function ProfileScreen() {
     );
   }
 
+  const { data: cars } = useQuery<CarProfile[]>({
+    queryKey: ["/api/cars"],
+    enabled: !!user,
+  });
+
   const earnedBadges = BADGES.filter((b) => user.reputation >= b.minRep);
   const unearned = BADGES.filter((b) => user.reputation < b.minRep);
 
@@ -190,6 +262,32 @@ export default function ProfileScreen() {
             <Text style={[styles.statValue, { color: Colors.accent }]}>{user.reputation}</Text>
             <Text style={styles.statLabel}>Total XP</Text>
           </View>
+        </View>
+
+        {/* My Garage */}
+        <View style={styles.card}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <Text style={styles.cardTitle}>My Garage</Text>
+            <Pressable
+              hitSlop={8}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                router.push("/car-profile");
+              }}
+            >
+              <Ionicons name="add-circle" size={24} color={Colors.accent} />
+            </Pressable>
+          </View>
+          {(!cars || cars.length === 0) ? (
+            <View style={{ alignItems: "center", paddingVertical: 20, gap: 8 }}>
+              <Ionicons name="car-sport-outline" size={36} color={Colors.textMuted} />
+              <Text style={{ fontSize: 14, fontFamily: "Inter_500Medium", color: Colors.textMuted }}>
+                Add your first ride
+              </Text>
+            </View>
+          ) : (
+            cars.map((car) => <GarageCard key={car.id} car={car} />)
+          )}
         </View>
 
         {/* Badges */}

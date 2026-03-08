@@ -312,7 +312,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/hazards", requireAuth, async (req: Request, res: Response) => {
     try {
-      const { lat, lng, type, severity, title, description } = req.body;
+      const { lat, lng, type, severity, title, description, photoUrl } = req.body;
       if (!lat || !lng || !type || !severity || !title || !description) {
         return res.status(400).json({ message: "All fields required" });
       }
@@ -346,6 +346,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         severity: parsedSeverity,
         title: title.trim(),
         description: description.trim(),
+        photoUrl: photoUrl && typeof photoUrl === "string" ? photoUrl.trim() : null,
       });
       await storage.updateUserReputation(req.session.userId!, 10);
       res.json(hazard);
@@ -658,6 +659,389 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Failed to redeem promo code" });
+    }
+  });
+
+  // Car profile routes
+  app.get("/api/cars", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const profiles = await storage.getCarProfilesByUser(req.session.userId!);
+      res.json(profiles);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch car profiles" });
+    }
+  });
+
+  app.get("/api/cars/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const profile = await storage.getCarProfileById(req.params.id);
+      if (!profile) return res.status(404).json({ message: "Car profile not found" });
+      if (profile.userId !== req.session.userId) {
+        return res.status(403).json({ message: "Not your car profile" });
+      }
+      res.json(profile);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch car profile" });
+    }
+  });
+
+  app.post("/api/cars", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { make, model, year, rideHeight, suspensionType, hasFrontLip, wheelSize, clearanceMode, isDefault } = req.body;
+      if (!make || !model || !year) {
+        return res.status(400).json({ message: "Make, model, and year are required" });
+      }
+      if (typeof make !== "string" || make.length < 1 || make.length > 50) {
+        return res.status(400).json({ message: "Make must be 1-50 characters" });
+      }
+      if (typeof model !== "string" || model.length < 1 || model.length > 50) {
+        return res.status(400).json({ message: "Model must be 1-50 characters" });
+      }
+      const parsedYear = parseInt(year);
+      if (isNaN(parsedYear) || parsedYear < 1900 || parsedYear > 2030) {
+        return res.status(400).json({ message: "Year must be between 1900 and 2030" });
+      }
+      const validSuspension = ["stock", "lowered", "coilovers", "air_ride", "bagged"];
+      if (suspensionType && !validSuspension.includes(suspensionType)) {
+        return res.status(400).json({ message: "Invalid suspension type" });
+      }
+      const validClearance = ["normal", "lowered", "very_lowered", "show_car"];
+      if (clearanceMode && !validClearance.includes(clearanceMode)) {
+        return res.status(400).json({ message: "Invalid clearance mode" });
+      }
+      const profile = await storage.createCarProfile({
+        userId: req.session.userId!,
+        make: make.trim(),
+        model: model.trim(),
+        year: parsedYear,
+        rideHeight: rideHeight ? parseFloat(rideHeight) : null,
+        suspensionType: suspensionType || "stock",
+        hasFrontLip: !!hasFrontLip,
+        wheelSize: wheelSize ? parseInt(wheelSize) : null,
+        clearanceMode: clearanceMode || "normal",
+        isDefault: !!isDefault,
+      });
+      res.json(profile);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to create car profile" });
+    }
+  });
+
+  app.put("/api/cars/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const existing = await storage.getCarProfileById(req.params.id);
+      if (!existing) return res.status(404).json({ message: "Car profile not found" });
+      if (existing.userId !== req.session.userId) {
+        return res.status(403).json({ message: "Not your car profile" });
+      }
+      const { make, model, year, rideHeight, suspensionType, hasFrontLip, wheelSize, clearanceMode, isDefault } = req.body;
+      const validSuspension = ["stock", "lowered", "coilovers", "air_ride", "bagged"];
+      const validClearance = ["normal", "lowered", "very_lowered", "show_car"];
+      const updates: any = {};
+      if (make !== undefined) {
+        if (typeof make !== "string" || make.trim().length < 1 || make.trim().length > 50) {
+          return res.status(400).json({ message: "Make must be 1-50 characters" });
+        }
+        updates.make = make.trim();
+      }
+      if (model !== undefined) {
+        if (typeof model !== "string" || model.trim().length < 1 || model.trim().length > 50) {
+          return res.status(400).json({ message: "Model must be 1-50 characters" });
+        }
+        updates.model = model.trim();
+      }
+      if (year !== undefined) {
+        const parsedYear = parseInt(year);
+        if (isNaN(parsedYear) || parsedYear < 1900 || parsedYear > 2030) {
+          return res.status(400).json({ message: "Year must be between 1900 and 2030" });
+        }
+        updates.year = parsedYear;
+      }
+      if (rideHeight !== undefined) updates.rideHeight = rideHeight ? parseFloat(rideHeight) : null;
+      if (suspensionType !== undefined) {
+        if (!validSuspension.includes(suspensionType)) {
+          return res.status(400).json({ message: "Invalid suspension type" });
+        }
+        updates.suspensionType = suspensionType;
+      }
+      if (hasFrontLip !== undefined) updates.hasFrontLip = !!hasFrontLip;
+      if (wheelSize !== undefined) updates.wheelSize = wheelSize ? parseInt(wheelSize) : null;
+      if (clearanceMode !== undefined) {
+        if (!validClearance.includes(clearanceMode)) {
+          return res.status(400).json({ message: "Invalid clearance mode" });
+        }
+        updates.clearanceMode = clearanceMode;
+      }
+      if (isDefault !== undefined) updates.isDefault = !!isDefault;
+      const profile = await storage.updateCarProfile(req.params.id, updates);
+      res.json(profile);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to update car profile" });
+    }
+  });
+
+  app.delete("/api/cars/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const existing = await storage.getCarProfileById(req.params.id);
+      if (!existing) return res.status(404).json({ message: "Car profile not found" });
+      if (existing.userId !== req.session.userId) {
+        return res.status(403).json({ message: "Not your car profile" });
+      }
+      await storage.deleteCarProfile(req.params.id);
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to delete car profile" });
+    }
+  });
+
+  app.post("/api/cars/:id/default", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const existing = await storage.getCarProfileById(req.params.id);
+      if (!existing) return res.status(404).json({ message: "Car profile not found" });
+      if (existing.userId !== req.session.userId) {
+        return res.status(403).json({ message: "Not your car profile" });
+      }
+      await storage.setDefaultCarProfile(req.session.userId!, req.params.id);
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to set default car" });
+    }
+  });
+
+  // Event routes
+  app.get("/api/events", async (req: Request, res: Response) => {
+    try {
+      const { minLat, maxLat, minLng, maxLng } = req.query;
+      let evts;
+      if (minLat && maxLat && minLng && maxLng) {
+        evts = await storage.getEventsByBbox(
+          parseFloat(minLat as string),
+          parseFloat(maxLat as string),
+          parseFloat(minLng as string),
+          parseFloat(maxLng as string)
+        );
+      } else {
+        evts = await storage.getUpcomingEvents();
+      }
+      if (req.session?.userId) {
+        const enriched = await Promise.all(evts.map(async (e: any) => ({
+          ...e,
+          hasRsvped: await storage.getUserRsvp(req.session.userId!, e.id),
+        })));
+        return res.json(enriched);
+      }
+      res.json(evts);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch events" });
+    }
+  });
+
+  app.get("/api/events/upcoming", async (req: Request, res: Response) => {
+    try {
+      const evts = await storage.getUpcomingEvents();
+      if (req.session?.userId) {
+        const enriched = await Promise.all(evts.map(async (e: any) => ({
+          ...e,
+          hasRsvped: await storage.getUserRsvp(req.session.userId!, e.id),
+        })));
+        return res.json(enriched);
+      }
+      res.json(evts);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch upcoming events" });
+    }
+  });
+
+  app.get("/api/events/:id", async (req: Request, res: Response) => {
+    try {
+      const event = await storage.getEventById(req.params.id);
+      if (!event) return res.status(404).json({ message: "Event not found" });
+      const result: any = { ...event };
+      if (req.session?.userId) {
+        result.hasRsvped = await storage.getUserRsvp(req.session.userId, event.id);
+      }
+      res.json(result);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch event" });
+    }
+  });
+
+  app.post("/api/events", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { title, description, eventType, lat, lng, date, endDate, maxAttendees } = req.body;
+      if (!title || !description || !eventType || !lat || !lng || !date) {
+        return res.status(400).json({ message: "Title, description, type, location, and date are required" });
+      }
+      if (typeof title !== "string" || title.length < 3 || title.length > 100) {
+        return res.status(400).json({ message: "Title must be 3-100 characters" });
+      }
+      if (typeof description !== "string" || description.length < 5 || description.length > 500) {
+        return res.status(400).json({ message: "Description must be 5-500 characters" });
+      }
+      const validEventTypes = ["car_meet", "show_and_shine", "cruise", "photo_spot", "shop_garage", "warning"];
+      if (!validEventTypes.includes(eventType)) {
+        return res.status(400).json({ message: "Invalid event type" });
+      }
+      const parsedLat = parseFloat(lat);
+      const parsedLng = parseFloat(lng);
+      if (isNaN(parsedLat) || parsedLat < -90 || parsedLat > 90) {
+        return res.status(400).json({ message: "Invalid latitude" });
+      }
+      if (isNaN(parsedLng) || parsedLng < -180 || parsedLng > 180) {
+        return res.status(400).json({ message: "Invalid longitude" });
+      }
+      const parsedDate = new Date(date);
+      if (isNaN(parsedDate.getTime())) {
+        return res.status(400).json({ message: "Invalid date" });
+      }
+      const event = await storage.createEvent({
+        userId: req.session.userId!,
+        title: title.trim(),
+        description: description.trim(),
+        eventType,
+        lat: parsedLat,
+        lng: parsedLng,
+        date: parsedDate,
+        endDate: endDate ? new Date(endDate) : null,
+        maxAttendees: maxAttendees ? parseInt(maxAttendees) : null,
+      });
+      await storage.updateUserReputation(req.session.userId!, 15);
+      res.json(event);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to create event" });
+    }
+  });
+
+  app.put("/api/events/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const event = await storage.getEventById(req.params.id);
+      if (!event) return res.status(404).json({ message: "Event not found" });
+      if (event.userId !== req.session.userId) {
+        return res.status(403).json({ message: "Not your event" });
+      }
+      const { title, description, eventType, date, endDate, maxAttendees, status } = req.body;
+      const validEventTypes = ["car_meet", "cruise", "car_show", "photo_spot", "other"];
+      const validStatuses = ["active", "cancelled", "completed"];
+      const updates: any = {};
+      if (title !== undefined) {
+        if (typeof title !== "string" || title.trim().length < 3 || title.trim().length > 100) {
+          return res.status(400).json({ message: "Title must be 3-100 characters" });
+        }
+        updates.title = title.trim();
+      }
+      if (description !== undefined) {
+        if (typeof description !== "string" || description.trim().length < 5 || description.trim().length > 500) {
+          return res.status(400).json({ message: "Description must be 5-500 characters" });
+        }
+        updates.description = description.trim();
+      }
+      if (eventType !== undefined) {
+        if (!validEventTypes.includes(eventType)) {
+          return res.status(400).json({ message: "Invalid event type" });
+        }
+        updates.eventType = eventType;
+      }
+      if (date) {
+        const parsed = new Date(date);
+        if (isNaN(parsed.getTime())) {
+          return res.status(400).json({ message: "Invalid date" });
+        }
+        updates.date = parsed;
+      }
+      if (endDate !== undefined) updates.endDate = endDate ? new Date(endDate) : null;
+      if (maxAttendees !== undefined) updates.maxAttendees = maxAttendees ? parseInt(maxAttendees) : null;
+      if (status !== undefined) {
+        if (!validStatuses.includes(status)) {
+          return res.status(400).json({ message: "Invalid status" });
+        }
+        updates.status = status;
+      }
+      const updated = await storage.updateEvent(req.params.id, updates);
+      res.json(updated);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to update event" });
+    }
+  });
+
+  app.delete("/api/events/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const event = await storage.getEventById(req.params.id);
+      if (!event) return res.status(404).json({ message: "Event not found" });
+      const user = await storage.getUserById(req.session.userId!);
+      if (event.userId !== req.session.userId && user?.role !== "admin") {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+      await storage.deleteEvent(req.params.id);
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to delete event" });
+    }
+  });
+
+  app.post("/api/events/:id/rsvp", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const event = await storage.getEventById(req.params.id);
+      if (!event) return res.status(404).json({ message: "Event not found" });
+      if (event.maxAttendees && event.rsvpCount >= event.maxAttendees) {
+        const hasRsvp = await storage.getUserRsvp(req.session.userId!, req.params.id);
+        if (!hasRsvp) {
+          return res.status(400).json({ message: "Event is full" });
+        }
+      }
+      const result = await storage.toggleRsvp(req.session.userId!, req.params.id);
+      res.json(result);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to update RSVP" });
+    }
+  });
+
+  // Admin event routes
+  app.get("/api/admin/events", requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const evts = await storage.getAllEvents();
+      res.json(evts);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch events" });
+    }
+  });
+
+  app.delete("/api/admin/events/:id", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const event = await storage.deleteEvent(req.params.id);
+      if (!event) return res.status(404).json({ message: "Event not found" });
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to delete event" });
+    }
+  });
+
+  app.patch("/api/admin/events/:id/status", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { status } = req.body;
+      if (!status || !["upcoming", "active", "completed", "cancelled"].includes(status)) {
+        return res.status(400).json({ message: "Invalid status" });
+      }
+      const event = await storage.updateEvent(req.params.id, { status });
+      if (!event) return res.status(404).json({ message: "Event not found" });
+      res.json(event);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to update event status" });
     }
   });
 

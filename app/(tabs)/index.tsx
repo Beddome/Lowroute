@@ -19,12 +19,48 @@ import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
-import { SEVERITY_TIERS, HAZARD_TYPES } from "@/shared/types";
-import type { Hazard } from "@/shared/types";
+import { SEVERITY_TIERS, HAZARD_TYPES, EVENT_TYPES } from "@/shared/types";
+import type { Hazard, AppEvent } from "@/shared/types";
 import { getApiUrl } from "@/lib/query-client";
 import { fetch } from "expo/fetch";
 import { useLocation } from "@/contexts/LocationContext";
 import { useAuth } from "@/contexts/AuthContext";
+
+const EVENT_COLOR = "#8B5CF6";
+
+function getEventIcon(eventType: string): string {
+  const found = EVENT_TYPES.find((t) => t.value === eventType);
+  return found?.icon ?? "calendar";
+}
+
+function EventMarker({ event, onPress }: { event: AppEvent; onPress: () => void }) {
+  return (
+    <Marker
+      coordinate={{ latitude: event.lat, longitude: event.lng }}
+      onPress={onPress}
+      tracksViewChanges={false}
+    >
+      <View
+        style={[
+          styles.markerContainer,
+          {
+            width: 32,
+            height: 32,
+            borderRadius: 16,
+            backgroundColor: EVENT_COLOR,
+            borderColor: "rgba(0,0,0,0.6)",
+          },
+        ]}
+      >
+        <Ionicons
+          name={getEventIcon(event.eventType) as any}
+          size={16}
+          color="#fff"
+        />
+      </View>
+    </Marker>
+  );
+}
 
 function HazardMarker({ hazard, onPress }: { hazard: Hazard; onPress: () => void }) {
   const tier = SEVERITY_TIERS[hazard.severity - 1];
@@ -139,9 +175,34 @@ export default function MapScreen() {
   const [nearbyHazard, setNearbyHazard] = useState<Hazard | null>(null);
   const alertedHazardsRef = useRef<Set<string>>(new Set());
   const navStartTimeRef = useRef<number>(0);
+  const [showEvents, setShowEvents] = useState(true);
 
   const { data: hazards = [] } = useQuery<Hazard[]>({
     queryKey: ["/api/hazards"],
+  });
+
+  const eventsQueryKey = [
+    "/api/events",
+    `minLat=${(mapRegion.latitude - mapRegion.latitudeDelta).toFixed(4)}`,
+    `maxLat=${(mapRegion.latitude + mapRegion.latitudeDelta).toFixed(4)}`,
+    `minLng=${(mapRegion.longitude - mapRegion.longitudeDelta).toFixed(4)}`,
+    `maxLng=${(mapRegion.longitude + mapRegion.longitudeDelta).toFixed(4)}`,
+  ];
+
+  const { data: events = [] } = useQuery<AppEvent[]>({
+    queryKey: eventsQueryKey,
+    queryFn: async () => {
+      const baseUrl = getApiUrl();
+      const url = new URL("/api/events", baseUrl);
+      url.searchParams.set("minLat", (mapRegion.latitude - mapRegion.latitudeDelta).toFixed(4));
+      url.searchParams.set("maxLat", (mapRegion.latitude + mapRegion.latitudeDelta).toFixed(4));
+      url.searchParams.set("minLng", (mapRegion.longitude - mapRegion.longitudeDelta).toFixed(4));
+      url.searchParams.set("maxLng", (mapRegion.longitude + mapRegion.longitudeDelta).toFixed(4));
+      const res = await fetch(url.toString(), { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: showEvents,
   });
 
   useEffect(() => {
@@ -378,6 +439,19 @@ export default function MapScreen() {
             />
           ))}
 
+        {showEvents && events
+          .filter((e) => e.status !== "cancelled")
+          .map((e) => (
+            <EventMarker
+              key={`event-${e.id}`}
+              event={e}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push({ pathname: "/event-detail", params: { id: e.id } });
+              }}
+            />
+          ))}
+
         {originCoords && !isNavigating && (
           <Marker coordinate={{ latitude: originCoords.lat, longitude: originCoords.lng }}>
             <View style={styles.originPin}>
@@ -583,20 +657,34 @@ export default function MapScreen() {
         </Pressable>
       )}
 
-      {/* Report FAB - hidden during navigation */}
+      {/* FABs - hidden during navigation */}
       {!isNavigating && (
-        <Pressable
-          style={[styles.fab, { bottom: fabBottom }]}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            const lat = userLocation?.latitude ?? mapRegion.latitude;
-            const lng = userLocation?.longitude ?? mapRegion.longitude;
-            router.push({ pathname: "/report", params: { lat: String(lat), lng: String(lng) } });
-          }}
-        >
-          <Ionicons name="warning" size={22} color={Colors.bg} />
-          <Text style={styles.fabLabel}>Report</Text>
-        </Pressable>
+        <View style={[styles.fabGroup, { bottom: fabBottom }]}>
+          <Pressable
+            style={styles.fabEvent}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              const lat = userLocation?.latitude ?? mapRegion.latitude;
+              const lng = userLocation?.longitude ?? mapRegion.longitude;
+              router.push({ pathname: "/create-event", params: { lat: String(lat), lng: String(lng) } });
+            }}
+          >
+            <Ionicons name="calendar" size={20} color="#fff" />
+            <Text style={styles.fabEventLabel}>Event</Text>
+          </Pressable>
+          <Pressable
+            style={styles.fab}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              const lat = userLocation?.latitude ?? mapRegion.latitude;
+              const lng = userLocation?.longitude ?? mapRegion.longitude;
+              router.push({ pathname: "/report", params: { lat: String(lat), lng: String(lng) } });
+            }}
+          >
+            <Ionicons name="warning" size={22} color={Colors.bg} />
+            <Text style={styles.fabLabel}>Report</Text>
+          </Pressable>
+        </View>
       )}
 
       {/* Bottom panel */}
@@ -613,7 +701,7 @@ export default function MapScreen() {
               onStartNav={startNavigation}
             />
           ) : (
-            <TierLegend hazards={hazards} />
+            <TierLegend hazards={hazards} showEvents={showEvents} onToggleEvents={() => setShowEvents((v) => !v)} eventCount={events.length} />
           )}
         </View>
       )}
@@ -716,7 +804,7 @@ function RoutePanel({
   );
 }
 
-function TierLegend({ hazards }: { hazards: Hazard[] }) {
+function TierLegend({ hazards, showEvents, onToggleEvents, eventCount }: { hazards: Hazard[]; showEvents: boolean; onToggleEvents: () => void; eventCount: number }) {
   return (
     <View style={styles.legendPanel}>
       <View style={styles.legendHeader}>
@@ -739,6 +827,24 @@ function TierLegend({ hazards }: { hazards: Hazard[] }) {
             </View>
           );
         })}
+      </View>
+      <View style={styles.eventsToggleRow}>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendDot, { backgroundColor: EVENT_COLOR }]}>
+            <Ionicons name="calendar" size={14} color="#fff" />
+          </View>
+          <View style={styles.legendItemText}>
+            <Text style={[styles.legendLabel, { color: EVENT_COLOR }]}>Events</Text>
+            <Text style={styles.legendDesc}>{eventCount} nearby</Text>
+          </View>
+        </View>
+        <Pressable
+          onPress={onToggleEvents}
+          style={[styles.eventsToggleBtn, showEvents && styles.eventsToggleBtnActive]}
+          hitSlop={8}
+        >
+          <Ionicons name={showEvents ? "eye" : "eye-off"} size={16} color={showEvents ? EVENT_COLOR : Colors.textMuted} />
+        </Pressable>
       </View>
     </View>
   );
@@ -891,9 +997,14 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
 
-  fab: {
+  fabGroup: {
     position: "absolute",
     right: 16,
+    flexDirection: "column",
+    alignItems: "flex-end",
+    gap: 10,
+  },
+  fab: {
     backgroundColor: Colors.accent,
     borderRadius: 16,
     paddingVertical: 12,
@@ -908,6 +1019,21 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   fabLabel: { color: Colors.bg, fontSize: 14, fontFamily: "Inter_700Bold" },
+  fabEvent: {
+    backgroundColor: EVENT_COLOR,
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    shadowColor: EVENT_COLOR,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  fabEventLabel: { color: "#fff", fontSize: 13, fontFamily: "Inter_700Bold" },
 
   bottomPanel: {
     position: "absolute",
@@ -987,4 +1113,28 @@ const styles = StyleSheet.create({
   legendLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   legendDesc: { fontSize: 12, fontFamily: "Inter_400Regular", color: Colors.textMuted },
   legendCount2: { fontSize: 16, fontFamily: "Inter_700Bold", color: Colors.textMuted },
+
+  eventsToggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  eventsToggleBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.bgElevated,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  eventsToggleBtnActive: {
+    borderColor: EVENT_COLOR,
+    backgroundColor: EVENT_COLOR + "18",
+  },
 });

@@ -17,10 +17,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest, queryClient } from "@/lib/query-client";
-import { SEVERITY_TIERS, PROMO_TYPES, formatMSTDateClient, formatMSTClient } from "@/shared/types";
-import type { PromoCode } from "@/shared/types";
+import { SEVERITY_TIERS, PROMO_TYPES, EVENT_TYPES, formatMSTDateClient, formatMSTClient } from "@/shared/types";
+import type { PromoCode, AppEvent } from "@/shared/types";
 
-type Tab = "stats" | "hazards" | "users" | "promos";
+type Tab = "stats" | "hazards" | "users" | "promos" | "events";
 
 interface AdminUser {
   id: string;
@@ -34,6 +34,7 @@ interface AdminUser {
 interface AdminStats {
   totalUsers: number;
   totalHazards: number;
+  totalEvents?: number;
   hazardsBySeverity: Array<{ severity: number; count: number }>;
 }
 
@@ -74,14 +75,14 @@ export default function AdminScreen() {
         <Text style={styles.headerTitle}>Admin</Text>
       </View>
       <View style={styles.tabBar}>
-        {(["stats", "hazards", "users", "promos"] as Tab[]).map((tab) => (
+        {(["stats", "hazards", "users", "promos", "events"] as Tab[]).map((tab) => (
           <TouchableOpacity
             key={tab}
             style={[styles.tab, activeTab === tab && styles.tabActive]}
             onPress={() => setActiveTab(tab)}
           >
             <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
-              {tab === "stats" ? "Overview" : tab === "hazards" ? "Hazards" : tab === "users" ? "Users" : "Promos"}
+              {tab === "stats" ? "Overview" : tab === "hazards" ? "Hazards" : tab === "users" ? "Users" : tab === "promos" ? "Promos" : "Events"}
             </Text>
           </TouchableOpacity>
         ))}
@@ -90,6 +91,7 @@ export default function AdminScreen() {
       {activeTab === "hazards" && <HazardsPanel />}
       {activeTab === "users" && <UsersPanel currentUserId={user.id} />}
       {activeTab === "promos" && <PromoCodesPanel />}
+      {activeTab === "events" && <EventsPanel />}
     </View>
   );
 }
@@ -125,6 +127,11 @@ function StatsPanel() {
             <StatCard icon="people" label="Total Users" value={stats.totalUsers} color="#6366F1" />
             <StatCard icon="warning" label="Total Hazards" value={stats.totalHazards} color={Colors.accent} />
           </View>
+          {stats.totalEvents != null && (
+            <View style={[styles.statRow, { marginBottom: 16 }]}>
+              <StatCard icon="calendar" label="Total Events" value={stats.totalEvents} color="#8B5CF6" />
+            </View>
+          )}
           <Text style={styles.sectionTitle}>Hazards by Severity</Text>
           {SEVERITY_TIERS.map((tier) => (
             <View key={tier.tier} style={[styles.severityRow, { borderLeftColor: tier.color }]}>
@@ -494,6 +501,205 @@ function PromoCodesPanel() {
     />
   );
 }
+
+function EventsPanel() {
+  const eventsQuery = useQuery<AppEvent[]>({ queryKey: ["/api/admin/events"] });
+
+  const cancelMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("PATCH", `/api/admin/events/${id}/status`, { status: "cancelled" });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/events"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/admin/events/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/events"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
+    },
+  });
+
+  const confirmCancel = (id: string, title: string) => {
+    if (Platform.OS === "web") {
+      if (confirm(`Cancel event "${title}"?`)) {
+        cancelMutation.mutate(id);
+      }
+    } else {
+      Alert.alert("Cancel Event", `Cancel "${title}"?`, [
+        { text: "No", style: "cancel" },
+        { text: "Cancel Event", style: "destructive", onPress: () => cancelMutation.mutate(id) },
+      ]);
+    }
+  };
+
+  const confirmDelete = (id: string, title: string) => {
+    if (Platform.OS === "web") {
+      if (confirm(`Delete event "${title}"? This cannot be undone.`)) {
+        deleteMutation.mutate(id);
+      }
+    } else {
+      Alert.alert("Delete Event", `Delete "${title}"? This cannot be undone.`, [
+        { text: "No", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: () => deleteMutation.mutate(id) },
+      ]);
+    }
+  };
+
+  if (eventsQuery.isLoading) {
+    return <View style={styles.centered}><ActivityIndicator color={Colors.accent} size="large" /></View>;
+  }
+
+  const events = eventsQuery.data || [];
+
+  const getEventTypeInfo = (type: string) => EVENT_TYPES.find((t) => t.value === type);
+
+  const getStatusStyle = (status: string) => {
+    if (status === "cancelled") return { text: "Cancelled", color: Colors.error };
+    if (status === "completed") return { text: "Completed", color: Colors.textMuted };
+    return { text: "Active", color: Colors.success };
+  };
+
+  return (
+    <FlatList
+      data={events}
+      keyExtractor={(item) => item.id}
+      contentContainerStyle={[styles.scrollContent, events.length === 0 && styles.centered]}
+      refreshControl={<RefreshControl refreshing={eventsQuery.isRefetching} onRefresh={() => eventsQuery.refetch()} tintColor={Colors.accent} />}
+      ListEmptyComponent={<Text style={styles.emptyText}>No events created yet</Text>}
+      renderItem={({ item }) => {
+        const typeInfo = getEventTypeInfo(item.eventType);
+        const statusInfo = getStatusStyle(item.status);
+        const eventDate = new Date(item.date);
+        const isCancelled = item.status === "cancelled";
+        return (
+          <View style={[eventStyles.card, { borderLeftColor: isCancelled ? Colors.error : "#8B5CF6" }]}>
+            <View style={eventStyles.cardHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={eventStyles.title} numberOfLines={1}>{item.title}</Text>
+                <View style={eventStyles.metaRow}>
+                  {typeInfo && (
+                    <View style={eventStyles.typeBadge}>
+                      <Ionicons name={typeInfo.icon as any} size={12} color="#8B5CF6" />
+                      <Text style={eventStyles.typeBadgeText}>{typeInfo.label}</Text>
+                    </View>
+                  )}
+                  <View style={[eventStyles.statusBadge, { backgroundColor: statusInfo.color + "20" }]}>
+                    <Text style={[eventStyles.statusText, { color: statusInfo.color }]}>{statusInfo.text}</Text>
+                  </View>
+                </View>
+              </View>
+              <View style={eventStyles.actions}>
+                {!isCancelled && (
+                  <TouchableOpacity
+                    onPress={() => confirmCancel(item.id, item.title)}
+                    disabled={cancelMutation.isPending}
+                    hitSlop={8}
+                  >
+                    <Ionicons name="close-circle" size={22} color={Colors.tier2} />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  onPress={() => confirmDelete(item.id, item.title)}
+                  disabled={deleteMutation.isPending}
+                  hitSlop={8}
+                >
+                  <Ionicons name="trash" size={20} color={Colors.error} />
+                </TouchableOpacity>
+              </View>
+            </View>
+            <View style={eventStyles.detailRow}>
+              <Ionicons name="calendar-outline" size={13} color={Colors.textSecondary} />
+              <Text style={eventStyles.detailText}>{formatMSTClient(eventDate)}</Text>
+            </View>
+            <View style={eventStyles.detailRow}>
+              <Ionicons name="people-outline" size={13} color={Colors.textSecondary} />
+              <Text style={eventStyles.detailText}>
+                {item.rsvpCount} RSVP{item.rsvpCount !== 1 ? "s" : ""}{item.maxAttendees ? ` / ${item.maxAttendees} max` : ""}
+              </Text>
+            </View>
+            {item.creatorUsername && (
+              <View style={eventStyles.detailRow}>
+                <Ionicons name="person-outline" size={13} color={Colors.textSecondary} />
+                <Text style={eventStyles.detailText}>{item.creatorUsername}</Text>
+              </View>
+            )}
+          </View>
+        );
+      }}
+    />
+  );
+}
+
+const eventStyles = StyleSheet.create({
+  card: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    padding: 14,
+    marginBottom: 8,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 8,
+  },
+  title: {
+    fontSize: 15,
+    fontWeight: "600" as const,
+    color: Colors.text,
+    marginBottom: 6,
+  },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  typeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#8B5CF620",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  typeBadgeText: {
+    fontSize: 11,
+    fontWeight: "600" as const,
+    color: "#8B5CF6",
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: "700" as const,
+  },
+  actions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginLeft: 8,
+  },
+  detailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 4,
+  },
+  detailText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+});
 
 const promoStyles = StyleSheet.create({
   createCard: {
