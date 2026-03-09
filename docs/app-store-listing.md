@@ -129,8 +129,8 @@ Welcome to LowRoute! Plan safer routes, report hazards, connect with fellow car 
 
 | Product | Type | Price |
 |---------|------|-------|
-| LowRoute Pro (Monthly) | Auto-Renewable Subscription | TBD |
-| LowRoute Pro (Yearly) | Auto-Renewable Subscription | TBD |
+| LowRoute Pro (Monthly) | Auto-Renewable Subscription | $10.00 CAD/month |
+| LowRoute Pro (Yearly) | Auto-Renewable Subscription | $96.00 CAD/year (20% off) |
 
 **Subscription Description:**
 LowRoute Pro unlocks live GPS navigation with voice guidance, real-time hazard alerts, and priority access to new features. Subscriptions auto-renew unless cancelled at least 24 hours before the end of the current period. Manage subscriptions in your device settings.
@@ -141,12 +141,10 @@ LowRoute Pro unlocks live GPS navigation with voice guidance, real-time hazard a
 
 | Field | URL |
 |-------|-----|
-| Privacy Policy | https://YOUR_DOMAIN/privacy-policy |
-| Terms of Service | https://YOUR_DOMAIN/terms-of-service |
-| Support URL | https://YOUR_DOMAIN/support |
-| Marketing URL | https://YOUR_DOMAIN |
-
-Replace `YOUR_DOMAIN` with your production domain.
+| Privacy Policy | https://lowroute.com/privacy-policy |
+| Terms of Service | https://lowroute.com/terms-of-service |
+| Support URL | https://lowroute.com/support |
+| Marketing URL | https://lowroute.com |
 
 ---
 
@@ -211,8 +209,8 @@ LowRoute is a navigation app for low-clearance vehicles (lowriders, slammed cars
 Users report road hazards and the app scores routes by safety.
 
 Demo account for review:
-  Email: [PROVIDE REVIEW ACCOUNT EMAIL]
-  Password: [PROVIDE REVIEW ACCOUNT PASSWORD]
+  Username: appreview
+  Password: LowRoute-Review2026!
 
 The app requires location permission to display the map and nearby hazards.
 Background location is used only during active navigation for turn-by-turn guidance.
