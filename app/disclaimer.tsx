@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Pressable,
   Platform,
+  ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -22,75 +23,82 @@ export default function DisclaimerScreen({ onAccept }: DisclaimerScreenProps) {
 
   return (
     <View style={[styles.container, { paddingTop: topPad + 24, paddingBottom: bottomPad + 24 }]}>
-      <View style={styles.iconContainer}>
-        <LinearGradient
-          colors={["#F59E0B", "#D97706"]}
-          style={styles.iconGradient}
-        >
-          <Ionicons name="shield-checkmark" size={48} color="#000" />
-        </LinearGradient>
-      </View>
-
-      <Text style={styles.title}>Safety First</Text>
-      <Text style={styles.subtitle}>
-        Please read before using LowRoute
-      </Text>
-
-      <View style={styles.card}>
-        <View style={styles.cardItem}>
-          <Ionicons name="navigate-outline" size={22} color={Colors.accent} />
-          <View style={styles.cardItemText}>
-            <Text style={styles.cardItemTitle}>Advisory Information Only</Text>
-            <Text style={styles.cardItemDesc}>
-              LowRoute provides route suggestions and hazard reports based on community data. This information is advisory only and should not replace your own judgment while driving.
-            </Text>
-          </View>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        bounces={false}
+      >
+        <View style={styles.iconContainer}>
+          <LinearGradient
+            colors={["#F59E0B", "#D97706"]}
+            style={styles.iconGradient}
+          >
+            <Ionicons name="shield-checkmark" size={48} color="#000" />
+          </LinearGradient>
         </View>
 
-        <View style={styles.divider} />
+        <Text style={styles.title}>Safety First</Text>
+        <Text style={styles.subtitle}>
+          Please read before using LowRoute
+        </Text>
 
-        <View style={styles.cardItem}>
-          <Ionicons name="eye-off-outline" size={22} color={Colors.tier4} />
-          <View style={styles.cardItemText}>
-            <Text style={styles.cardItemTitle}>Do Not Use While Driving</Text>
-            <Text style={styles.cardItemDesc}>
-              Never interact with your phone while operating a vehicle. Set your route before you start driving and use voice navigation for hands-free guidance.
-            </Text>
+        <View style={styles.card}>
+          <View style={styles.cardItem}>
+            <Ionicons name="navigate-outline" size={22} color={Colors.accent} />
+            <View style={styles.cardItemText}>
+              <Text style={styles.cardItemTitle}>Advisory Information Only</Text>
+              <Text style={styles.cardItemDesc}>
+                LowRoute provides route suggestions and hazard reports based on community data. This information is advisory only and should not replace your own judgment while driving.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.cardItem}>
+            <Ionicons name="eye-off-outline" size={22} color={Colors.tier4} />
+            <View style={styles.cardItemText}>
+              <Text style={styles.cardItemTitle}>Do Not Use While Driving</Text>
+              <Text style={styles.cardItemDesc}>
+                Never interact with your phone while operating a vehicle. Set your route before you start driving and use voice navigation for hands-free guidance.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.cardItem}>
+            <Ionicons name="warning-outline" size={22} color={Colors.tier3} />
+            <View style={styles.cardItemText}>
+              <Text style={styles.cardItemTitle}>Road Conditions Change</Text>
+              <Text style={styles.cardItemDesc}>
+                Hazard reports may not reflect current conditions. Always observe the road ahead and proceed with caution, especially in unfamiliar areas.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.cardItem}>
+            <Ionicons name="person-outline" size={22} color={Colors.tier2} />
+            <View style={styles.cardItemText}>
+              <Text style={styles.cardItemTitle}>Driver Responsibility</Text>
+              <Text style={styles.cardItemDesc}>
+                You are solely responsible for your driving decisions. LowRoute is not liable for any vehicle damage, accidents, or incidents.
+              </Text>
+            </View>
           </View>
         </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.cardItem}>
-          <Ionicons name="warning-outline" size={22} color={Colors.tier3} />
-          <View style={styles.cardItemText}>
-            <Text style={styles.cardItemTitle}>Road Conditions Change</Text>
-            <Text style={styles.cardItemDesc}>
-              Hazard reports may not reflect current conditions. Always observe the road ahead and proceed with caution, especially in unfamiliar areas.
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.cardItem}>
-          <Ionicons name="person-outline" size={22} color={Colors.tier2} />
-          <View style={styles.cardItemText}>
-            <Text style={styles.cardItemTitle}>Driver Responsibility</Text>
-            <Text style={styles.cardItemDesc}>
-              You are solely responsible for your driving decisions. LowRoute is not liable for any vehicle damage, accidents, or incidents.
-            </Text>
-          </View>
-        </View>
-      </View>
+      </ScrollView>
 
       <View style={styles.bottomSection}>
         <Pressable
           style={({ pressed }) => [styles.acceptButton, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
           onPress={onAccept}
+          testID="disclaimer-accept"
         >
           <Ionicons name="checkmark-circle" size={20} color="#000" />
-          <Text style={styles.acceptText}>I Understand</Text>
+          <Text style={styles.acceptText}>I Understand & Accept</Text>
         </Pressable>
         <Text style={styles.footerNote}>
           By continuing, you acknowledge that LowRoute provides advisory route information and you accept full responsibility for your driving decisions.
@@ -105,7 +113,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.bg,
     paddingHorizontal: 24,
-    justifyContent: "space-between",
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 16,
   },
   iconContainer: {
     alignItems: "center",
@@ -167,7 +178,7 @@ const styles = StyleSheet.create({
   },
   bottomSection: {
     gap: 14,
-    marginTop: 20,
+    paddingTop: 16,
   },
   acceptButton: {
     flexDirection: "row",
