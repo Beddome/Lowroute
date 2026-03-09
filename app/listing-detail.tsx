@@ -20,6 +20,7 @@ import MapView, { Circle, PROVIDER_DEFAULT } from "react-native-maps";
 import { Colors } from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
+import ReportModal from "@/components/ReportModal";
 import {
   LISTING_CATEGORIES,
   LISTING_CONDITIONS,
@@ -72,6 +73,7 @@ export default function ListingDetailScreen() {
   const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [reportVisible, setReportVisible] = useState(false);
   const baseUrl = getApiUrl();
 
   const { data: listing, isLoading } = useQuery<MarketplaceListing>({
@@ -339,13 +341,22 @@ export default function ListingDetailScreen() {
         </Text>
 
         {!isOwner && !isSold && user && (
-          <Pressable
-            style={styles.contactButton}
-            onPress={handleContactSeller}
-          >
-            <Ionicons name="chatbubble-outline" size={20} color="#fff" />
-            <Text style={styles.contactButtonText}>Contact Seller</Text>
-          </Pressable>
+          <View style={styles.contactRow}>
+            <Pressable
+              style={[styles.contactButton, { flex: 1 }]}
+              onPress={handleContactSeller}
+            >
+              <Ionicons name="chatbubble-outline" size={20} color="#fff" />
+              <Text style={styles.contactButtonText}>Contact Seller</Text>
+            </Pressable>
+            <Pressable
+              style={styles.reportIconButton}
+              onPress={() => setReportVisible(true)}
+              hitSlop={8}
+            >
+              <Ionicons name="flag-outline" size={22} color={Colors.textMuted} />
+            </Pressable>
+          </View>
         )}
 
         {(isOwner || isAdmin) && (
@@ -376,6 +387,13 @@ export default function ListingDetailScreen() {
         )}
       </View>
     </ScrollView>
+    <ReportModal
+      visible={reportVisible}
+      onClose={() => setReportVisible(false)}
+      contentType="listing"
+      contentId={listing.id}
+      targetUserId={listing.sellerId}
+    />
     </View>
   );
 }
@@ -585,12 +603,27 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 12,
     backgroundColor: ACCENT,
-    marginBottom: 12,
   },
   contactButtonText: {
     color: "#fff",
     fontFamily: "Inter_600SemiBold",
     fontSize: 15,
+  },
+  contactRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 12,
+  },
+  reportIconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: Colors.bgElevated,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    justifyContent: "center",
+    alignItems: "center",
   },
   actionsRow: {
     flexDirection: "row",

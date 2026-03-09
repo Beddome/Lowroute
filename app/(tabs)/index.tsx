@@ -1139,6 +1139,10 @@ export default function MapScreen() {
                 <Text style={styles.instructionText} numberOfLines={2}>{currentInstruction}</Text>
               </View>
             )}
+            <View style={styles.drivingWarningStrip}>
+              <Ionicons name="eye-off" size={12} color={Colors.tier3} />
+              <Text style={styles.drivingWarningText}>Do not use while driving</Text>
+            </View>
           </View>
           <View style={styles.navButtons}>
             <Pressable
@@ -1715,6 +1719,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Inter_500Medium",
     color: Colors.textSecondary,
+  },
+  drivingWarningStrip: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    gap: 4,
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  drivingWarningText: {
+    fontSize: 10,
+    fontFamily: "Inter_500Medium",
+    color: Colors.textMuted,
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.5,
   },
 
   topPanel: {

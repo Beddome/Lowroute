@@ -18,6 +18,7 @@ import * as Haptics from "expo-haptics";
 import { Colors } from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest, queryClient, getApiUrl } from "@/lib/query-client";
+import ReportModal from "@/components/ReportModal";
 import { fetch } from "expo/fetch";
 import type { Message } from "@/shared/types";
 
@@ -71,6 +72,7 @@ export default function ConversationScreen() {
   }>();
 
   const [text, setText] = useState("");
+  const [reportVisible, setReportVisible] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
   const otherUserId = params.userId;
@@ -177,6 +179,9 @@ export default function ConversationScreen() {
             <Text style={styles.headerListingTitle} numberOfLines={1}>{listingTitle}</Text>
           )}
         </View>
+        <Pressable onPress={() => setReportVisible(true)} hitSlop={12} style={styles.reportBtn}>
+          <Ionicons name="flag-outline" size={20} color={Colors.textMuted} />
+        </Pressable>
       </View>
 
       {isLoading ? (
@@ -229,6 +234,13 @@ export default function ConversationScreen() {
           )}
         </Pressable>
       </View>
+    <ReportModal
+      visible={reportVisible}
+      onClose={() => setReportVisible(false)}
+      contentType={isGroup ? "message" : "user"}
+      contentId={isGroup ? (groupChatId || "") : (otherUserId || "")}
+      targetUserId={isGroup ? "" : (otherUserId || "")}
+    />
     </KeyboardAvoidingView>
   );
 }
@@ -253,6 +265,10 @@ const styles = StyleSheet.create({
   },
   headerInfo: {
     flex: 1,
+  },
+  reportBtn: {
+    padding: 4,
+    marginLeft: 8,
   },
   headerUsername: {
     fontSize: 17,

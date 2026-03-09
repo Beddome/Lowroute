@@ -31,8 +31,15 @@ The application features an interactive map displaying hazard markers colored by
 - **Marketplace:** A car parts marketplace allows users to browse, create, and manage listings with photos, category/condition filters, radius-based search, shipping options (pickup only/shipping available/shipping only), pin-based location with privacy jitter (~500m), and "My Listings" management. Listing detail shows approximate location with 2km privacy circle and "Contact Seller" messaging button.
 - **Messaging/Inbox:** Server-based messaging system for buyer-seller communication (listing-scoped), friend DMs, and group chats. Inbox tab shows conversations grouped by listing/friend/group, with unread count badges. Compose button opens a friend picker for creating new DMs or group chats (multi-select with optional group naming). Group chat uses per-member `lastReadAt` timestamp tracking on `group_chat_members` table. Chat UI with message bubbles, sender names in group mode, polling for new messages every 10s.
 - **Subscription System:** Free and Pro tiers managed via RevenueCat SDK, gating features like live navigation and hazard alerts.
-- **Admin Panel:** Provides tools for stats, hazard management, user role management, promo code creation, and event management.
-- **Security:** Implements rate limiting on auth endpoints, robust input validation, and secure storage of API keys.
+- **Admin Panel:** Provides tools for stats, hazard management, user role management (promote/demote), promo code creation, event management, content moderation (Reports tab with review/resolve/dismiss actions), and account management (suspend/unsuspend/ban/delete/cancel-membership per user with search).
+- **Content Moderation:** Users can report content via ReportModal (listings, conversations) with 6 reason types. Reports tracked in `reports` table with reporter/target user references, admin review workflow.
+- **Account Management:** Password change, forgot password (email reset), account deletion (Apple 5.1.1 compliance), data export (GDPR/CCPA). Legal pages (Privacy Policy, Terms of Service) accessible in-app and via public URLs.
+- **Push Notifications:** Expo Push Notification service integration for new messages (DM and group) and friend requests. Token registration on app launch.
+- **Safety Disclaimer:** First-launch safety disclaimer screen stored via AsyncStorage, must accept before using app.
+- **Offline Handling:** OfflineBanner component using NetInfo (native) and online/offline events (web). React Query retry logic for transient network errors (2 retries with exponential backoff, no retry on 4xx).
+- **Security:** Global write rate limiting (60 req/min per user on all POST/PUT/PATCH/DELETE), per-endpoint auth rate limiting (10 attempts/15 min), input sanitization, image magic number validation, file type/size restrictions (10MB max, jpg/png/webp only), session security (secure cookies, httpOnly, sameSite), production CORS configuration.
+- **EAS Build:** `eas.json` configured with development, preview, and production profiles for App Store/Play Store submission.
+- **App Store Metadata:** Store listing guide at `docs/app-store-listing.md` with descriptions, keywords, categories, screenshots dimensions.
 
 ## External Dependencies
 

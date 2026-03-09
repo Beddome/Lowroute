@@ -44,6 +44,8 @@ export const eventTypeEnum = pgEnum("event_type", [
   "warning",
 ]);
 
+export const userStatusEnum = pgEnum("user_status", ["active", "suspended", "banned"]);
+
 export const users = pgTable("users", {
   id: varchar("id")
     .primaryKey()
@@ -53,9 +55,12 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   reputation: integer("reputation").notNull().default(0),
   role: text("role").notNull().default("user"),
+  status: userStatusEnum("status").notNull().default("active"),
+  reportCount: integer("report_count").notNull().default(0),
   subscriptionTier: text("subscription_tier").notNull().default("free"),
   subscriptionExpiresAt: timestamp("subscription_expires_at"),
   shareLocation: boolean("share_location").notNull().default(true),
+  pushToken: text("push_token"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -280,6 +285,58 @@ export const groupChatMembers = pgTable("group_chat_members", {
   lastReadAt: timestamp("last_read_at").notNull().defaultNow(),
 });
 
+export const reportContentTypeEnum = pgEnum("report_content_type", [
+  "user",
+  "listing",
+  "message",
+  "hazard",
+  "event",
+]);
+
+export const reportReasonEnum = pgEnum("report_reason", [
+  "spam",
+  "inappropriate",
+  "scam_fraud",
+  "harassment",
+  "inaccurate",
+  "other",
+]);
+
+export const reportStatusEnum = pgEnum("report_status", [
+  "pending",
+  "reviewed",
+  "resolved",
+  "dismissed",
+]);
+
+export const reports = pgTable("reports", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  reporterId: varchar("reporter_id").references(() => users.id).notNull(),
+  contentType: reportContentTypeEnum("content_type").notNull(),
+  contentId: varchar("content_id").notNull(),
+  targetUserId: varchar("target_user_id").references(() => users.id).notNull(),
+  reason: reportReasonEnum("reason").notNull(),
+  description: text("description"),
+  status: reportStatusEnum("status").notNull().default("pending"),
+  adminNotes: text("admin_notes"),
+  resolvedBy: varchar("resolved_by").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  resolvedAt: timestamp("resolved_at"),
+});
+
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  token: varchar("token", { length: 64 }).notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  used: boolean("used").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   email: true,
@@ -313,6 +370,8 @@ export type MarketplaceListing = typeof marketplaceListings.$inferSelect;
 export type InsertMarketplaceListing = typeof marketplaceListings.$inferInsert;
 export type Friendship = typeof friendships.$inferSelect;
 export type UserLocation = typeof userLocations.$inferSelect;
+export type Report = typeof reports.$inferSelect;
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 
 export const HAZARD_TYPES = [
   { value: "pothole", label: "Pothole" },

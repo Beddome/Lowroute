@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from "react";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { fetch } from "expo/fetch";
+import { registerForPushNotifications } from "@/lib/notifications";
 
 interface AuthUser {
   id: string;
@@ -52,12 +53,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const res = await apiRequest("POST", "/api/auth/login", { username, password });
     const data = await res.json();
     setUser(data);
+    registerForPushNotifications().catch(() => {});
   };
 
   const register = async (username: string, email: string, password: string) => {
     const res = await apiRequest("POST", "/api/auth/register", { username, email, password });
     const data = await res.json();
     setUser(data);
+    registerForPushNotifications().catch(() => {});
   };
 
   const logout = async () => {

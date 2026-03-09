@@ -17,6 +17,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.lowroute.app",
+      "buildNumber": "1",
       "infoPlist": {
         "NSLocationAlwaysAndWhenInUseUsageDescription": "LowRoute uses your location in the background to provide turn-by-turn navigation and alert you to nearby hazards while driving.",
         "NSLocationWhenInUseUsageDescription": "LowRoute needs your location to show nearby hazards and help plan safe routes.",
@@ -27,6 +28,7 @@
     },
     "android": {
       "package": "com.lowroute.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#0A0A0B",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -63,9 +65,18 @@
         }
       ]
     ],
+    "extra": {
+      "eas": {
+        "projectId": ""
+      }
+    },
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "owner": ""
   }
 }

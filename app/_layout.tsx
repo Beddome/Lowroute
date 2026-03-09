@@ -8,15 +8,21 @@ import {
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { LocationProvider } from "@/contexts/LocationContext";
 import { UnitsProvider } from "@/contexts/UnitsContext";
 import { Colors } from "@/constants/colors";
+import OfflineBanner from "@/components/OfflineBanner";
+import DisclaimerScreen from "@/app/disclaimer";
+import { registerForPushNotifications, setupNotificationHandler } from "@/lib/notifications";
+
+const DISCLAIMER_KEY = "lowroute_disclaimer_accepted";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -133,6 +139,30 @@ function RootLayoutNav() {
           contentStyle: { backgroundColor: Colors.bg },
         }}
       />
+      <Stack.Screen
+        name="change-password"
+        options={{
+          presentation: "modal",
+          headerShown: false,
+          contentStyle: { backgroundColor: Colors.bg },
+        }}
+      />
+      <Stack.Screen
+        name="privacy-policy"
+        options={{
+          presentation: "modal",
+          headerShown: false,
+          contentStyle: { backgroundColor: Colors.bg },
+        }}
+      />
+      <Stack.Screen
+        name="terms-of-service"
+        options={{
+          presentation: "modal",
+          headerShown: false,
+          contentStyle: { backgroundColor: Colors.bg },
+        }}
+      />
     </Stack>
   );
 }
@@ -145,13 +175,43 @@ export default function RootLayout() {
     Inter_700Bold,
   });
 
+  const [disclaimerAccepted, setDisclaimerAccepted] = useState<boolean | null>(null);
+
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    AsyncStorage.getItem(DISCLAIMER_KEY).then((val) => {
+      setDisclaimerAccepted(val === "true");
+    }).catch(() => setDisclaimerAccepted(false));
+  }, []);
+
+  useEffect(() => {
+    if ((fontsLoaded || fontError) && disclaimerAccepted !== null) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError]);
+  }, [fontsLoaded, fontError, disclaimerAccepted]);
+
+  useEffect(() => {
+    if (disclaimerAccepted) {
+      setupNotificationHandler();
+    }
+  }, [disclaimerAccepted]);
+
+  const handleAcceptDisclaimer = useCallback(() => {
+    setDisclaimerAccepted(true);
+    AsyncStorage.setItem(DISCLAIMER_KEY, "true").catch(() => {});
+  }, []);
 
   if (!fontsLoaded && !fontError) return null;
+  if (disclaimerAccepted === null) return null;
+
+  if (!disclaimerAccepted) {
+    return (
+      <ErrorBoundary>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <DisclaimerScreen onAccept={handleAcceptDisclaimer} />
+        </GestureHandlerRootView>
+      </ErrorBoundary>
+    );
+  }
 
   return (
     <ErrorBoundary>
@@ -161,6 +221,7 @@ export default function RootLayout() {
             <AuthProvider>
               <UnitsProvider>
                 <LocationProvider>
+                  <OfflineBanner />
                   <RootLayoutNav />
                 </LocationProvider>
               </UnitsProvider>

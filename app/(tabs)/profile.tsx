@@ -10,6 +10,9 @@ import {
   Share,
   Alert,
   Switch,
+  Modal,
+  TextInput,
+  TouchableOpacity,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -161,7 +164,51 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Delete Account",
+      "Are you sure you want to permanently delete your account? This action cannot be undone. You will be asked to confirm with your password.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Continue",
+          style: "destructive",
+          onPress: () => {
+            setDeletePassword("");
+            setDeleteModalVisible(true);
+          },
+        },
+      ]
+    );
+  };
+
+  const confirmDeleteAccount = async () => {
+    if (!deletePassword) {
+      Alert.alert("Error", "Please enter your password.");
+      return;
+    }
+    try {
+      await apiRequest("DELETE", "/api/auth/account", { password: deletePassword });
+      setDeleteModalVisible(false);
+      await logout();
+    } catch (e: any) {
+      Alert.alert("Error", e.message?.replace(/^\d+: /, "") || "Failed to delete account.");
+    }
+  };
+
+  const handleExportData = async () => {
+    try {
+      const res = await apiRequest("GET", "/api/auth/export");
+      const data = await res.json();
+      Alert.alert("Data Exported", "Your data export has been prepared successfully.");
+    } catch (e: any) {
+      Alert.alert("Error", e.message?.replace(/^\d+: /, "") || "Failed to export data.");
+    }
+  };
+
   const [shareLocation, setShareLocation] = useState<boolean>(user?.shareLocation ?? true);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
 
   useEffect(() => {
     if (user) setShareLocation(user.shareLocation ?? true);
@@ -563,6 +610,75 @@ export default function ProfileScreen() {
               thumbColor={shareLocation ? Colors.accent : Colors.textMuted}
             />
           </View>
+          <Pressable
+            style={({ pressed }) => [styles.settingsRow, { marginTop: 16 }, pressed && { opacity: 0.85 }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push("/change-password");
+            }}
+          >
+            <Ionicons name="lock-closed-outline" size={18} color={Colors.textSecondary} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.settingsLabel}>Change Password</Text>
+              <Text style={styles.settingsDesc}>Update your account password</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.settingsRow, { marginTop: 16 }, pressed && { opacity: 0.85 }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              handleExportData();
+            }}
+          >
+            <Ionicons name="download-outline" size={18} color={Colors.textSecondary} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.settingsLabel}>Export My Data</Text>
+              <Text style={styles.settingsDesc}>Download a copy of your data</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.settingsRow, { marginTop: 16 }, pressed && { opacity: 0.85 }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              handleDeleteAccount();
+            }}
+          >
+            <Ionicons name="trash-outline" size={18} color={Colors.error} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.settingsLabel, { color: Colors.error }]}>Delete Account</Text>
+              <Text style={styles.settingsDesc}>Permanently delete your account</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+          </Pressable>
+        </View>
+
+        {/* Legal */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Legal</Text>
+          <Pressable
+            style={({ pressed }) => [styles.legalRow, pressed && { opacity: 0.85 }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push("/privacy-policy");
+            }}
+          >
+            <Ionicons name="shield-checkmark-outline" size={18} color={Colors.textSecondary} />
+            <Text style={styles.legalLabel}>Privacy Policy</Text>
+            <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.legalRow, { marginTop: 10 }, pressed && { opacity: 0.85 }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push("/terms-of-service");
+            }}
+          >
+            <Ionicons name="document-text-outline" size={18} color={Colors.textSecondary} />
+            <Text style={styles.legalLabel}>Terms of Service</Text>
+            <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+          </Pressable>
         </View>
 
         {/* Community tips */}
@@ -583,6 +699,32 @@ export default function ProfileScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <Modal visible={deleteModalVisible} transparent animationType="fade" onRequestClose={() => setDeleteModalVisible(false)}>
+        <View style={styles.deleteModalOverlay}>
+          <View style={styles.deleteModalContent}>
+            <Text style={styles.deleteModalTitle}>Confirm Deletion</Text>
+            <Text style={styles.deleteModalDesc}>Enter your password to permanently delete your account.</Text>
+            <TextInput
+              style={styles.deleteModalInput}
+              placeholder="Password"
+              placeholderTextColor={Colors.textMuted}
+              secureTextEntry
+              value={deletePassword}
+              onChangeText={setDeletePassword}
+              autoFocus
+            />
+            <View style={styles.deleteModalButtons}>
+              <TouchableOpacity style={styles.deleteModalCancel} onPress={() => setDeleteModalVisible(false)}>
+                <Text style={styles.deleteModalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.deleteModalConfirm} onPress={confirmDeleteAccount}>
+                <Text style={styles.deleteModalConfirmText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -742,6 +884,9 @@ const styles = StyleSheet.create({
   settingsLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: Colors.text },
   settingsDesc: { fontSize: 12, fontFamily: "Inter_400Regular", color: Colors.textMuted, marginTop: 2 },
 
+  legalRow: { flexDirection: "row" as const, alignItems: "center" as const, gap: 12 },
+  legalLabel: { flex: 1, fontSize: 14, fontFamily: "Inter_500Medium", color: Colors.text },
+
   sectionCount: {
     backgroundColor: Colors.accent + "22",
     paddingHorizontal: 8,
@@ -780,4 +925,69 @@ const styles = StyleSheet.create({
   },
   friendsLabel: { fontSize: 15, fontFamily: "Inter_700Bold", color: Colors.text },
   friendsDesc: { fontSize: 12, fontFamily: "Inter_400Regular", color: Colors.textMuted, marginTop: 2 },
+  deleteModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  deleteModalContent: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: 16,
+    padding: 24,
+    width: "100%",
+    maxWidth: 400,
+  },
+  deleteModalTitle: {
+    fontSize: 18,
+    fontFamily: "Inter_700Bold",
+    color: Colors.text,
+    marginBottom: 8,
+  },
+  deleteModalDesc: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textSecondary,
+    marginBottom: 16,
+  },
+  deleteModalInput: {
+    backgroundColor: Colors.bgElevated,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: Colors.text,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: 16,
+  },
+  deleteModalButtons: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  deleteModalCancel: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: Colors.bgElevated,
+    alignItems: "center",
+  },
+  deleteModalCancelText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.textSecondary,
+  },
+  deleteModalConfirm: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: Colors.error,
+    alignItems: "center",
+  },
+  deleteModalConfirmText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    color: "#fff",
+  },
 });

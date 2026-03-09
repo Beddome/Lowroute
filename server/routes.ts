@@ -11,22 +11,44 @@ import fs from "node:fs";
 import * as storage from "./storage";
 import { parseDateEndOfDayMST } from "./timezone";
 import { SEVERITY_TIERS, CLEARANCE_MODES } from "../shared/schema";
+import { sendPushNotification, sendPushToMultiple } from "./notifications";
 
-const loginAttempts = new Map<string, { count: number; lastAttempt: number }>();
-const RATE_LIMIT_MAX = 10;
-const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const rateLimitBuckets = new Map<string, Map<string, { count: number; lastAttempt: number }>>();
 
-function checkRateLimit(key: string): boolean {
+function checkRateLimit(key: string, bucket = "default", maxAttempts = 10, windowMs = 15 * 60 * 1000): boolean {
   const now = Date.now();
-  const entry = loginAttempts.get(key);
-  if (!entry || now - entry.lastAttempt > RATE_LIMIT_WINDOW_MS) {
-    loginAttempts.set(key, { count: 1, lastAttempt: now });
+  if (!rateLimitBuckets.has(bucket)) rateLimitBuckets.set(bucket, new Map());
+  const entries = rateLimitBuckets.get(bucket)!;
+  const entry = entries.get(key);
+  if (!entry || now - entry.lastAttempt > windowMs) {
+    entries.set(key, { count: 1, lastAttempt: now });
     return true;
   }
-  if (entry.count >= RATE_LIMIT_MAX) return false;
+  if (entry.count >= maxAttempts) return false;
   entry.count++;
   entry.lastAttempt = now;
   return true;
+}
+
+function sanitizeInput(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
+
+function writeRateLimitMiddleware(maxPerMinute = 30) {
+  return (req: Request, res: Response, next: () => void) => {
+    const userId = req.session?.userId;
+    if (!userId) return next();
+    const key = `${req.method}:${req.path}:${userId}`;
+    if (!checkRateLimit(key, "write", maxPerMinute, 60 * 1000)) {
+      return res.status(429).json({ message: "Too many requests. Please try again later." });
+    }
+    next();
+  };
 }
 
 function decodePolyline(encoded: string): Array<{ lat: number; lng: number }> {
@@ -257,6 +279,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     })
   );
 
+  app.use((req: Request, res: Response, next: () => void) => {
+    if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method) && req.path.startsWith("/api/")) {
+      writeRateLimitMiddleware(60)(req, res, next);
+    } else {
+      next();
+    }
+  });
+
   await storage.seedDemoHazards();
   if (process.env.NODE_ENV === "production") {
     if (process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD) {
@@ -324,6 +354,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const valid = await bcrypt.compare(password, user.passwordHash);
       if (!valid) return res.status(401).json({ message: "Invalid credentials" });
+
+      if ((user as any).status === "suspended") {
+        return res.status(403).json({ message: "Your account has been suspended. Contact support for more information." });
+      }
+      if ((user as any).status === "banned") {
+        return res.status(403).json({ message: "Your account has been permanently banned." });
+      }
 
       req.session.userId = user.id;
       const freshUser = await storage.checkAndDowngradeExpiredSubscription(user.id);
@@ -455,16 +492,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Admin routes
-  app.get("/api/admin/users", requireAdmin, async (_req: Request, res: Response) => {
-    try {
-      const users = await storage.getAllUsers();
-      res.json(users);
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ message: "Failed to fetch users" });
-    }
-  });
+  // Admin routes (user management moved to bottom with search support)
 
   app.patch("/api/admin/users/:id/role", requireAdmin, async (req: Request, res: Response) => {
     try {
@@ -1336,6 +1364,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!friendship) {
         return res.status(400).json({ message: "Cannot send friend request to this user" });
       }
+      const requester = await storage.getUserById(req.session.userId!);
+      sendPushNotification(addresseeId, "Friend Request", `${requester?.username || "Someone"} sent you a friend request`, { type: "friend_request", fromUserId: req.session.userId });
       res.json(friendship);
     } catch (err) {
       console.error(err);
@@ -1669,7 +1699,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const upload = multer({
     storage: uploadStorage,
-    limits: { fileSize: 5 * 1024 * 1024 },
+    limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: (_req, file, cb) => {
       const allowed = [".jpg", ".jpeg", ".png", ".webp"];
       const ext = path.extname(file.originalname).toLowerCase();
@@ -1710,6 +1740,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         listingId: listingId || null,
         content: content.trim(),
       });
+      const sender = await storage.getUserById(req.session.userId!);
+      sendPushNotification(receiverId, "New Message", `${sender?.username || "Someone"}: ${content.trim().substring(0, 100)}`, { type: "message", senderId: req.session.userId });
       res.json(msg);
     } catch (err) {
       console.error(err);
@@ -1840,6 +1872,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isMember = await storage.isGroupChatMember(req.params.id, req.session.userId!);
       if (!isMember) return res.status(403).json({ message: "Not a member" });
       const msg = await storage.sendGroupMessage(req.session.userId!, req.params.id, content.trim());
+      const groupChat = await storage.getGroupChatById(req.params.id);
+      if (groupChat?.members) {
+        const otherMemberIds = groupChat.members.filter((m: any) => m.userId !== req.session.userId).map((m: any) => m.userId);
+        if (otherMemberIds.length > 0) {
+          const sender = await storage.getUserById(req.session.userId!);
+          sendPushToMultiple(otherMemberIds, groupChat.name || "Group Chat", `${sender?.username || "Someone"}: ${content.trim().substring(0, 100)}`, { type: "group_message", groupChatId: req.params.id });
+        }
+      }
       res.json(msg);
     } catch (err) {
       console.error(err);
@@ -1862,6 +1902,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/privacy-policy", (_req: Request, res: Response) => {
+    const templatePath = path.resolve(process.cwd(), "server", "templates", "privacy-policy.html");
+    const html = fs.readFileSync(templatePath, "utf-8");
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(html);
+  });
+
+  app.get("/terms-of-service", (_req: Request, res: Response) => {
+    const templatePath = path.resolve(process.cwd(), "server", "templates", "terms-of-service.html");
+    const html = fs.readFileSync(templatePath, "utf-8");
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(html);
+  });
+
   const express = require("express");
   app.use("/uploads", express.static(uploadsDir));
 
@@ -1869,8 +1923,372 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
     }
+    try {
+      const buffer = fs.readFileSync(req.file.path);
+      const isJpeg = buffer[0] === 0xFF && buffer[1] === 0xD8;
+      const isPng = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
+      const isWebp = buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46;
+      if (!isJpeg && !isPng && !isWebp) {
+        fs.unlinkSync(req.file.path);
+        return res.status(400).json({ message: "Invalid image file" });
+      }
+    } catch {
+      // If we can't read the file, let it through (multer already validated extension)
+    }
     const photoUrl = `/uploads/${req.file.filename}`;
     res.json({ url: photoUrl });
+  });
+
+  // ===== PASSWORD CHANGE =====
+  app.patch("/api/auth/password", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ message: "Current password and new password are required" });
+      }
+      if (newPassword.length < 6) {
+        return res.status(400).json({ message: "New password must be at least 6 characters" });
+      }
+
+      const user = await storage.getUserById(req.session.userId!);
+      if (!user) return res.status(404).json({ message: "User not found" });
+
+      const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!valid) return res.status(401).json({ message: "Current password is incorrect" });
+
+      const newHash = await bcrypt.hash(newPassword, 10);
+      await storage.updateUserPassword(user.id, newHash);
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to change password" });
+    }
+  });
+
+  // ===== PASSWORD RESET =====
+  app.post("/api/auth/forgot-password", async (req: Request, res: Response) => {
+    try {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ message: "Email is required" });
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.json({ success: true, message: "If an account with that email exists, a reset link has been sent." });
+      }
+
+      const crypto = await import("crypto");
+      const token = crypto.randomBytes(32).toString("hex");
+      await storage.createPasswordResetToken(user.id, token);
+
+      const domain = process.env.REPLIT_DEV_DOMAIN || process.env.REPL_SLUG + ".repl.co";
+      const resetUrl = `https://${domain}:5000/api/auth/reset-password/${token}`;
+      console.log(`Password reset link for ${email}: ${resetUrl}`);
+
+      res.json({ success: true, message: "If an account with that email exists, a reset link has been sent." });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to process password reset" });
+    }
+  });
+
+  app.get("/api/auth/reset-password/:token", async (req: Request, res: Response) => {
+    try {
+      const resetToken = await storage.getPasswordResetToken(req.params.token);
+      if (!resetToken || new Date() > resetToken.expiresAt) {
+        return res.status(400).send(`
+          <html><head><title>LowRoute - Reset Password</title>
+          <style>body{font-family:sans-serif;background:#0A0A0B;color:#F5F5F5;display:flex;justify-content:center;align-items:center;height:100vh;margin:0}
+          .card{background:#111114;padding:40px;border-radius:16px;text-align:center;max-width:400px}
+          h2{color:#F59E0B}p{color:#9A9AAF}</style></head>
+          <body><div class="card"><h2>Link Expired</h2><p>This password reset link has expired or already been used. Please request a new one from the app.</p></div></body></html>
+        `);
+      }
+      res.send(`
+        <html><head><title>LowRoute - Reset Password</title>
+        <style>body{font-family:sans-serif;background:#0A0A0B;color:#F5F5F5;display:flex;justify-content:center;align-items:center;height:100vh;margin:0}
+        .card{background:#111114;padding:40px;border-radius:16px;max-width:400px;width:90%}
+        h2{color:#F59E0B;margin-bottom:20px}
+        input{width:100%;padding:12px;border-radius:8px;border:1px solid #2A2A32;background:#1E1E24;color:#F5F5F5;font-size:16px;margin-bottom:12px;box-sizing:border-box}
+        button{width:100%;padding:14px;border-radius:12px;background:#F59E0B;color:#0A0A0B;font-size:16px;font-weight:bold;border:none;cursor:pointer}
+        button:hover{background:#D97706}
+        .msg{margin-top:12px;padding:10px;border-radius:8px;text-align:center}</style></head>
+        <body><div class="card"><h2>Reset Your Password</h2>
+        <form id="f" onsubmit="return doReset(event)">
+        <input type="password" id="pw" placeholder="New password (min 6 chars)" required minlength="6">
+        <input type="password" id="pw2" placeholder="Confirm new password" required minlength="6">
+        <button type="submit">Reset Password</button>
+        </form><div id="msg"></div>
+        <script>async function doReset(e){e.preventDefault();
+        const pw=document.getElementById('pw').value,pw2=document.getElementById('pw2').value,msg=document.getElementById('msg');
+        if(pw!==pw2){msg.innerHTML='<div style="color:#EF4444">Passwords do not match</div>';return false}
+        try{const r=await fetch('/api/auth/reset-password/${req.params.token}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
+        const d=await r.json();if(r.ok){msg.innerHTML='<div style="color:#22C55E">Password reset! You can now log in with your new password.</div>';document.getElementById('f').style.display='none'}
+        else{msg.innerHTML='<div style="color:#EF4444">'+(d.message||'Error')+'</div>'}}catch{msg.innerHTML='<div style="color:#EF4444">Network error</div>'}return false}</script>
+        </div></body></html>
+      `);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send("Server error");
+    }
+  });
+
+  app.post("/api/auth/reset-password/:token", async (req: Request, res: Response) => {
+    try {
+      const resetToken = await storage.getPasswordResetToken(req.params.token);
+      if (!resetToken || new Date() > resetToken.expiresAt) {
+        return res.status(400).json({ message: "Invalid or expired reset token" });
+      }
+
+      const { password } = req.body;
+      if (!password || password.length < 6) {
+        return res.status(400).json({ message: "Password must be at least 6 characters" });
+      }
+
+      const newHash = await bcrypt.hash(password, 10);
+      await storage.updateUserPassword(resetToken.userId, newHash);
+      await storage.markResetTokenUsed(resetToken.id);
+
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to reset password" });
+    }
+  });
+
+  // ===== ACCOUNT DELETION =====
+  app.delete("/api/auth/account", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { password } = req.body;
+      if (!password) return res.status(400).json({ message: "Password is required to delete your account" });
+
+      const user = await storage.getUserById(req.session.userId!);
+      if (!user) return res.status(404).json({ message: "User not found" });
+
+      const valid = await bcrypt.compare(password, user.passwordHash);
+      if (!valid) return res.status(401).json({ message: "Incorrect password" });
+
+      await storage.deleteUserAccount(user.id);
+      req.session.destroy(() => {});
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to delete account" });
+    }
+  });
+
+  // ===== DATA EXPORT =====
+  app.get("/api/auth/export", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const data = await storage.exportUserData(req.session.userId!);
+      if (!data) return res.status(404).json({ message: "User not found" });
+      res.setHeader("Content-Disposition", `attachment; filename="lowroute-data-export.json"`);
+      res.json(data);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to export data" });
+    }
+  });
+
+  // ===== PUSH TOKEN =====
+  app.post("/api/push-token", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { pushToken } = req.body;
+      await storage.updatePushToken(req.session.userId!, pushToken || null);
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to update push token" });
+    }
+  });
+
+  // ===== REPORTS =====
+  app.post("/api/reports", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { contentType, contentId, targetUserId, reason, description } = req.body;
+      if (!contentType || !contentId || !targetUserId || !reason) {
+        return res.status(400).json({ message: "contentType, contentId, targetUserId, and reason are required" });
+      }
+      if (targetUserId === req.session.userId) {
+        return res.status(400).json({ message: "You cannot report yourself" });
+      }
+      const validContentTypes = ["user", "listing", "message", "hazard", "event"];
+      if (!validContentTypes.includes(contentType)) {
+        return res.status(400).json({ message: "Invalid content type" });
+      }
+      const validReasons = ["spam", "inappropriate", "scam_fraud", "harassment", "inaccurate", "other"];
+      if (!validReasons.includes(reason)) {
+        return res.status(400).json({ message: "Invalid report reason" });
+      }
+      const report = await storage.createReport({
+        reporterId: req.session.userId!,
+        contentType,
+        contentId,
+        targetUserId,
+        reason,
+        description: description ? sanitizeInput(String(description).substring(0, 1000)) : undefined,
+      });
+      res.status(201).json(report);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to submit report" });
+    }
+  });
+
+  // ===== ADMIN REPORTS MANAGEMENT =====
+  app.get("/api/admin/reports", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUserById(req.session.userId!);
+      if (!user || user.role !== "admin") return res.status(403).json({ message: "Admin access required" });
+
+      const status = req.query.status as string | undefined;
+      const reports = await storage.getReports(status);
+      const mapped = reports.map((r: any) => ({
+        id: r.id,
+        reporterId: r.reporter_id,
+        contentType: r.content_type,
+        contentId: r.content_id,
+        targetUserId: r.target_user_id,
+        reason: r.reason,
+        description: r.description,
+        status: r.status,
+        adminNotes: r.admin_notes,
+        createdAt: r.created_at,
+        resolvedAt: r.resolved_at,
+        resolvedBy: r.resolved_by,
+        reporterUsername: r.reporter_username,
+        targetUsername: r.target_username,
+        targetReportCount: r.target_report_count,
+        targetStatus: r.target_status,
+      }));
+      res.json(mapped);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch reports" });
+    }
+  });
+
+  app.get("/api/admin/reports/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUserById(req.session.userId!);
+      if (!user || user.role !== "admin") return res.status(403).json({ message: "Admin access required" });
+
+      const report = await storage.getReportById(req.params.id);
+      if (!report) return res.status(404).json({ message: "Report not found" });
+      res.json(report);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch report" });
+    }
+  });
+
+  app.patch("/api/admin/reports/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUserById(req.session.userId!);
+      if (!user || user.role !== "admin") return res.status(403).json({ message: "Admin access required" });
+
+      const { status, adminNotes } = req.body;
+      if (!status) return res.status(400).json({ message: "Status is required" });
+
+      await storage.updateReportStatus(req.params.id, status, user.id, adminNotes);
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to update report" });
+    }
+  });
+
+  // ===== ADMIN USER MANAGEMENT =====
+  app.get("/api/admin/users", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUserById(req.session.userId!);
+      if (!user || user.role !== "admin") return res.status(403).json({ message: "Admin access required" });
+
+      const search = req.query.search as string | undefined;
+      const users = await storage.getAllUsers(search);
+      const mapped = users.map((u: any) => ({
+        id: u.id,
+        username: u.username,
+        email: u.email,
+        role: u.role,
+        status: u.status,
+        reportCount: u.report_count,
+        reputation: u.reputation ?? 0,
+        subscriptionTier: u.subscription_tier,
+        createdAt: u.created_at,
+      }));
+      res.json(mapped);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  app.post("/api/admin/users/:id/suspend", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const adminUser = await storage.getUserById(req.session.userId!);
+      if (!adminUser || adminUser.role !== "admin") return res.status(403).json({ message: "Admin access required" });
+      if (req.params.id === req.session.userId) return res.status(400).json({ message: "Cannot suspend yourself" });
+
+      await storage.suspendUser(req.params.id);
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to suspend user" });
+    }
+  });
+
+  app.post("/api/admin/users/:id/unsuspend", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const adminUser = await storage.getUserById(req.session.userId!);
+      if (!adminUser || adminUser.role !== "admin") return res.status(403).json({ message: "Admin access required" });
+
+      await storage.unsuspendUser(req.params.id);
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to unsuspend user" });
+    }
+  });
+
+  app.post("/api/admin/users/:id/ban", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const adminUser = await storage.getUserById(req.session.userId!);
+      if (!adminUser || adminUser.role !== "admin") return res.status(403).json({ message: "Admin access required" });
+      if (req.params.id === req.session.userId) return res.status(400).json({ message: "Cannot ban yourself" });
+
+      await storage.banUser(req.params.id);
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to ban user" });
+    }
+  });
+
+  app.post("/api/admin/users/:id/cancel-membership", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const adminUser = await storage.getUserById(req.session.userId!);
+      if (!adminUser || adminUser.role !== "admin") return res.status(403).json({ message: "Admin access required" });
+
+      await storage.cancelMembership(req.params.id);
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to cancel membership" });
+    }
+  });
+
+  app.delete("/api/admin/users/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const adminUser = await storage.getUserById(req.session.userId!);
+      if (!adminUser || adminUser.role !== "admin") return res.status(403).json({ message: "Admin access required" });
+      if (req.params.id === req.session.userId) return res.status(400).json({ message: "Cannot delete yourself" });
+
+      await storage.adminDeleteUser(req.params.id);
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to delete user" });
+    }
   });
 
   const httpServer = createServer(app);

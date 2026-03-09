@@ -9,6 +9,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Modal,
+  Alert,
 } from "react-native";
 import { Link, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,6 +18,7 @@ import * as Haptics from "expo-haptics";
 import { useAuth } from "@/contexts/AuthContext";
 import { Colors } from "@/constants/colors";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { apiRequest } from "@/lib/query-client";
 
 export default function LoginScreen() {
   const { login } = useAuth();
@@ -25,6 +28,21 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [forgotModalVisible, setForgotModalVisible] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+
+  const handleForgotPassword = async () => {
+    if (!forgotEmail.trim()) return;
+    setForgotLoading(true);
+    try {
+      await apiRequest("POST", "/api/auth/forgot-password", { email: forgotEmail.trim() });
+    } catch {}
+    setForgotLoading(false);
+    setForgotModalVisible(false);
+    setForgotEmail("");
+    Alert.alert("Check Your Email", "If an account with that email exists, we've sent password reset instructions.");
+  };
 
   const handleLogin = async () => {
     if (!username.trim() || !password) {
@@ -123,6 +141,13 @@ export default function LoginScreen() {
           </Pressable>
         </View>
 
+        <Pressable
+          style={{ alignSelf: "center", marginTop: 16 }}
+          onPress={() => setForgotModalVisible(true)}
+        >
+          <Text style={styles.linkText}>Forgot Password?</Text>
+        </Pressable>
+
         <View style={styles.footer}>
           <Text style={styles.footerText}>Don't have an account?</Text>
           <Link href="/(auth)/register" asChild>
@@ -131,10 +156,126 @@ export default function LoginScreen() {
             </Pressable>
           </Link>
         </View>
+
+        <Modal
+          visible={forgotModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setForgotModalVisible(false)}
+        >
+          <Pressable
+            style={forgotStyles.overlay}
+            onPress={() => setForgotModalVisible(false)}
+          >
+            <Pressable style={forgotStyles.modal} onPress={() => {}}>
+              <Text style={forgotStyles.title}>Reset Password</Text>
+              <Text style={forgotStyles.desc}>
+                Enter your email address and we'll send you instructions to reset your password.
+              </Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="mail-outline" size={18} color={Colors.textMuted} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Email address"
+                  placeholderTextColor={Colors.textMuted}
+                  value={forgotEmail}
+                  onChangeText={setForgotEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                />
+              </View>
+              <View style={forgotStyles.actions}>
+                <Pressable
+                  style={({ pressed }) => [forgotStyles.cancelBtn, pressed && { opacity: 0.85 }]}
+                  onPress={() => {
+                    setForgotModalVisible(false);
+                    setForgotEmail("");
+                  }}
+                >
+                  <Text style={forgotStyles.cancelText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [forgotStyles.submitBtn, pressed && { opacity: 0.85 }]}
+                  onPress={handleForgotPassword}
+                  disabled={forgotLoading}
+                >
+                  {forgotLoading ? (
+                    <ActivityIndicator color={Colors.bg} size="small" />
+                  ) : (
+                    <Text style={forgotStyles.submitText}>Send</Text>
+                  )}
+                </Pressable>
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
+
+const forgotStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  modal: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 24,
+    width: "100%",
+    maxWidth: 400,
+    gap: 16,
+  },
+  title: {
+    fontSize: 20,
+    fontFamily: "Inter_700Bold",
+    color: Colors.text,
+  },
+  desc: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textSecondary,
+    lineHeight: 20,
+  },
+  actions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 4,
+  },
+  cancelBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.text,
+  },
+  submitBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: Colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  submitText: {
+    fontSize: 15,
+    fontFamily: "Inter_700Bold",
+    color: Colors.bg,
+  },
+});
 
 const styles = StyleSheet.create({
   container: { flexGrow: 1, padding: 24, backgroundColor: Colors.bg },

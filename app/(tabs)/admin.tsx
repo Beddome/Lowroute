@@ -20,7 +20,7 @@ import { apiRequest, queryClient } from "@/lib/query-client";
 import { SEVERITY_TIERS, PROMO_TYPES, EVENT_TYPES, formatMSTDateClient, formatMSTClient } from "@/shared/types";
 import type { PromoCode, AppEvent } from "@/shared/types";
 
-type Tab = "stats" | "hazards" | "users" | "promos" | "events";
+type Tab = "stats" | "hazards" | "users" | "promos" | "events" | "reports";
 
 interface AdminUser {
   id: string;
@@ -29,6 +29,26 @@ interface AdminUser {
   reputation: number;
   role: "user" | "admin";
   subscriptionTier: "free" | "pro";
+  status?: "active" | "suspended" | "banned";
+  reportCount?: number;
+  createdAt?: string;
+}
+
+interface AdminReport {
+  id: string;
+  reporterId: string;
+  contentType: string;
+  contentId: string;
+  targetUserId: string;
+  reason: string;
+  description?: string;
+  status: string;
+  adminNotes?: string;
+  createdAt: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
+  reporterUsername?: string;
+  targetUsername?: string;
 }
 
 interface AdminStats {
@@ -75,21 +95,25 @@ export default function AdminScreen() {
         <Text style={styles.headerTitle}>Admin</Text>
       </View>
       <View style={styles.tabBar}>
-        {(["stats", "hazards", "users", "promos", "events"] as Tab[]).map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            style={[styles.tab, activeTab === tab && styles.tabActive]}
-            onPress={() => setActiveTab(tab)}
-          >
-            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
-              {tab === "stats" ? "Overview" : tab === "hazards" ? "Hazards" : tab === "users" ? "Users" : tab === "promos" ? "Promos" : "Events"}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        {(["stats", "hazards", "users", "reports", "promos", "events"] as Tab[]).map((tab) => {
+          const labels: Record<Tab, string> = { stats: "Overview", hazards: "Hazards", users: "Users", reports: "Reports", promos: "Promos", events: "Events" };
+          return (
+            <TouchableOpacity
+              key={tab}
+              style={[styles.tab, activeTab === tab && styles.tabActive]}
+              onPress={() => setActiveTab(tab)}
+            >
+              <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
+                {labels[tab]}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
       {activeTab === "stats" && <StatsPanel />}
       {activeTab === "hazards" && <HazardsPanel />}
       {activeTab === "users" && <UsersPanel currentUserId={user.id} />}
+      {activeTab === "reports" && <ReportsPanel />}
       {activeTab === "promos" && <PromoCodesPanel />}
       {activeTab === "events" && <EventsPanel />}
     </View>
@@ -234,31 +258,53 @@ function HazardsPanel() {
 }
 
 function UsersPanel({ currentUserId }: { currentUserId: string }) {
+  const [searchText, setSearchText] = useState("");
   const usersQuery = useQuery<AdminUser[]>({ queryKey: ["/api/admin/users"] });
+
+  const invalidateUsers = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
+  };
 
   const roleMutation = useMutation({
     mutationFn: async ({ id, role }: { id: string; role: string }) => {
       await apiRequest("PATCH", `/api/admin/users/${id}/role`, { role });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
-    },
+    onSuccess: invalidateUsers,
   });
 
-  const toggleRole = (user: AdminUser) => {
-    if (user.id === currentUserId) return;
-    const newRole = user.role === "admin" ? "user" : "admin";
-    const action = newRole === "admin" ? "Promote" : "Demote";
+  const suspendMutation = useMutation({
+    mutationFn: async (id: string) => { await apiRequest("POST", `/api/admin/users/${id}/suspend`); },
+    onSuccess: invalidateUsers,
+  });
 
+  const unsuspendMutation = useMutation({
+    mutationFn: async (id: string) => { await apiRequest("POST", `/api/admin/users/${id}/unsuspend`); },
+    onSuccess: invalidateUsers,
+  });
+
+  const banMutation = useMutation({
+    mutationFn: async (id: string) => { await apiRequest("POST", `/api/admin/users/${id}/ban`); },
+    onSuccess: invalidateUsers,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => { await apiRequest("DELETE", `/api/admin/users/${id}`); },
+    onSuccess: invalidateUsers,
+  });
+
+  const cancelMembershipMutation = useMutation({
+    mutationFn: async (id: string) => { await apiRequest("POST", `/api/admin/users/${id}/cancel-membership`); },
+    onSuccess: invalidateUsers,
+  });
+
+  const confirmAction = (title: string, message: string, onConfirm: () => void) => {
     if (Platform.OS === "web") {
-      if (confirm(`${action} ${user.username} to ${newRole}?`)) {
-        roleMutation.mutate({ id: user.id, role: newRole });
-      }
+      if (confirm(`${title}: ${message}`)) onConfirm();
     } else {
-      Alert.alert(`${action} User`, `${action} ${user.username} to ${newRole}?`, [
+      Alert.alert(title, message, [
         { text: "Cancel", style: "cancel" },
-        { text: action, onPress: () => roleMutation.mutate({ id: user.id, role: newRole }) },
+        { text: "Confirm", style: "destructive", onPress: onConfirm },
       ]);
     }
   };
@@ -267,7 +313,10 @@ function UsersPanel({ currentUserId }: { currentUserId: string }) {
     return <View style={styles.centered}><ActivityIndicator color={Colors.accent} size="large" /></View>;
   }
 
-  const users = usersQuery.data || [];
+  const allUsers = usersQuery.data || [];
+  const users = searchText.trim()
+    ? allUsers.filter(u => u.username.toLowerCase().includes(searchText.toLowerCase()) || u.email.toLowerCase().includes(searchText.toLowerCase()))
+    : allUsers;
 
   return (
     <FlatList
@@ -275,9 +324,19 @@ function UsersPanel({ currentUserId }: { currentUserId: string }) {
       keyExtractor={(item) => item.id}
       contentContainerStyle={[styles.scrollContent, users.length === 0 && styles.centered]}
       refreshControl={<RefreshControl refreshing={usersQuery.isRefetching} onRefresh={() => usersQuery.refetch()} tintColor={Colors.accent} />}
+      ListHeaderComponent={
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search users..."
+          placeholderTextColor={Colors.textMuted}
+          value={searchText}
+          onChangeText={setSearchText}
+        />
+      }
       ListEmptyComponent={<Text style={styles.emptyText}>No users found</Text>}
       renderItem={({ item }) => {
         const isSelf = item.id === currentUserId;
+        const statusColor = item.status === "suspended" ? "#F59E0B" : item.status === "banned" ? Colors.error : Colors.success;
         return (
           <View style={styles.userCard}>
             <View style={styles.userAvatar}>
@@ -287,28 +346,197 @@ function UsersPanel({ currentUserId }: { currentUserId: string }) {
               <View style={styles.userNameRow}>
                 <Text style={styles.userName} numberOfLines={1}>{item.username}</Text>
                 {item.role === "admin" && (
-                  <View style={styles.adminBadge}>
-                    <Text style={styles.adminBadgeText}>ADMIN</Text>
-                  </View>
+                  <View style={styles.adminBadge}><Text style={styles.adminBadgeText}>ADMIN</Text></View>
                 )}
                 {isSelf && (
-                  <View style={styles.selfBadge}>
-                    <Text style={styles.selfBadgeText}>YOU</Text>
+                  <View style={styles.selfBadge}><Text style={styles.selfBadgeText}>YOU</Text></View>
+                )}
+                {item.status && item.status !== "active" && (
+                  <View style={[styles.adminBadge, { backgroundColor: statusColor + "22", borderColor: statusColor }]}>
+                    <Text style={[styles.adminBadgeText, { color: statusColor }]}>{item.status.toUpperCase()}</Text>
                   </View>
                 )}
               </View>
               <Text style={styles.userMeta}>
-                {item.email} {"\u00B7"} Rep: {item.reputation} {"\u00B7"} {item.subscriptionTier}
+                {item.email} · Rep: {item.reputation} · {item.subscriptionTier}
+                {(item.reportCount ?? 0) > 0 ? ` · ⚠ ${item.reportCount} reports` : ""}
               </Text>
+              {!isSelf && (
+                <View style={styles.actionRow}>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, { backgroundColor: "#6366F122" }]}
+                    onPress={() => {
+                      const newRole = item.role === "admin" ? "user" : "admin";
+                      confirmAction("Change Role", `${item.role === "admin" ? "Demote" : "Promote"} ${item.username}?`, () => roleMutation.mutate({ id: item.id, role: newRole }));
+                    }}
+                  >
+                    <Text style={[styles.actionBtnText, { color: "#6366F1" }]}>{item.role === "admin" ? "Demote" : "Promote"}</Text>
+                  </TouchableOpacity>
+                  {item.status !== "suspended" && item.status !== "banned" && (
+                    <TouchableOpacity
+                      style={[styles.actionBtn, { backgroundColor: "#F59E0B22" }]}
+                      onPress={() => confirmAction("Suspend", `Suspend ${item.username}?`, () => suspendMutation.mutate(item.id))}
+                    >
+                      <Text style={[styles.actionBtnText, { color: "#F59E0B" }]}>Suspend</Text>
+                    </TouchableOpacity>
+                  )}
+                  {item.status === "suspended" && (
+                    <TouchableOpacity
+                      style={[styles.actionBtn, { backgroundColor: Colors.success + "22" }]}
+                      onPress={() => confirmAction("Unsuspend", `Unsuspend ${item.username}?`, () => unsuspendMutation.mutate(item.id))}
+                    >
+                      <Text style={[styles.actionBtnText, { color: Colors.success }]}>Unsuspend</Text>
+                    </TouchableOpacity>
+                  )}
+                  {item.status !== "banned" && (
+                    <TouchableOpacity
+                      style={[styles.actionBtn, { backgroundColor: Colors.error + "22" }]}
+                      onPress={() => confirmAction("Ban", `Permanently ban ${item.username}?`, () => banMutation.mutate(item.id))}
+                    >
+                      <Text style={[styles.actionBtnText, { color: Colors.error }]}>Ban</Text>
+                    </TouchableOpacity>
+                  )}
+                  {item.subscriptionTier !== "free" && (
+                    <TouchableOpacity
+                      style={[styles.actionBtn, { backgroundColor: "#8B5CF622" }]}
+                      onPress={() => confirmAction("Cancel Membership", `Downgrade ${item.username} to free?`, () => cancelMembershipMutation.mutate(item.id))}
+                    >
+                      <Text style={[styles.actionBtnText, { color: "#8B5CF6" }]}>Cancel Sub</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    style={[styles.actionBtn, { backgroundColor: Colors.error + "22" }]}
+                    onPress={() => confirmAction("Delete Account", `Permanently delete ${item.username} and all their data? This cannot be undone.`, () => deleteMutation.mutate(item.id))}
+                  >
+                    <Text style={[styles.actionBtnText, { color: Colors.error }]}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
-            {!isSelf && (
-              <TouchableOpacity onPress={() => toggleRole(item)} disabled={roleMutation.isPending} hitSlop={8}>
-                <Ionicons
-                  name={item.role === "admin" ? "arrow-down-circle" : "arrow-up-circle"}
-                  size={24}
-                  color={item.role === "admin" ? Colors.error : Colors.success}
-                />
-              </TouchableOpacity>
+          </View>
+        );
+      }}
+    />
+  );
+}
+
+function ReportsPanel() {
+  const reportsQuery = useQuery<AdminReport[]>({ queryKey: ["/api/admin/reports"] });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, status, adminNotes }: { id: string; status: string; adminNotes?: string }) => {
+      await apiRequest("PATCH", `/api/admin/reports/${id}`, { status, adminNotes });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/reports"] });
+    },
+  });
+
+  const handleAction = (report: AdminReport, newStatus: string) => {
+    const title = newStatus === "resolved" ? "Resolve" : newStatus === "dismissed" ? "Dismiss" : "Review";
+    if (Platform.OS === "web") {
+      const notes = prompt(`${title} report? Add optional notes:`) ?? "";
+      updateMutation.mutate({ id: report.id, status: newStatus, adminNotes: notes || undefined });
+    } else {
+      Alert.alert(title, `Mark this report as ${newStatus}?`, [
+        { text: "Cancel", style: "cancel" },
+        { text: title, onPress: () => updateMutation.mutate({ id: report.id, status: newStatus }) },
+      ]);
+    }
+  };
+
+  if (reportsQuery.isLoading) {
+    return <View style={styles.centered}><ActivityIndicator color={Colors.accent} size="large" /></View>;
+  }
+
+  const reports = reportsQuery.data || [];
+
+  const reasonLabels: Record<string, string> = {
+    spam: "Spam",
+    inappropriate: "Inappropriate",
+    scam_fraud: "Scam/Fraud",
+    harassment: "Harassment",
+    inaccurate: "Inaccurate",
+    other: "Other",
+  };
+
+  const statusColors: Record<string, string> = {
+    pending: "#F59E0B",
+    reviewed: "#6366F1",
+    resolved: Colors.success,
+    dismissed: Colors.textMuted,
+  };
+
+  return (
+    <FlatList
+      data={reports}
+      keyExtractor={(item) => item.id}
+      contentContainerStyle={[styles.scrollContent, reports.length === 0 && styles.centered]}
+      refreshControl={<RefreshControl refreshing={reportsQuery.isRefetching} onRefresh={() => reportsQuery.refetch()} tintColor={Colors.accent} />}
+      ListEmptyComponent={<Text style={styles.emptyText}>No reports</Text>}
+      renderItem={({ item }) => {
+        const sColor = statusColors[item.status] || Colors.textMuted;
+        return (
+          <View style={styles.reportCard}>
+            <View style={styles.reportHeader}>
+              <View style={[styles.adminBadge, { backgroundColor: sColor + "22", borderColor: sColor }]}>
+                <Text style={[styles.adminBadgeText, { color: sColor }]}>{item.status.toUpperCase()}</Text>
+              </View>
+              <Text style={styles.reportMeta}>{new Date(item.createdAt).toLocaleDateString()}</Text>
+            </View>
+            <Text style={styles.reportReason}>
+              <Text style={{ color: Colors.text, fontFamily: "Inter_600SemiBold" }}>Reason: </Text>
+              {reasonLabels[item.reason] || item.reason}
+            </Text>
+            <Text style={styles.reportMeta}>
+              Type: {item.contentType} · Reporter: {item.reporterUsername || item.reporterId?.substring(0, 8)}
+            </Text>
+            <Text style={styles.reportMeta}>
+              Reported user: {item.targetUsername || item.targetUserId?.substring(0, 8)}
+            </Text>
+            {item.description && (
+              <Text style={styles.reportDescription} numberOfLines={3}>{item.description}</Text>
+            )}
+            {item.adminNotes && (
+              <Text style={[styles.reportDescription, { color: "#6366F1" }]}>Notes: {item.adminNotes}</Text>
+            )}
+            {item.status === "pending" && (
+              <View style={styles.actionRow}>
+                <TouchableOpacity
+                  style={[styles.actionBtn, { backgroundColor: "#6366F122" }]}
+                  onPress={() => handleAction(item, "reviewed")}
+                >
+                  <Text style={[styles.actionBtnText, { color: "#6366F1" }]}>Review</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionBtn, { backgroundColor: Colors.success + "22" }]}
+                  onPress={() => handleAction(item, "resolved")}
+                >
+                  <Text style={[styles.actionBtnText, { color: Colors.success }]}>Resolve</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionBtn, { backgroundColor: Colors.textMuted + "22" }]}
+                  onPress={() => handleAction(item, "dismissed")}
+                >
+                  <Text style={[styles.actionBtnText, { color: Colors.textMuted }]}>Dismiss</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            {item.status === "reviewed" && (
+              <View style={styles.actionRow}>
+                <TouchableOpacity
+                  style={[styles.actionBtn, { backgroundColor: Colors.success + "22" }]}
+                  onPress={() => handleAction(item, "resolved")}
+                >
+                  <Text style={[styles.actionBtnText, { color: Colors.success }]}>Resolve</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionBtn, { backgroundColor: Colors.textMuted + "22" }]}
+                  onPress={() => handleAction(item, "dismissed")}
+                >
+                  <Text style={[styles.actionBtnText, { color: Colors.textMuted }]}>Dismiss</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         );
@@ -989,7 +1217,7 @@ const styles = StyleSheet.create({
   },
   userCard: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     backgroundColor: Colors.bgCard,
     borderRadius: 12,
     padding: 14,
@@ -1051,5 +1279,58 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.textMuted,
     marginTop: 12,
+  },
+  searchInput: {
+    backgroundColor: Colors.bgElevated,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: Colors.text,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  actionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 8,
+  },
+  actionBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  actionBtnText: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+  },
+  reportCard: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 8,
+    gap: 4,
+  },
+  reportHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+  reportReason: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+  },
+  reportMeta: {
+    fontSize: 12,
+    color: Colors.textMuted,
+  },
+  reportDescription: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    marginTop: 4,
+    fontStyle: "italic" as const,
   },
 });

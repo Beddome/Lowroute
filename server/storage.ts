@@ -139,7 +139,7 @@ export async function getAllActiveHazards() {
   return db.select().from(schema.hazards).where(eq(schema.hazards.status, "active"));
 }
 
-export async function getAllUsers() {
+export async function getAllUsersBasic() {
   return db.select({
     id: schema.users.id,
     username: schema.users.username,
@@ -1368,5 +1368,244 @@ export async function markGroupMessagesRead(userId: string, groupChatId: string)
     WHERE group_chat_id = ${groupChatId}
     AND user_id = ${userId}
   `);
+}
+
+// ===== PASSWORD MANAGEMENT =====
+
+export async function updateUserPassword(userId: string, newPasswordHash: string) {
+  await db.update(schema.users)
+    .set({ passwordHash: newPasswordHash })
+    .where(eq(schema.users.id, userId));
+}
+
+export async function createPasswordResetToken(userId: string, token: string) {
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+  await db.execute(sql`UPDATE password_reset_tokens SET used = true WHERE user_id = ${userId} AND used = false`);
+  const [row] = await db.insert(schema.passwordResetTokens).values({
+    userId,
+    token,
+    expiresAt,
+  }).returning();
+  return row;
+}
+
+export async function getPasswordResetToken(token: string) {
+  const [row] = await db.select().from(schema.passwordResetTokens)
+    .where(and(
+      eq(schema.passwordResetTokens.token, token),
+      eq(schema.passwordResetTokens.used, false),
+    ));
+  return row || null;
+}
+
+export async function markResetTokenUsed(tokenId: string) {
+  await db.update(schema.passwordResetTokens)
+    .set({ used: true })
+    .where(eq(schema.passwordResetTokens.id, tokenId));
+}
+
+// ===== ACCOUNT DELETION =====
+
+export async function deleteUserAccount(userId: string) {
+  await db.execute(sql`DELETE FROM hazard_votes WHERE user_id = ${userId}`);
+  await db.execute(sql`DELETE FROM event_rsvps WHERE user_id = ${userId}`);
+  await db.execute(sql`DELETE FROM messages WHERE sender_id = ${userId} OR receiver_id = ${userId}`);
+  await db.execute(sql`DELETE FROM group_chat_members WHERE user_id = ${userId}`);
+  await db.execute(sql`DELETE FROM friendships WHERE requester_id = ${userId} OR addressee_id = ${userId}`);
+  await db.execute(sql`DELETE FROM user_locations WHERE user_id = ${userId}`);
+  await db.execute(sql`DELETE FROM saved_routes WHERE user_id = ${userId}`);
+  await db.execute(sql`DELETE FROM marketplace_listings WHERE seller_id = ${userId}`);
+  await db.execute(sql`DELETE FROM car_profiles WHERE user_id = ${userId}`);
+  await db.execute(sql`DELETE FROM promo_redemptions WHERE user_id = ${userId}`);
+  await db.execute(sql`DELETE FROM hazards WHERE user_id = ${userId}`);
+  await db.execute(sql`DELETE FROM events WHERE user_id = ${userId}`);
+  await db.execute(sql`DELETE FROM reports WHERE reporter_id = ${userId}`);
+  await db.execute(sql`UPDATE reports SET target_user_id = ${userId} WHERE target_user_id = ${userId}`);
+  await db.execute(sql`DELETE FROM password_reset_tokens WHERE user_id = ${userId}`);
+  await db.execute(sql`DELETE FROM users WHERE id = ${userId}`);
+}
+
+// ===== REPORTING SYSTEM =====
+
+export async function createReport(data: {
+  reporterId: string;
+  contentType: string;
+  contentId: string;
+  targetUserId: string;
+  reason: string;
+  description?: string;
+}) {
+  const [report] = await db.execute(sql`
+    INSERT INTO reports (reporter_id, content_type, content_id, target_user_id, reason, description)
+    VALUES (${data.reporterId}, ${data.contentType}, ${data.contentId}, ${data.targetUserId}, ${data.reason}, ${data.description || null})
+    RETURNING *
+  `);
+  await db.execute(sql`UPDATE users SET report_count = report_count + 1 WHERE id = ${data.targetUserId}`);
+  const rows = Array.isArray(report) ? report : (report as any).rows ?? [];
+  return rows[0] || report;
+}
+
+export async function getReports(status?: string) {
+  const validStatuses = ["pending", "reviewed", "resolved", "dismissed"];
+  if (status && validStatuses.includes(status)) {
+    const result = await db.execute(sql`
+      SELECT r.*,
+        reporter.username as reporter_username,
+        target.username as target_username,
+        target.report_count as target_report_count,
+        target.status as target_status
+      FROM reports r
+      LEFT JOIN users reporter ON reporter.id = r.reporter_id
+      LEFT JOIN users target ON target.id = r.target_user_id
+      WHERE r.status = ${status}
+      ORDER BY r.created_at DESC
+    `);
+    return Array.isArray(result) ? result : (result as any).rows ?? [];
+  }
+  const result = await db.execute(sql`
+    SELECT r.*,
+      reporter.username as reporter_username,
+      target.username as target_username,
+      target.report_count as target_report_count,
+      target.status as target_status
+    FROM reports r
+    LEFT JOIN users reporter ON reporter.id = r.reporter_id
+    LEFT JOIN users target ON target.id = r.target_user_id
+    ORDER BY r.created_at DESC
+  `);
+  return Array.isArray(result) ? result : (result as any).rows ?? [];
+}
+
+export async function getReportById(id: string) {
+  const result = await db.execute(sql`
+    SELECT r.*,
+      reporter.username as reporter_username,
+      target.username as target_username,
+      target.report_count as target_report_count,
+      target.email as target_email,
+      target.status as target_status
+    FROM reports r
+    LEFT JOIN users reporter ON reporter.id = r.reporter_id
+    LEFT JOIN users target ON target.id = r.target_user_id
+    WHERE r.id = ${id}
+  `);
+  const rows = Array.isArray(result) ? result : (result as any).rows ?? [];
+  return rows[0] || null;
+}
+
+export async function updateReportStatus(id: string, status: string, adminId: string, adminNotes?: string) {
+  await db.execute(sql`
+    UPDATE reports
+    SET status = ${status}, resolved_by = ${adminId}, resolved_at = NOW(),
+        admin_notes = COALESCE(${adminNotes || null}, admin_notes)
+    WHERE id = ${id}
+  `);
+}
+
+export async function getReportCountForUser(userId: string) {
+  const result = await db.execute(sql`
+    SELECT COUNT(*)::int as count FROM reports WHERE target_user_id = ${userId}
+  `);
+  const rows = Array.isArray(result) ? result : (result as any).rows ?? [];
+  return rows[0]?.count || 0;
+}
+
+// ===== ADMIN ACCOUNT MANAGEMENT =====
+
+export async function suspendUser(userId: string) {
+  await db.update(schema.users)
+    .set({ status: "suspended" as any })
+    .where(eq(schema.users.id, userId));
+}
+
+export async function unsuspendUser(userId: string) {
+  await db.update(schema.users)
+    .set({ status: "active" as any })
+    .where(eq(schema.users.id, userId));
+}
+
+export async function banUser(userId: string) {
+  await db.update(schema.users)
+    .set({ status: "banned" as any })
+    .where(eq(schema.users.id, userId));
+}
+
+export async function cancelMembership(userId: string) {
+  await db.update(schema.users)
+    .set({
+      subscriptionTier: "free",
+      subscriptionExpiresAt: null,
+    })
+    .where(eq(schema.users.id, userId));
+}
+
+export async function adminDeleteUser(userId: string) {
+  await deleteUserAccount(userId);
+}
+
+export async function getAllUsers(search?: string) {
+  if (search) {
+    const result = await db.execute(sql`
+      SELECT id, username, email, role, status, report_count, subscription_tier, created_at
+      FROM users
+      WHERE username ILIKE ${'%' + search + '%'} OR email ILIKE ${'%' + search + '%'}
+      ORDER BY created_at DESC
+    `);
+    return Array.isArray(result) ? result : (result as any).rows ?? [];
+  }
+  const result = await db.execute(sql`
+    SELECT id, username, email, role, status, report_count, subscription_tier, created_at
+    FROM users
+    ORDER BY created_at DESC
+  `);
+  return Array.isArray(result) ? result : (result as any).rows ?? [];
+}
+
+// ===== DATA EXPORT =====
+
+export async function exportUserData(userId: string) {
+  const user = await getUserById(userId);
+  if (!user) return null;
+
+  const cars = await db.select().from(schema.carProfiles).where(eq(schema.carProfiles.userId, userId));
+  const hazardsResult = await db.select().from(schema.hazards).where(eq(schema.hazards.userId, userId));
+  const routes = await db.select().from(schema.savedRoutes).where(eq(schema.savedRoutes.userId, userId));
+  const listings = await db.select().from(schema.marketplaceListings).where(eq(schema.marketplaceListings.sellerId, userId));
+  const msgResult = await db.execute(sql`SELECT * FROM messages WHERE sender_id = ${userId} OR receiver_id = ${userId} ORDER BY created_at DESC`);
+  const messages = Array.isArray(msgResult) ? msgResult : (msgResult as any).rows ?? [];
+  const friendsResult = await db.execute(sql`
+    SELECT f.*, u.username FROM friendships f
+    LEFT JOIN users u ON (CASE WHEN f.requester_id = ${userId} THEN f.addressee_id ELSE f.requester_id END) = u.id
+    WHERE f.requester_id = ${userId} OR f.addressee_id = ${userId}
+  `);
+  const friends = Array.isArray(friendsResult) ? friendsResult : (friendsResult as any).rows ?? [];
+
+  const { passwordHash, ...safeUser } = user;
+  return {
+    profile: safeUser,
+    carProfiles: cars,
+    hazardReports: hazardsResult,
+    savedRoutes: routes,
+    marketplaceListings: listings,
+    messages,
+    friends,
+    exportedAt: new Date().toISOString(),
+  };
+}
+
+// ===== PUSH TOKENS =====
+
+export async function updatePushToken(userId: string, pushToken: string | null) {
+  await db.update(schema.users)
+    .set({ pushToken })
+    .where(eq(schema.users.id, userId));
+}
+
+export async function getPushTokensForUsers(userIds: string[]) {
+  if (userIds.length === 0) return [];
+  const result = await db.execute(sql`
+    SELECT id, push_token FROM users WHERE id = ANY(${userIds}) AND push_token IS NOT NULL
+  `);
+  return Array.isArray(result) ? result : (result as any).rows ?? [];
 }
 
