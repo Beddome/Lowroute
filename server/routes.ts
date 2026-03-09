@@ -1929,6 +1929,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.send(html);
   });
 
+  app.get("/support", (_req: Request, res: Response) => {
+    const templatePath = path.resolve(process.cwd(), "server", "templates", "support.html");
+    const html = fs.readFileSync(templatePath, "utf-8");
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(html);
+  });
+
   const express = require("express");
   app.use("/uploads", express.static(uploadsDir));
 
