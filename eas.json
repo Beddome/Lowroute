@@ -14,7 +14,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_DOMAIN": ""
+        "EXPO_PUBLIC_DOMAIN": "lowroute.com"
       }
     },
     "preview": {
@@ -26,7 +26,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_DOMAIN": ""
+        "EXPO_PUBLIC_DOMAIN": "lowroute.com"
       }
     },
     "production": {
@@ -38,7 +38,7 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_DOMAIN": ""
+        "EXPO_PUBLIC_DOMAIN": "lowroute.com"
       }
     }
   },
