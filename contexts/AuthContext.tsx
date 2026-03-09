@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo, ReactNo
 import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { fetch } from "expo/fetch";
 import { registerForPushNotifications } from "@/lib/notifications";
+import { loginRevenueCat, logoutRevenueCat } from "@/lib/revenuecat";
 
 interface AuthUser {
   id: string;
@@ -37,16 +38,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (res.ok) {
         const data = await res.json();
         setUser(data);
+        return data;
       } else {
         setUser(null);
+        return null;
       }
     } catch {
       setUser(null);
+      return null;
     }
   };
 
   useEffect(() => {
-    refreshUser().finally(() => setIsLoading(false));
+    refreshUser().then((data) => {
+      if (data?.id) loginRevenueCat(String(data.id)).catch(() => {});
+    }).finally(() => setIsLoading(false));
   }, []);
 
   const login = async (username: string, password: string) => {
@@ -54,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await res.json();
     setUser(data);
     registerForPushNotifications().catch(() => {});
+    loginRevenueCat(String(data.id)).catch(() => {});
   };
 
   const register = async (username: string, email: string, password: string) => {
@@ -61,11 +68,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await res.json();
     setUser(data);
     registerForPushNotifications().catch(() => {});
+    loginRevenueCat(String(data.id)).catch(() => {});
   };
 
   const logout = async () => {
     await apiRequest("POST", "/api/auth/logout");
     setUser(null);
+    logoutRevenueCat().catch(() => {});
   };
 
   const value = useMemo(

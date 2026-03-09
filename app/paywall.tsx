@@ -9,62 +9,75 @@ import {
   Alert,
   ActivityIndicator,
   TextInput,
+  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSubscription, ENTITLEMENT_ID } from "@/lib/revenuecat";
 import { Colors } from "@/constants/colors";
 import { apiRequest } from "@/lib/query-client";
+import type { PurchasesPackage } from "react-native-purchases";
 
-const TIERS = [
-  {
-    id: "free",
-    name: "Free",
-    price: "$0",
-    period: "forever",
-    color: Colors.textSecondary,
-    features: [
-      { text: "View hazard map", included: true },
-      { text: "Report hazards", included: true },
-      { text: "Community voting", included: true },
-      { text: "Basic route suggestions", included: true },
-      { text: "Live GPS navigation", included: false },
-      { text: "Hazard proximity alerts", included: false },
-      { text: "Priority reporting", included: false },
-      { text: "Ad-free experience", included: false },
-    ],
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    price: "TBD",
-    period: "/month",
-    color: Colors.accent,
-    badge: "MOST POPULAR",
-    features: [
-      { text: "Everything in Free", included: true },
-      { text: "Live GPS navigation", included: true },
-      { text: "Hazard proximity alerts", included: true },
-      { text: "Priority reporting", included: true },
-      { text: "Ad-free experience", included: true },
-      { text: "Route history & analytics", included: true },
-      { text: "Early access to new features", included: true },
-      { text: "Exclusive badges", included: true },
-    ],
-  },
+const FALLBACK_MONTHLY_PRICE = "$10.00 CAD";
+const FALLBACK_YEARLY_PRICE = "$96.00 CAD";
+
+const PRO_FEATURES = [
+  "Live GPS navigation",
+  "Hazard proximity alerts",
+  "Priority reporting",
+  "Ad-free experience",
+  "Route history & analytics",
+  "Early access to new features",
+  "Exclusive badges",
+];
+
+const FREE_FEATURES = [
+  "View hazard map",
+  "Report hazards",
+  "Community voting",
+  "Basic route suggestions",
 ];
 
 export default function PaywallScreen() {
   const insets = useSafeAreaInsets();
   const { user, refreshUser } = useAuth();
-  const [selectedTier, setSelectedTier] = useState<string>(user?.subscriptionTier ?? "free");
-  const [isLoading, setIsLoading] = useState(false);
+  const {
+    offerings,
+    isSubscribed,
+    purchase,
+    restore,
+    isPurchasing,
+    isRestoring,
+    isLoading: rcLoading,
+  } = useSubscription();
+
+  const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">("yearly");
   const [promoCode, setPromoCode] = useState("");
   const [promoLoading, setPromoLoading] = useState(false);
   const [promoMessage, setPromoMessage] = useState<{ text: string; success: boolean } | null>(null);
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [pendingPackage, setPendingPackage] = useState<PurchasesPackage | null>(null);
+  const [purchaseError, setPurchaseError] = useState<string | null>(null);
+
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+
+  const currentOffering = offerings?.current;
+  const monthlyPkg = currentOffering?.availablePackages?.find(
+    (p) => p.packageType === "MONTHLY" || p.identifier === "$rc_monthly" || p.identifier === "monthly"
+  );
+  const yearlyPkg = currentOffering?.availablePackages?.find(
+    (p) => p.packageType === "ANNUAL" || p.identifier === "$rc_annual" || p.identifier === "yearly"
+  );
+
+  const monthlyPrice = monthlyPkg?.product?.priceString || FALLBACK_MONTHLY_PRICE;
+  const yearlyPrice = yearlyPkg?.product?.priceString || FALLBACK_YEARLY_PRICE;
+
+  const yearlyMonthly = yearlyPkg?.product?.price
+    ? `${yearlyPkg.product.currencyCode} ${(yearlyPkg.product.price / 12).toFixed(2)}`
+    : "$8.00 CAD";
 
   const handleRedeemPromo = async () => {
     if (!promoCode.trim()) return;
@@ -102,35 +115,95 @@ export default function PaywallScreen() {
     }
   };
 
-  const handleSubscribe = async () => {
+  const handlePurchase = () => {
     if (!user) {
       router.push("/(auth)/login");
       return;
     }
 
-    if (selectedTier === "pro") {
-      Alert.alert(
-        "Coming Soon",
-        "Pro subscriptions are launching soon! We're finalizing pricing to make it accessible for the low-car community. You'll be the first to know.",
-        [{ text: "Got it", style: "default" }]
-      );
+    const pkg = selectedPlan === "monthly" ? monthlyPkg : yearlyPkg;
+    if (!pkg) {
+      setPurchaseError("This plan is not yet available. Check back soon.");
       return;
     }
 
-    setIsLoading(true);
+    setPendingPackage(pkg);
+    setPurchaseError(null);
+    setConfirmVisible(true);
+  };
+
+  const confirmPurchase = async () => {
+    if (!pendingPackage) return;
+    setConfirmVisible(false);
+    setPurchaseError(null);
+
     try {
-      await apiRequest("POST", "/api/subscription", { tier: selectedTier });
+      await purchase(pendingPackage);
       await refreshUser();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
+    } catch (err: any) {
+      if (err?.userCancelled) return;
+      const msg = err?.message || "Purchase failed. Please try again.";
+      setPurchaseError(msg);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  };
+
+  const handleRestore = async () => {
+    setPurchaseError(null);
+    try {
+      const info = await restore();
+      const hasEntitlement = info?.entitlements?.active?.[ENTITLEMENT_ID] !== undefined;
+      if (hasEntitlement) {
+        await refreshUser();
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        router.back();
+      } else {
+        setPurchaseError("No active subscriptions found to restore.");
+      }
     } catch {
-      Alert.alert("Error", "Failed to update subscription");
-    } finally {
-      setIsLoading(false);
+      setPurchaseError("Failed to restore purchases. Please try again.");
     }
   };
 
   const currentTier = user?.subscriptionTier ?? "free";
+
+  if (isSubscribed || currentTier === "pro") {
+    return (
+      <View style={[styles.container, { paddingTop: topPad }]}>
+        <View style={styles.header}>
+          <Pressable style={styles.closeBtn} onPress={() => router.back()} hitSlop={16} testID="paywall-close">
+            <Ionicons name="close" size={24} color={Colors.textSecondary} />
+          </Pressable>
+          <View style={[styles.headerIcon, { borderColor: Colors.accent + "66" }]}>
+            <Ionicons name="rocket" size={40} color={Colors.accent} />
+          </View>
+          <Text style={styles.headerTitle}>You're on Pro</Text>
+          <Text style={styles.headerSubtitle}>
+            You have full access to all LowRoute Pro features.
+          </Text>
+        </View>
+        <View style={styles.activeFeatures}>
+          {PRO_FEATURES.map((f) => (
+            <View key={f} style={styles.featureRow}>
+              <Ionicons name="checkmark-circle" size={18} color={Colors.tier1} />
+              <Text style={styles.featureText}>{f}</Text>
+            </View>
+          ))}
+        </View>
+        <View style={styles.ctaSection}>
+          <Pressable
+            style={[styles.manageBtn]}
+            onPress={() => router.push("/manage-subscription")}
+          >
+            <Ionicons name="settings-outline" size={18} color={Colors.text} />
+            <Text style={styles.manageBtnText}>Manage Subscription</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: topPad }]}>
@@ -151,96 +224,106 @@ export default function PaywallScreen() {
           </Text>
         </View>
 
-        <View style={styles.tiersContainer}>
-          {TIERS.map((tier) => {
-            const isSelected = selectedTier === tier.id;
-            const isCurrent = currentTier === tier.id;
-            return (
-              <Pressable
-                key={tier.id}
-                style={[
-                  styles.tierCard,
-                  isSelected && { borderColor: tier.color, borderWidth: 2 },
-                ]}
-                onPress={() => {
-                  setSelectedTier(tier.id);
-                  Haptics.selectionAsync();
-                }}
-              >
-                {tier.badge && (
-                  <View style={[styles.tierBadge, { backgroundColor: tier.color }]}>
-                    <Text style={styles.tierBadgeText}>{tier.badge}</Text>
-                  </View>
-                )}
-                <View style={styles.tierHeader}>
-                  <Text style={[styles.tierName, { color: tier.color }]}>{tier.name}</Text>
-                  <View style={styles.tierPricing}>
-                    <Text style={styles.tierPrice}>{tier.price}</Text>
-                    <Text style={styles.tierPeriod}>{tier.period}</Text>
-                  </View>
-                  {isCurrent && (
-                    <View style={styles.currentBadge}>
-                      <Text style={styles.currentBadgeText}>CURRENT</Text>
-                    </View>
-                  )}
-                </View>
-                <View style={styles.featureList}>
-                  {tier.features.map((feature) => (
-                    <View key={feature.text} style={styles.featureRow}>
-                      <Ionicons
-                        name={feature.included ? "checkmark-circle" : "close-circle"}
-                        size={18}
-                        color={feature.included ? Colors.tier1 : Colors.textMuted}
-                      />
-                      <Text
-                        style={[
-                          styles.featureText,
-                          !feature.included && { color: Colors.textMuted },
-                        ]}
-                      >
-                        {feature.text}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              </Pressable>
-            );
-          })}
+        <View style={styles.plansContainer}>
+          <Pressable
+            style={[
+              styles.planCard,
+              selectedPlan === "yearly" && styles.planCardSelected,
+            ]}
+            onPress={() => {
+              setSelectedPlan("yearly");
+              Haptics.selectionAsync();
+            }}
+            testID="plan-yearly"
+          >
+            <View style={styles.saveBadge}>
+              <Text style={styles.saveBadgeText}>SAVE 20%</Text>
+            </View>
+            <View style={styles.planRadio}>
+              <View style={[styles.radioOuter, selectedPlan === "yearly" && styles.radioOuterSelected]}>
+                {selectedPlan === "yearly" && <View style={styles.radioInner} />}
+              </View>
+            </View>
+            <View style={styles.planDetails}>
+              <Text style={styles.planName}>Yearly</Text>
+              <Text style={styles.planPrice}>{yearlyPrice}<Text style={styles.planPeriod}>/year</Text></Text>
+              <Text style={styles.planSub}>{yearlyMonthly}/month</Text>
+            </View>
+          </Pressable>
+
+          <Pressable
+            style={[
+              styles.planCard,
+              selectedPlan === "monthly" && styles.planCardSelected,
+            ]}
+            onPress={() => {
+              setSelectedPlan("monthly");
+              Haptics.selectionAsync();
+            }}
+            testID="plan-monthly"
+          >
+            <View style={styles.planRadio}>
+              <View style={[styles.radioOuter, selectedPlan === "monthly" && styles.radioOuterSelected]}>
+                {selectedPlan === "monthly" && <View style={styles.radioInner} />}
+              </View>
+            </View>
+            <View style={styles.planDetails}>
+              <Text style={styles.planName}>Monthly</Text>
+              <Text style={styles.planPrice}>{monthlyPrice}<Text style={styles.planPeriod}>/month</Text></Text>
+            </View>
+          </Pressable>
         </View>
+
+        <View style={styles.featuresSection}>
+          <Text style={styles.featuresSectionTitle}>Everything in Pro</Text>
+          {PRO_FEATURES.map((f) => (
+            <View key={f} style={styles.featureRow}>
+              <Ionicons name="checkmark-circle" size={18} color={Colors.tier1} />
+              <Text style={styles.featureText}>{f}</Text>
+            </View>
+          ))}
+          <View style={styles.divider} />
+          <Text style={styles.featuresSectionTitle}>Free includes</Text>
+          {FREE_FEATURES.map((f) => (
+            <View key={f} style={styles.featureRow}>
+              <Ionicons name="checkmark" size={18} color={Colors.textMuted} />
+              <Text style={[styles.featureText, { color: Colors.textSecondary }]}>{f}</Text>
+            </View>
+          ))}
+        </View>
+
+        {purchaseError && (
+          <View style={styles.errorBanner}>
+            <Ionicons name="alert-circle" size={16} color={Colors.error} />
+            <Text style={styles.errorText}>{purchaseError}</Text>
+          </View>
+        )}
 
         <View style={styles.ctaSection}>
           <Pressable
-            style={[
-              styles.ctaButton,
-              selectedTier === currentTier && styles.ctaButtonDisabled,
-            ]}
-            onPress={handleSubscribe}
-            disabled={isLoading || selectedTier === currentTier}
+            style={[styles.ctaButton, (isPurchasing || rcLoading) && styles.ctaButtonDisabled]}
+            onPress={handlePurchase}
+            disabled={isPurchasing || rcLoading}
+            testID="paywall-subscribe"
           >
-            {isLoading ? (
+            {isPurchasing ? (
               <ActivityIndicator color={Colors.bg} />
             ) : (
               <>
-                <Ionicons
-                  name={selectedTier === "pro" ? "rocket" : "checkmark-circle"}
-                  size={20}
-                  color={Colors.bg}
-                />
+                <Ionicons name="rocket" size={20} color={Colors.bg} />
                 <Text style={styles.ctaText}>
-                  {selectedTier === currentTier
-                    ? "Current Plan"
-                    : selectedTier === "pro"
-                    ? "Get Pro Access"
-                    : "Switch to Free"}
+                  {selectedPlan === "yearly" ? `Get Pro — ${yearlyPrice}/year` : `Get Pro — ${monthlyPrice}/month`}
                 </Text>
               </>
             )}
           </Pressable>
-          <Text style={styles.ctaDisclaimer}>
-            {selectedTier === "pro"
-              ? "Pricing coming soon. No charges in preview mode."
-              : "Free forever. Upgrade anytime."}
-          </Text>
+          <Pressable onPress={handleRestore} disabled={isRestoring} style={styles.restoreBtn}>
+            {isRestoring ? (
+              <ActivityIndicator color={Colors.textMuted} size="small" />
+            ) : (
+              <Text style={styles.restoreText}>Restore Purchases</Text>
+            )}
+          </Pressable>
         </View>
 
         <View style={styles.guaranteeSection}>
@@ -250,7 +333,7 @@ export default function PaywallScreen() {
           </View>
           <View style={styles.guaranteeRow}>
             <Ionicons name="lock-closed" size={20} color={Colors.tier1} />
-            <Text style={styles.guaranteeText}>Secure payments via RevenueCat</Text>
+            <Text style={styles.guaranteeText}>Secure payments via App Store / Google Play</Text>
           </View>
           <View style={styles.guaranteeRow}>
             <Ionicons name="people" size={20} color={Colors.tier1} />
@@ -303,6 +386,38 @@ export default function PaywallScreen() {
           )}
         </View>
       </ScrollView>
+
+      <Modal
+        visible={confirmVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Confirm Purchase</Text>
+            <Text style={styles.modalBody}>
+              Subscribe to LowRoute Pro ({selectedPlan === "yearly" ? "Yearly" : "Monthly"}) for{" "}
+              {selectedPlan === "yearly" ? yearlyPrice : monthlyPrice}
+              {selectedPlan === "yearly" ? "/year" : "/month"}?
+            </Text>
+            <View style={styles.modalActions}>
+              <Pressable
+                style={styles.modalCancel}
+                onPress={() => setConfirmVisible(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={styles.modalConfirm}
+                onPress={confirmPurchase}
+              >
+                <Text style={styles.modalConfirmText}>Subscribe</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -349,47 +464,86 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
 
-  tiersContainer: { paddingHorizontal: 16, gap: 12 },
-  tierCard: {
+  plansContainer: { paddingHorizontal: 16, gap: 10, marginBottom: 8 },
+  planCard: {
     backgroundColor: Colors.bgCard,
-    borderRadius: 18,
-    borderWidth: 1,
+    borderRadius: 16,
+    borderWidth: 1.5,
     borderColor: Colors.border,
-    padding: 20,
+    padding: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
     overflow: "hidden",
   },
-  tierBadge: {
+  planCardSelected: {
+    borderColor: Colors.accent,
+    backgroundColor: Colors.accent + "0D",
+  },
+  saveBadge: {
     position: "absolute",
     top: 0,
     right: 0,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    backgroundColor: Colors.accent,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
     borderBottomLeftRadius: 10,
   },
-  tierBadgeText: {
+  saveBadgeText: {
     fontSize: 10,
     fontFamily: "Inter_700Bold",
     color: Colors.bg,
     letterSpacing: 0.5,
   },
-  tierHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16 },
-  tierName: { fontSize: 20, fontFamily: "Inter_700Bold" },
-  tierPricing: { flex: 1, flexDirection: "row", alignItems: "baseline", gap: 2 },
-  tierPrice: { fontSize: 24, fontFamily: "Inter_700Bold", color: Colors.text },
-  tierPeriod: { fontSize: 13, fontFamily: "Inter_400Regular", color: Colors.textMuted },
-  currentBadge: {
-    backgroundColor: Colors.bgElevated,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderWidth: 1,
-    borderColor: Colors.border,
+  planRadio: { width: 24 },
+  radioOuter: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: Colors.textMuted,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  currentBadgeText: { fontSize: 10, fontFamily: "Inter_700Bold", color: Colors.textSecondary },
+  radioOuterSelected: { borderColor: Colors.accent },
+  radioInner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: Colors.accent,
+  },
+  planDetails: { flex: 1 },
+  planName: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: Colors.text },
+  planPrice: { fontSize: 22, fontFamily: "Inter_700Bold", color: Colors.text, marginTop: 2 },
+  planPeriod: { fontSize: 14, fontFamily: "Inter_400Regular", color: Colors.textMuted },
+  planSub: { fontSize: 13, fontFamily: "Inter_400Regular", color: Colors.textSecondary, marginTop: 2 },
 
-  featureList: { gap: 10 },
-  featureRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  featuresSection: { paddingHorizontal: 24, marginTop: 16, marginBottom: 8 },
+  featuresSectionTitle: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.textSecondary,
+    marginBottom: 10,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  featureRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 },
   featureText: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular", color: Colors.text },
+  divider: { height: 1, backgroundColor: Colors.border, marginVertical: 14 },
+
+  activeFeatures: { paddingHorizontal: 24, marginTop: 8 },
+
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: Colors.error + "15",
+  },
+  errorText: { flex: 1, fontSize: 13, fontFamily: "Inter_500Medium", color: Colors.error },
 
   ctaSection: { padding: 24, alignItems: "center" },
   ctaButton: {
@@ -404,13 +558,21 @@ const styles = StyleSheet.create({
   },
   ctaButtonDisabled: { opacity: 0.5 },
   ctaText: { fontSize: 17, fontFamily: "Inter_700Bold", color: Colors.bg },
-  ctaDisclaimer: {
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-    color: Colors.textMuted,
-    marginTop: 10,
-    textAlign: "center",
+  restoreBtn: { marginTop: 14, padding: 8 },
+  restoreText: { fontSize: 14, fontFamily: "Inter_500Medium", color: Colors.textMuted },
+
+  manageBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: Colors.bgCard,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
+  manageBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: Colors.text },
 
   guaranteeSection: { paddingHorizontal: 24, gap: 14, marginBottom: 20 },
   guaranteeRow: { flexDirection: "row", alignItems: "center", gap: 12 },
@@ -425,21 +587,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  promoHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 12,
-  },
-  promoTitle: {
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
-    color: Colors.text,
-  },
-  promoInputRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
+  promoHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+  promoTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: Colors.text },
+  promoInputRow: { flexDirection: "row", gap: 10 },
   promoInput: {
     flex: 1,
     backgroundColor: Colors.bgElevated,
@@ -477,4 +627,55 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_500Medium",
     textAlign: "center",
   },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 32,
+  },
+  modalContent: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: 20,
+    padding: 24,
+    width: "100%",
+    maxWidth: 340,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: "Inter_700Bold",
+    color: Colors.text,
+    textAlign: "center",
+    marginBottom: 12,
+  },
+  modalBody: {
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textSecondary,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  modalActions: { flexDirection: "row", gap: 12 },
+  modalCancel: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: Colors.bgElevated,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  modalCancelText: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: Colors.textSecondary },
+  modalConfirm: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: Colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalConfirmText: { fontSize: 15, fontFamily: "Inter_700Bold", color: Colors.bg },
 });

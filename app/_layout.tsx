@@ -21,10 +21,12 @@ import { Colors } from "@/constants/colors";
 import OfflineBanner from "@/components/OfflineBanner";
 import DisclaimerScreen from "@/app/disclaimer";
 import { registerForPushNotifications, setupNotificationHandler } from "@/lib/notifications";
+import { initializeRevenueCat, SubscriptionProvider } from "@/lib/revenuecat";
 
 const DISCLAIMER_KEY = "lowroute_disclaimer_accepted";
 
 SplashScreen.preventAutoHideAsync();
+initializeRevenueCat();
 
 function RootLayoutNav() {
   return (
@@ -163,6 +165,16 @@ function RootLayoutNav() {
           contentStyle: { backgroundColor: Colors.bg },
         }}
       />
+      <Stack.Screen
+        name="manage-subscription"
+        options={{
+          presentation: "formSheet",
+          sheetAllowedDetents: [0.7],
+          sheetGrabberVisible: true,
+          headerShown: false,
+          contentStyle: { backgroundColor: Colors.bg },
+        }}
+      />
     </Stack>
   );
 }
@@ -219,12 +231,14 @@ export default function RootLayout() {
         <GestureHandlerRootView style={{ flex: 1 }}>
           <KeyboardProvider>
             <AuthProvider>
-              <UnitsProvider>
-                <LocationProvider>
-                  <OfflineBanner />
-                  <RootLayoutNav />
-                </LocationProvider>
-              </UnitsProvider>
+              <SubscriptionProvider>
+                <UnitsProvider>
+                  <LocationProvider>
+                    <OfflineBanner />
+                    <RootLayoutNav />
+                  </LocationProvider>
+                </UnitsProvider>
+              </SubscriptionProvider>
             </AuthProvider>
           </KeyboardProvider>
         </GestureHandlerRootView>

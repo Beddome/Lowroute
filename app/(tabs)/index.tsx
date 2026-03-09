@@ -23,6 +23,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { SEVERITY_TIERS, HAZARD_TYPES, EVENT_TYPES } from "@/shared/types";
 import type { Hazard, AppEvent, CarProfile, UserLocation } from "@/shared/types";
+import { useSubscription } from "@/lib/revenuecat";
 import { getApiUrl, apiRequest, queryClient } from "@/lib/query-client";
 import { fetch } from "expo/fetch";
 import { useLocation } from "@/contexts/LocationContext";
@@ -266,6 +267,7 @@ export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
   const params = useLocalSearchParams<{ loadRoute?: string; startLat?: string; startLng?: string; endLat?: string; endLng?: string; startAddr?: string; endAddr?: string }>();
   const { user } = useAuth();
+  const { isSubscribed: isProUser } = useSubscription();
   const { currentPosition, heading, speed, isTracking, startTracking, stopTracking, startBackgroundTracking, stopBackgroundTracking } = useLocation();
   const { formatDistance, formatSpeed, formatRouteDistance, speedUnit } = useUnits();
 
@@ -597,7 +599,7 @@ export default function MapScreen() {
       return;
     }
 
-    if (user.subscriptionTier !== "pro" && user.role !== "admin") {
+    if (user.subscriptionTier !== "pro" && user.role !== "admin" && !isProUser) {
       router.push("/paywall");
       return;
     }
@@ -619,7 +621,7 @@ export default function MapScreen() {
     } catch (err) {
       Alert.alert("Location Error", "Unable to start navigation. Please ensure location permissions are granted.");
     }
-  }, [user, startTracking, startBackgroundTracking, speak]);
+  }, [user, isProUser, startTracking, startBackgroundTracking, speak]);
 
   const endNavigation = useCallback(() => {
     Speech.stop();

@@ -25,6 +25,7 @@ import { Colors } from "@/constants/colors";
 import { formatMSTDateClient, CarProfile, SavedRoute, SUSPENSION_TYPES, CLEARANCE_MODES } from "@/shared/types";
 import { apiRequest, queryClient } from "@/lib/query-client";
 import CarAvatar from "@/components/CarAvatar";
+import { useSubscription } from "@/lib/revenuecat";
 
 const BADGES = [
   { id: "first_report", icon: "flag" as const, label: "First Report", desc: "Submitted your first hazard", minRep: 10, color: Colors.accent },
@@ -541,7 +542,17 @@ export default function ProfileScreen() {
                 </Text>
               )}
             </View>
-            {user.subscriptionTier !== "pro" && (
+            {user.subscriptionTier === "pro" ? (
+              <Pressable
+                style={({ pressed }) => [styles.upgradeBtn, { backgroundColor: Colors.bgElevated }, pressed && { opacity: 0.85 }]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push("/manage-subscription");
+                }}
+              >
+                <Text style={[styles.upgradeBtnText, { color: Colors.text }]}>Manage</Text>
+              </Pressable>
+            ) : (
               <Pressable
                 style={({ pressed }) => [styles.upgradeBtn, pressed && { opacity: 0.85 }]}
                 onPress={() => {
