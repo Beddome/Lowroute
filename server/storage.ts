@@ -1420,7 +1420,7 @@ export async function deleteUserAccount(userId: string) {
   await db.execute(sql`DELETE FROM hazards WHERE user_id = ${userId}`);
   await db.execute(sql`DELETE FROM events WHERE user_id = ${userId}`);
   await db.execute(sql`DELETE FROM reports WHERE reporter_id = ${userId}`);
-  await db.execute(sql`UPDATE reports SET target_user_id = ${userId} WHERE target_user_id = ${userId}`);
+  await db.execute(sql`DELETE FROM reports WHERE target_user_id = ${userId}`);
   await db.execute(sql`DELETE FROM password_reset_tokens WHERE user_id = ${userId}`);
   await db.execute(sql`DELETE FROM users WHERE id = ${userId}`);
 }

@@ -119,9 +119,22 @@ declare module "express-session" {
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-function requireAuth(req: Request, res: Response, next: Function) {
+async function requireAuth(req: Request, res: Response, next: Function) {
   if (!req.session?.userId) {
     return res.status(401).json({ message: "Not authenticated" });
+  }
+  const user = await storage.getUserById(req.session.userId);
+  if (!user) {
+    req.session.destroy(() => {});
+    return res.status(401).json({ message: "Not authenticated" });
+  }
+  if ((user as any).status === "suspended") {
+    req.session.destroy(() => {});
+    return res.status(403).json({ message: "Your account has been suspended." });
+  }
+  if ((user as any).status === "banned") {
+    req.session.destroy(() => {});
+    return res.status(403).json({ message: "Your account has been permanently banned." });
   }
   next();
 }
