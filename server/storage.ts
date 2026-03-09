@@ -291,10 +291,17 @@ export async function checkAndDowngradeExpiredSubscription(userId: string) {
 
 export async function seedAdminUser(username: string, passwordHash: string) {
   const existing = await getUserByUsername(username);
-  if (existing) return existing;
+  if (existing) {
+    const adminEmail = process.env.ADMIN_EMAIL || existing.email;
+    await db.update(schema.users)
+      .set({ passwordHash, role: "admin", email: adminEmail })
+      .where(eq(schema.users.id, existing.id));
+    return { ...existing, email: adminEmail };
+  }
+  const adminEmail = process.env.ADMIN_EMAIL || `${username}@lowroute.app`;
   const [admin] = await db.insert(schema.users).values({
     username,
-    email: `${username}@lowroute.app`,
+    email: adminEmail,
     passwordHash,
     reputation: 1000,
     role: "admin",
