@@ -280,7 +280,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use(
     session({
       store: new PgStore({ pool, createTableIfMissing: true }),
-      secret: process.env.SESSION_SECRET || "lowroute-dev-secret",
+      secret: process.env.LOWROUTE_SESSION_SECRET || "lowroute-dev-secret",
       resave: false,
       saveUninitialized: false,
       cookie: {
@@ -302,13 +302,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   await storage.seedDemoHazards();
   if (process.env.NODE_ENV === "production") {
-    if (process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD) {
-      const adminHash = await bcrypt.hash(process.env.ADMIN_PASSWORD, 10);
-      await storage.seedAdminUser(process.env.ADMIN_USERNAME, adminHash);
+    if (process.env.LOWROUTE_ADMIN_USERNAME && process.env.LOWROUTE_ADMIN_PASSWORD) {
+      const adminHash = await bcrypt.hash(process.env.LOWROUTE_ADMIN_PASSWORD, 10);
+      await storage.seedAdminUser(process.env.LOWROUTE_ADMIN_USERNAME, adminHash);
     }
   } else {
-    const adminUsername = process.env.ADMIN_USERNAME || "admin";
-    const adminPassword = process.env.ADMIN_PASSWORD || "lowroute-admin";
+    const adminUsername = process.env.LOWROUTE_ADMIN_USERNAME || "admin";
+    const adminPassword = process.env.LOWROUTE_ADMIN_PASSWORD || "lowroute-admin";
     const adminHash = await bcrypt.hash(adminPassword, 10);
     await storage.seedAdminUser(adminUsername, adminHash);
   }
