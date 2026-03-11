@@ -23,7 +23,8 @@
         "NSLocationWhenInUseUsageDescription": "LowRoute needs your location to show nearby hazards and help plan safe routes.",
         "UIBackgroundModes": [
           "location"
-        ]
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
