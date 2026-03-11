@@ -26,7 +26,7 @@ import { initializeRevenueCat, SubscriptionProvider } from "@/lib/revenuecat";
 const DISCLAIMER_KEY = "lowroute_disclaimer_accepted";
 
 SplashScreen.preventAutoHideAsync();
-initializeRevenueCat();
+try { initializeRevenueCat(); } catch (e) { console.warn("RevenueCat init error:", e); }
 
 function RootLayoutNav() {
   return (

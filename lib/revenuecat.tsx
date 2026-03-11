@@ -20,10 +20,15 @@ export function initializeRevenueCat() {
     return;
   }
 
-  Purchases.setLogLevel(Purchases.LOG_LEVEL.DEBUG);
-  Purchases.configure({ apiKey: REVENUECAT_API_KEY });
-  rcConfigured = true;
-  console.log("RevenueCat configured");
+  try {
+    Purchases.setLogLevel(Purchases.LOG_LEVEL.DEBUG);
+    Purchases.configure({ apiKey: REVENUECAT_API_KEY });
+    rcConfigured = true;
+    console.log("RevenueCat configured");
+  } catch (e) {
+    console.warn("RevenueCat initialization failed:", e);
+    rcConfigured = false;
+  }
 }
 
 export async function loginRevenueCat(appUserId: string) {

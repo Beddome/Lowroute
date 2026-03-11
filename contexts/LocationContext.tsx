@@ -31,13 +31,14 @@ interface LocationContextValue {
 
 let backgroundLocationCallback: ((position: LocationPosition, heading: number | null, speed: number | null) => void) | null = null;
 
-TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
-  if (error) {
-    console.warn("Background location error:", error.message);
-    return;
-  }
-  if (data) {
-    const { locations } = data as { locations: Location.LocationObject[] };
+try {
+  TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
+    if (error) {
+      console.warn("Background location error:", error.message);
+      return;
+    }
+    if (data) {
+      const { locations } = data as { locations: Location.LocationObject[] };
     if (locations && locations.length > 0) {
       const loc = locations[locations.length - 1];
       const position: LocationPosition = {
@@ -52,7 +53,10 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
       }
     }
   }
-});
+  });
+} catch (e) {
+  console.warn("TaskManager.defineTask failed:", e);
+}
 
 const LocationContext = createContext<LocationContextValue | null>(null);
 
