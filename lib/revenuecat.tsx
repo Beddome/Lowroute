@@ -8,7 +8,11 @@ import Purchases, {
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/query-client";
 
-const REVENUECAT_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY;
+const REVENUECAT_API_KEY = Platform.select({
+  ios: process.env.EXPO_PUBLIC_REVENUECAT_API_KEY_IOS,
+  android: process.env.EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID,
+  default: process.env.EXPO_PUBLIC_REVENUECAT_API_KEY_IOS,
+});
 
 export const ENTITLEMENT_ID = "Lowroute Pro";
 
