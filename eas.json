@@ -16,7 +16,8 @@
       "env": {
         "EXPO_PUBLIC_DOMAIN": "lowroute.com",
         "EXPO_PUBLIC_REVENUECAT_API_KEY_IOS": "appl_vUClFQiwQlmwtPgOecsJlLHLkCe",
-        "EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID": "goog_eKXoEPJwstIexnWLjkvjGefpYqB"
+        "EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID": "goog_eKXoEPJwstIexnWLjkvjGefpYqB",
+        "GOOGLE_MAPS_API_KEY": "AIzaSyDYY9tx-9YPEeXUigw2iEF8_SBZFlS_JzU"
       }
     },
     "preview": {
@@ -30,7 +31,8 @@
       "env": {
         "EXPO_PUBLIC_DOMAIN": "lowroute.com",
         "EXPO_PUBLIC_REVENUECAT_API_KEY_IOS": "appl_vUClFQiwQlmwtPgOecsJlLHLkCe",
-        "EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID": "goog_eKXoEPJwstIexnWLjkvjGefpYqB"
+        "EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID": "goog_eKXoEPJwstIexnWLjkvjGefpYqB",
+        "GOOGLE_MAPS_API_KEY": "AIzaSyDYY9tx-9YPEeXUigw2iEF8_SBZFlS_JzU"
       }
     },
     "production": {
@@ -44,7 +46,8 @@
       "env": {
         "EXPO_PUBLIC_DOMAIN": "lowroute.com",
         "EXPO_PUBLIC_REVENUECAT_API_KEY_IOS": "appl_vUClFQiwQlmwtPgOecsJlLHLkCe",
-        "EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID": "goog_eKXoEPJwstIexnWLjkvjGefpYqB"
+        "EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID": "goog_eKXoEPJwstIexnWLjkvjGefpYqB",
+        "GOOGLE_MAPS_API_KEY": "AIzaSyDYY9tx-9YPEeXUigw2iEF8_SBZFlS_JzU"
       }
     }
   },
