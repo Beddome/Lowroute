@@ -19,8 +19,8 @@ export const safeSpeech = {
   speak: (text: string, options?: Speech.SpeechOptions) => {
     try { Speech.speak(text, options); } catch {}
   },
-  stop: () => {
-    try { Speech.stop(); } catch {}
+  stop: async () => {
+    try { await Speech.stop(); } catch {}
   },
   isSpeakingAsync: async () => {
     try { return await Speech.isSpeakingAsync(); } catch { return false; }

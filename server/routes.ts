@@ -385,12 +385,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/auth/logout", (req: Request, res: Response) => {
-    try {
-      req.session.destroy(() => res.json({ success: true }));
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ message: "Logout failed" });
-    }
+    req.session.destroy((err) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ message: "Logout failed" });
+      }
+      res.json({ success: true });
+    });
   });
 
   app.get("/api/auth/me", async (req: Request, res: Response) => {
