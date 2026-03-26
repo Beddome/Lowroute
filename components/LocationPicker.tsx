@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { View, Text, StyleSheet, Platform, TextInput } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import { safeHaptics as Haptics } from "@/lib/safe-native";
 import { Colors } from "@/constants/colors";
 
 interface LocationPickerProps {

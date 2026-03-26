@@ -385,7 +385,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/auth/logout", (req: Request, res: Response) => {
-    req.session.destroy(() => res.json({ success: true }));
+    try {
+      req.session.destroy(() => res.json({ success: true }));
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Logout failed" });
+    }
   });
 
   app.get("/api/auth/me", async (req: Request, res: Response) => {
@@ -483,9 +488,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/api/hazards/:id", async (req: Request, res: Response) => {
-    const hazard = await storage.getHazardById(req.params.id);
-    if (!hazard) return res.status(404).json({ message: "Not found" });
-    res.json(hazard);
+    try {
+      const hazard = await storage.getHazardById(req.params.id);
+      if (!hazard) return res.status(404).json({ message: "Not found" });
+      res.json(hazard);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch hazard" });
+    }
   });
 
   app.post("/api/hazards/:id/vote", requireAuth, async (req: Request, res: Response) => {

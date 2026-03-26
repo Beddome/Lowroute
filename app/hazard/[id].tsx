@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import { safeHaptics as Haptics } from "@/lib/safe-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { SEVERITY_TIERS, HAZARD_TYPES } from "@/shared/types";
@@ -71,6 +71,7 @@ export default function HazardDetailScreen() {
 
   const { data: hazard, isLoading } = useQuery<Hazard>({
     queryKey: [`/api/hazards/${id}`],
+    enabled: !!id,
   });
 
   const voteMutation = useMutation({

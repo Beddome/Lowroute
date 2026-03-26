@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import { safeHaptics as Haptics } from "@/lib/safe-native";
 import { useAuth } from "@/contexts/AuthContext";
 import { Colors } from "@/constants/colors";
 import { useSafeAreaInsets } from "react-native-safe-area-context";

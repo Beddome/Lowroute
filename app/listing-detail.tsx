@@ -15,7 +15,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import * as Haptics from "expo-haptics";
+import { safeHaptics as Haptics } from "@/lib/safe-native";
 import MapView, { Circle, PROVIDER_DEFAULT } from "react-native-maps";
 import { Colors } from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
@@ -78,6 +78,7 @@ export default function ListingDetailScreen() {
 
   const { data: listing, isLoading } = useQuery<MarketplaceListing>({
     queryKey: ["/api/marketplace", id],
+    enabled: !!id,
   });
 
   const deleteMutation = useMutation({

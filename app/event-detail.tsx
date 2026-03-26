@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import { safeHaptics as Haptics } from "@/lib/safe-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { EVENT_TYPES, formatMSTClient } from "@/shared/types";
@@ -34,6 +34,7 @@ export default function EventDetailScreen() {
 
   const { data: event, isLoading } = useQuery<AppEvent>({
     queryKey: ["/api/events", id],
+    enabled: !!id,
   });
 
   const rsvpMutation = useMutation({

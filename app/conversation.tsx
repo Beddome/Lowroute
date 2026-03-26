@@ -14,7 +14,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import * as Haptics from "expo-haptics";
+import { safeHaptics as Haptics } from "@/lib/safe-native";
 import { Colors } from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest, queryClient, getApiUrl } from "@/lib/query-client";
