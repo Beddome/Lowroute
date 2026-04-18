@@ -868,9 +868,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(200).json({ message: "User not found; ignoring" });
       }
 
-      // Grant pro: initial purchase, renewal, plan change, un-cancel, non-renewing purchase.
-      // Note: CANCELLATION means auto-renew was turned off; entitlement remains active
-      // until EXPIRATION, so we do NOT downgrade on CANCELLATION.
+      // Grant pro on purchase/renewal/plan-change/un-cancel/non-renewing purchase.
+      // Revoke pro on cancellation/expiration/pause. The stale-event guard below
+      // protects against incorrect downgrades when a CANCELLATION arrives while
+      // entitlement is still active (e.g. user cancels mid-billing-cycle).
       const proGrantTypes = new Set([
         "INITIAL_PURCHASE",
         "RENEWAL",
@@ -918,7 +919,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateSubscriptionTier(appUserId, "free", null);
         console.log(`[RC Webhook] User ${appUserId} → free (${type})`);
       } else {
-        // BILLING_ISSUE, CANCELLATION, SUBSCRIBER_ALIAS, TEST, TRANSFER, REFUND, etc.
+        // BILLING_ISSUE, SUBSCRIBER_ALIAS, TEST, TRANSFER, REFUND, etc.
         console.log(`[RC Webhook] Ignoring event type ${type}`);
       }
 
