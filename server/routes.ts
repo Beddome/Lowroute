@@ -839,10 +839,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const authHeader = req.headers.authorization || "";
-      const provided = authHeader.startsWith("Bearer ")
-        ? authHeader.slice(7)
-        : authHeader;
-      if (provided !== expectedSecret) {
+      if (authHeader !== `Bearer ${expectedSecret}`) {
         console.warn("[RC Webhook] Invalid auth header");
         return res.status(401).json({ message: "Unauthorized" });
       }
@@ -881,7 +878,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         "UNCANCELLATION",
         "NON_RENEWING_PURCHASE",
       ]);
-      const proRevokeTypes = new Set(["EXPIRATION", "SUBSCRIPTION_PAUSED"]);
+      const proRevokeTypes = new Set([
+        "CANCELLATION",
+        "EXPIRATION",
+        "SUBSCRIPTION_PAUSED",
+      ]);
 
       if (proGrantTypes.has(type)) {
         const expiresAt = expirationMs ? new Date(expirationMs) : null;
