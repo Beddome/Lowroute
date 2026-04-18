@@ -869,9 +869,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Grant pro on purchase/renewal/plan-change/un-cancel/non-renewing purchase.
-      // Revoke pro on cancellation/expiration/pause. The stale-event guard below
-      // protects against incorrect downgrades when a CANCELLATION arrives while
-      // entitlement is still active (e.g. user cancels mid-billing-cycle).
+      // Revoke pro on cancellation/expiration/pause.
       const proGrantTypes = new Set([
         "INITIAL_PURCHASE",
         "RENEWAL",
@@ -904,18 +902,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           `[RC Webhook] User ${appUserId} → pro (expires ${expiresAt?.toISOString() || "none"})`
         );
       } else if (proRevokeTypes.has(type)) {
-        // Stale event guard: don't downgrade if user has a future expiration that
-        // is later than this event's timestamp (out-of-order delivery).
-        if (
-          eventTimestampMs &&
-          user.subscriptionExpiresAt &&
-          new Date(user.subscriptionExpiresAt).getTime() > eventTimestampMs
-        ) {
-          console.log(
-            `[RC Webhook] Ignoring stale revoke for ${appUserId}; current entitlement extends past event`
-          );
-          return res.status(200).json({ message: "Stale event ignored" });
-        }
         await storage.updateSubscriptionTier(appUserId, "free", null);
         console.log(`[RC Webhook] User ${appUserId} → free (${type})`);
       } else {
