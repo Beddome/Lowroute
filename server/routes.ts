@@ -830,6 +830,105 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/webhooks/revenuecat", async (req: Request, res: Response) => {
+    try {
+      const expectedSecret = process.env.REVENUECAT_WEBHOOK_AUTH;
+      if (!expectedSecret) {
+        console.error("[RC Webhook] REVENUECAT_WEBHOOK_AUTH not configured");
+        return res.status(500).json({ message: "Webhook not configured" });
+      }
+
+      const authHeader = req.headers.authorization || "";
+      const provided = authHeader.startsWith("Bearer ")
+        ? authHeader.slice(7)
+        : authHeader;
+      if (provided !== expectedSecret) {
+        console.warn("[RC Webhook] Invalid auth header");
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const event = req.body?.event;
+      if (!event || typeof event !== "object") {
+        console.warn("[RC Webhook] Missing event in body");
+        return res.status(200).json({ message: "No event" });
+      }
+
+      const type: string = event.type || "UNKNOWN";
+      const appUserId: string | undefined =
+        event.app_user_id || event.original_app_user_id;
+      const expirationMs: number | undefined = event.expiration_at_ms;
+      const eventTimestampMs: number | undefined = event.event_timestamp_ms;
+
+      console.log(`[RC Webhook] Event ${type} for user ${appUserId || "(none)"}`);
+
+      if (!appUserId) {
+        return res.status(200).json({ message: "No app_user_id; ignoring" });
+      }
+
+      const user = await storage.getUserById(appUserId);
+      if (!user) {
+        console.warn(`[RC Webhook] User ${appUserId} not found; ignoring`);
+        return res.status(200).json({ message: "User not found; ignoring" });
+      }
+
+      // Grant pro: initial purchase, renewal, plan change, un-cancel, non-renewing purchase.
+      // Note: CANCELLATION means auto-renew was turned off; entitlement remains active
+      // until EXPIRATION, so we do NOT downgrade on CANCELLATION.
+      const proGrantTypes = new Set([
+        "INITIAL_PURCHASE",
+        "RENEWAL",
+        "PRODUCT_CHANGE",
+        "UNCANCELLATION",
+        "NON_RENEWING_PURCHASE",
+      ]);
+      const proRevokeTypes = new Set(["EXPIRATION", "SUBSCRIPTION_PAUSED"]);
+
+      if (proGrantTypes.has(type)) {
+        const expiresAt = expirationMs ? new Date(expirationMs) : null;
+        // Stale event guard: if we already have a later expiration recorded,
+        // ignore this event (out-of-order delivery).
+        if (
+          expiresAt &&
+          user.subscriptionExpiresAt &&
+          new Date(user.subscriptionExpiresAt).getTime() > expiresAt.getTime()
+        ) {
+          console.log(
+            `[RC Webhook] Ignoring stale grant for ${appUserId}; existing expiry is later`
+          );
+          return res.status(200).json({ message: "Stale event ignored" });
+        }
+        await storage.updateSubscriptionTier(appUserId, "pro", expiresAt);
+        console.log(
+          `[RC Webhook] User ${appUserId} → pro (expires ${expiresAt?.toISOString() || "none"})`
+        );
+      } else if (proRevokeTypes.has(type)) {
+        // Stale event guard: don't downgrade if user has a future expiration that
+        // is later than this event's timestamp (out-of-order delivery).
+        if (
+          eventTimestampMs &&
+          user.subscriptionExpiresAt &&
+          new Date(user.subscriptionExpiresAt).getTime() > eventTimestampMs
+        ) {
+          console.log(
+            `[RC Webhook] Ignoring stale revoke for ${appUserId}; current entitlement extends past event`
+          );
+          return res.status(200).json({ message: "Stale event ignored" });
+        }
+        await storage.updateSubscriptionTier(appUserId, "free", null);
+        console.log(`[RC Webhook] User ${appUserId} → free (${type})`);
+      } else {
+        // BILLING_ISSUE, CANCELLATION, SUBSCRIBER_ALIAS, TEST, TRANSFER, REFUND, etc.
+        console.log(`[RC Webhook] Ignoring event type ${type}`);
+      }
+
+      return res.status(200).json({ message: "OK" });
+    } catch (err) {
+      console.error("[RC Webhook] Error processing webhook:", err);
+      // Return 5xx so RevenueCat retries on transient failures.
+      return res.status(500).json({ message: "Internal error" });
+    }
+  });
+
   app.post("/api/subscription", requireAuth, async (req: Request, res: Response) => {
     try {
       const { tier } = req.body;
