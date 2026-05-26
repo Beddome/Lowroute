@@ -6,7 +6,6 @@ import {
   Pressable,
   ScrollView,
   Platform,
-  Alert,
   ActivityIndicator,
   TextInput,
   Modal,
@@ -17,6 +16,7 @@ import { router } from "expo-router";
 import { safeHaptics as Haptics } from "@/lib/safe-native";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription, ENTITLEMENT_ID } from "@/lib/revenuecat";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Colors } from "@/constants/colors";
 import { apiRequest } from "@/lib/query-client";
 import type { PurchasesPackage } from "react-native-purchases";
@@ -41,7 +41,38 @@ const FREE_FEATURES = [
   "Basic route suggestions",
 ];
 
+function PaywallFallback({ error, resetError }: { error: Error; resetError: () => void }) {
+  const insets = useSafeAreaInsets();
+  const topPad = Platform.OS === "web" ? 67 : insets.top;
+  return (
+    <View style={[styles.container, { paddingTop: topPad, padding: 24, justifyContent: "center" }]}>
+      <Ionicons name="alert-circle" size={48} color={Colors.error} style={{ alignSelf: "center", marginBottom: 16 }} />
+      <Text style={[styles.headerTitle, { fontSize: 22 }]}>Something went wrong</Text>
+      <Text style={[styles.headerSubtitle, { marginVertical: 12 }]} numberOfLines={4}>
+        {error?.message || "The subscription screen failed to load."}
+      </Text>
+      <Pressable
+        style={[styles.ctaButton, { marginTop: 8 }]}
+        onPress={() => { resetError(); router.back(); }}
+      >
+        <Text style={styles.ctaText}>Close</Text>
+      </Pressable>
+      <Pressable style={[styles.restoreBtn, { marginTop: 14 }]} onPress={resetError}>
+        <Text style={styles.restoreText}>Try again</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export default function PaywallScreen() {
+  return (
+    <ErrorBoundary FallbackComponent={PaywallFallback}>
+      <PaywallInner />
+    </ErrorBoundary>
+  );
+}
+
+function PaywallInner() {
   const insets = useSafeAreaInsets();
   const { user, refreshUser } = useAuth();
   const {
@@ -52,6 +83,11 @@ export default function PaywallScreen() {
     isPurchasing,
     isRestoring,
     isLoading: rcLoading,
+    isOfferingsLoading,
+    offeringsError,
+    refetchOfferings,
+    isConfigured,
+    initError,
   } = useSubscription();
 
   const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">("yearly");
@@ -223,6 +259,36 @@ export default function PaywallScreen() {
             Get live GPS navigation, hazard proximity alerts, and premium features to protect your build.
           </Text>
         </View>
+
+        {(isOfferingsLoading || (!isConfigured && !initError)) && !offerings && (
+          <View style={styles.statusBanner}>
+            <ActivityIndicator color={Colors.accent} size="small" />
+            <Text style={styles.statusBannerText}>Loading subscription plans…</Text>
+          </View>
+        )}
+
+        {(offeringsError || (isConfigured === false && initError)) && (
+          <View style={[styles.statusBanner, { backgroundColor: Colors.error + "15" }]}>
+            <Ionicons name="cloud-offline" size={18} color={Colors.error} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.statusBannerText, { color: Colors.error }]} numberOfLines={2}>
+                {offeringsError
+                  ? "Couldn't load latest plans — showing standard pricing."
+                  : initError || "Subscription service unavailable."}
+              </Text>
+            </View>
+            {offeringsError && isConfigured && refetchOfferings && (
+              <Pressable
+                onPress={() => refetchOfferings()}
+                style={styles.retryBtn}
+                hitSlop={8}
+                testID="paywall-retry-offerings"
+              >
+                <Text style={styles.retryBtnText}>Retry</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
 
         <View style={styles.plansContainer}>
           <Pressable
@@ -464,6 +530,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
 
+  statusBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: Colors.bgElevated,
+  },
+  statusBannerText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    color: Colors.textSecondary,
+  },
+  retryBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: Colors.accent,
+  },
+  retryBtnText: {
+    fontSize: 12,
+    fontFamily: "Inter_700Bold",
+    color: Colors.bg,
+  },
   plansContainer: { paddingHorizontal: 16, gap: 10, marginBottom: 8 },
   planCard: {
     backgroundColor: Colors.bgCard,

@@ -17,22 +17,58 @@ const REVENUECAT_API_KEY = Platform.select({
 export const ENTITLEMENT_ID = "Lowroute Pro";
 
 let rcConfigured = false;
+let rcInitError: string | null = null;
+
+export function isRevenueCatConfigured() {
+  return rcConfigured;
+}
+
+export function getRevenueCatInitError() {
+  return rcInitError;
+}
 
 export function initializeRevenueCat() {
   if (!REVENUECAT_API_KEY) {
-    console.warn("RevenueCat API key not found, skipping initialization");
+    rcInitError = "Subscription service not configured (missing API key).";
+    console.warn("[RevenueCat] API key not found, skipping initialization");
     return;
   }
 
   try {
-    Purchases.setLogLevel(Purchases.LOG_LEVEL.DEBUG);
+    try {
+      if (Purchases.LOG_LEVEL?.WARN !== undefined) {
+        Purchases.setLogLevel(Purchases.LOG_LEVEL.WARN);
+      }
+    } catch (logErr) {
+      console.warn("[RevenueCat] setLogLevel failed (non-fatal):", logErr);
+    }
     Purchases.configure({ apiKey: REVENUECAT_API_KEY });
     rcConfigured = true;
-    console.log("RevenueCat configured");
-  } catch (e) {
-    console.warn("RevenueCat initialization failed:", e);
+    rcInitError = null;
+    console.log("[RevenueCat] configured");
+  } catch (e: any) {
+    rcInitError = e?.message ?? "Failed to initialize subscription service.";
+    console.warn("[RevenueCat] initialization failed:", e);
     rcConfigured = false;
   }
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${ms}ms`));
+    }, ms);
+    promise.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      }
+    );
+  });
 }
 
 export async function loginRevenueCat(appUserId: string) {
@@ -59,8 +95,17 @@ function useSubscriptionContext() {
   const customerInfoQuery = useQuery<CustomerInfo>({
     queryKey: ["revenuecat", "customer-info"],
     queryFn: async () => {
-      const info = await Purchases.getCustomerInfo();
-      return info;
+      try {
+        const info = await withTimeout(
+          Purchases.getCustomerInfo(),
+          12000,
+          "getCustomerInfo"
+        );
+        return info;
+      } catch (e) {
+        console.warn("[RevenueCat] getCustomerInfo failed:", e);
+        throw e;
+      }
     },
     staleTime: 60 * 1000,
     retry: 1,
@@ -70,8 +115,22 @@ function useSubscriptionContext() {
   const offeringsQuery = useQuery<PurchasesOfferings>({
     queryKey: ["revenuecat", "offerings"],
     queryFn: async () => {
-      const offerings = await Purchases.getOfferings();
-      return offerings;
+      if (!rcConfigured) {
+        throw new Error(rcInitError ?? "Subscription service not configured.");
+      }
+      try {
+        const offerings = await withTimeout(
+          Purchases.getOfferings(),
+          12000,
+          "getOfferings"
+        );
+        const pkgCount = offerings?.current?.availablePackages?.length ?? 0;
+        console.log(`[RevenueCat] offerings loaded (${pkgCount} packages)`);
+        return offerings;
+      } catch (e) {
+        console.warn("[RevenueCat] getOfferings failed:", e);
+        throw e;
+      }
     },
     staleTime: 300 * 1000,
     retry: 1,
@@ -105,12 +164,16 @@ function useSubscriptionContext() {
     offerings: offeringsQuery.data ?? null,
     isSubscribed,
     isLoading: customerInfoQuery.isLoading || offeringsQuery.isLoading,
+    isOfferingsLoading: offeringsQuery.isLoading,
+    offeringsError: offeringsQuery.error as Error | null,
+    refetchOfferings: offeringsQuery.refetch,
     purchase: purchaseMutation.mutateAsync,
     restore: restoreMutation.mutateAsync,
     isPurchasing: purchaseMutation.isPending,
     isRestoring: restoreMutation.isPending,
     purchaseError: purchaseMutation.error,
     isConfigured: rcConfigured,
+    initError: rcInitError,
   };
 }
 
