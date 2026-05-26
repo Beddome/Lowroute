@@ -266,6 +266,9 @@ export default function MarketplaceScreen() {
                 Haptics.selectionAsync();
                 setShowMyListings(!showMyListings);
               }}
+              accessibilityLabel={showMyListings ? "Show all listings" : "Show my listings"}
+              accessibilityRole="button"
+              testID="marketplace-my-listings-toggle"
             >
               <Ionicons
                 name={showMyListings ? "person" : "person-outline"}
@@ -284,6 +287,9 @@ export default function MarketplaceScreen() {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               router.push("/create-listing");
             }}
+            accessibilityLabel="Create new listing"
+            accessibilityRole="button"
+            testID="marketplace-create-btn"
           >
             <Ionicons name="add" size={24} color={Colors.bg} />
           </Pressable>
@@ -302,7 +308,12 @@ export default function MarketplaceScreen() {
             returnKeyType="search"
           />
           {search.length > 0 && (
-            <Pressable onPress={() => setSearch("")}>
+            <Pressable
+              onPress={() => setSearch("")}
+              accessibilityLabel="Clear search"
+              accessibilityRole="button"
+              hitSlop={8}
+            >
               <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
             </Pressable>
           )}

@@ -38,7 +38,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
 
     return token;
   } catch (err) {
-    console.log("Push notification registration failed:", err);
+    if (__DEV__) console.warn("Push notification registration failed:", err);
     return null;
   }
 }

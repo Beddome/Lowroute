@@ -151,7 +151,12 @@ export default function FriendsScreen() {
     <View style={[s.container, { paddingTop: topPad }]}>
       <View style={s.header}>
         <Text style={s.title}>Friends</Text>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={12}
+          accessibilityLabel="Close friends"
+          accessibilityRole="button"
+        >
           <Ionicons name="close" size={24} color={Colors.textSecondary} />
         </Pressable>
       </View>
@@ -169,7 +174,12 @@ export default function FriendsScreen() {
         />
         {isSearching && <ActivityIndicator size="small" color={Colors.accent} />}
         {searchQuery.length > 0 && !isSearching && (
-          <Pressable onPress={() => { setSearchQuery(""); setSearchResults([]); }} hitSlop={8}>
+          <Pressable
+            onPress={() => { setSearchQuery(""); setSearchResults([]); }}
+            hitSlop={8}
+            accessibilityLabel="Clear search"
+            accessibilityRole="button"
+          >
             <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
           </Pressable>
         )}
@@ -197,6 +207,8 @@ export default function FriendsScreen() {
                       sendRequestMutation.mutate(u.id);
                     }}
                     disabled={sendRequestMutation.isPending}
+                    accessibilityLabel={`Send friend request to ${u.username}`}
+                    accessibilityRole="button"
                   >
                     <Ionicons name="person-add" size={16} color={Colors.accent} />
                   </Pressable>
@@ -234,6 +246,8 @@ export default function FriendsScreen() {
                         style={({ pressed }) => [s.acceptBtn, pressed && { opacity: 0.7 }]}
                         onPress={() => acceptMutation.mutate(req.id)}
                         disabled={acceptMutation.isPending}
+                        accessibilityLabel="Accept friend request"
+                        accessibilityRole="button"
                       >
                         <Ionicons name="checkmark" size={18} color={Colors.success} />
                       </Pressable>
@@ -241,6 +255,8 @@ export default function FriendsScreen() {
                         style={({ pressed }) => [s.declineBtn, pressed && { opacity: 0.7 }]}
                         onPress={() => declineMutation.mutate(req.id)}
                         disabled={declineMutation.isPending}
+                        accessibilityLabel="Decline friend request"
+                        accessibilityRole="button"
                       >
                         <Ionicons name="close" size={18} color={Colors.error} />
                       </Pressable>

@@ -41,6 +41,7 @@ The application features an interactive map displaying hazard markers colored by
 - **Offline Handling:** OfflineBanner component using NetInfo (native) and online/offline events (web). React Query retry logic for transient network errors (2 retries with exponential backoff, no retry on 4xx).
 - **Security:** Global write rate limiting (60 req/min per user on all POST/PUT/PATCH/DELETE), per-endpoint auth rate limiting (10 attempts/15 min), input sanitization, image magic number validation, file type/size restrictions (10MB max, jpg/png/webp only), session security (secure cookies, httpOnly, sameSite), production CORS configuration.
 - **EAS Build:** `eas.json` configured with development, preview, and production profiles for App Store/Play Store submission.
+- **Google Maps Android key:** `app.json` declares `android.config.googleMaps.apiKey` as an empty string placeholder. Before running EAS Build for Android, paste the `GOOGLE_MAPS_API_KEY` secret value into that field (or inject it via your release pipeline). The placeholder is empty rather than committed so the secret stays out of source control. iOS / Web do not require this key. (Replaces the deleted `app.config.ts` — dynamic Expo configs are incompatible with Replit Expo Launch.)
 - **App Store Metadata:** Store listing guide at `docs/app-store-listing.md` with descriptions, keywords, categories, screenshots dimensions.
 
 ## External Dependencies

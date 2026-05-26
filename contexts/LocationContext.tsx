@@ -34,7 +34,7 @@ let backgroundLocationCallback: ((position: LocationPosition, heading: number | 
 try {
   TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
     if (error) {
-      console.warn("Background location error:", error.message);
+      if (__DEV__) console.warn("Background location error:", error.message);
       return;
     }
     if (data) {
@@ -55,7 +55,7 @@ try {
   }
   });
 } catch (e) {
-  console.warn("TaskManager.defineTask failed:", e);
+  if (__DEV__) console.warn("TaskManager.defineTask failed:", e);
 }
 
 const LocationContext = createContext<LocationContextValue | null>(null);
@@ -143,7 +143,7 @@ export function LocationProvider({ children }: { children: ReactNode }) {
           setHeading(pos.coords.heading);
           setSpeed(pos.coords.speed);
         },
-        (err) => { console.warn("Geolocation error:", err.message); },
+        (err) => { if (__DEV__) console.warn("Geolocation error:", err.message); },
         { enableHighAccuracy: true, maximumAge: 5000 }
       );
       webWatchId.current = id;
@@ -211,7 +211,7 @@ export function LocationProvider({ children }: { children: ReactNode }) {
 
     const isTaskDefined = TaskManager.isTaskDefined(BACKGROUND_LOCATION_TASK);
     if (!isTaskDefined) {
-      console.warn("Background location task not defined");
+      if (__DEV__) console.warn("Background location task not defined");
       return;
     }
 
@@ -244,7 +244,7 @@ export function LocationProvider({ children }: { children: ReactNode }) {
         await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
       }
     } catch (e) {
-      console.warn("Error stopping background location:", e);
+      if (__DEV__) console.warn("Error stopping background location:", e);
     }
 
     setIsBackgroundTracking(false);

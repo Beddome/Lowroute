@@ -18,7 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { safeHaptics as Haptics } from "@/lib/safe-native";
 import { safeSpeech as Speech } from "@/lib/safe-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { SEVERITY_TIERS, HAZARD_TYPES, EVENT_TYPES } from "@/shared/types";
@@ -330,15 +330,25 @@ export default function MapScreen() {
     enabled: !!user,
   });
 
+  const [isTabFocused, setIsTabFocused] = useState(true);
+  useFocusEffect(
+    useCallback(() => {
+      setIsTabFocused(true);
+      return () => setIsTabFocused(false);
+    }, [])
+  );
+
   const { data: friendLocations = [] } = useQuery<UserLocation[]>({
     queryKey: ["/api/friends/locations"],
-    enabled: !!user,
-    refetchInterval: 30000,
+    enabled: !!user && isTabFocused,
+    refetchInterval: isTabFocused ? 30000 : false,
+    refetchIntervalInBackground: false,
   });
 
   const userLocationRef = useRef(userLocation);
   userLocationRef.current = userLocation;
   const locationUpdateRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastSentLocationRef = useRef<{ lat: number; lng: number; at: number } | null>(null);
 
   useEffect(() => {
     activeCarProfileRef.current = activeCarProfile;
@@ -346,17 +356,41 @@ export default function MapScreen() {
 
   useEffect(() => {
     if (!user || !userLocation) return;
-    const sendLocation = () => {
+    const MIN_MOVE_M = 25;
+    const MAX_AGE_MS = 5 * 60 * 1000;
+    const distanceM = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
+      const R = 6371000;
+      const toRad = (d: number) => (d * Math.PI) / 180;
+      const dLat = toRad(b.lat - a.lat);
+      const dLng = toRad(b.lng - a.lng);
+      const sa =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(sa));
+    };
+    const sendLocation = (force = false) => {
       const loc = userLocationRef.current;
       if (!loc) return;
+      const now = Date.now();
+      const last = lastSentLocationRef.current;
+      const next = { lat: loc.latitude, lng: loc.longitude };
+      if (
+        !force &&
+        last &&
+        now - last.at < MAX_AGE_MS &&
+        distanceM(last, next) < MIN_MOVE_M
+      ) {
+        return;
+      }
+      lastSentLocationRef.current = { ...next, at: now };
       apiRequest("POST", "/api/location/update", {
-        lat: loc.latitude,
-        lng: loc.longitude,
+        lat: next.lat,
+        lng: next.lng,
         activeCarId: activeCarProfileRef.current?.id,
       }).catch(() => {});
     };
-    sendLocation();
-    locationUpdateRef.current = setInterval(sendLocation, 30000);
+    sendLocation(true);
+    locationUpdateRef.current = setInterval(() => sendLocation(false), 30000);
     return () => {
       if (locationUpdateRef.current) clearInterval(locationUpdateRef.current);
     };

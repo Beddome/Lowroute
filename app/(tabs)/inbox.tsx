@@ -153,6 +153,9 @@ export default function InboxScreen() {
           style={({ pressed }) => [styles.composeBtn, pressed && { opacity: 0.7 }]}
           onPress={() => router.push("/new-chat")}
           hitSlop={12}
+          accessibilityLabel="New conversation"
+          accessibilityRole="button"
+          testID="inbox-compose-btn"
         >
           <Ionicons name="create-outline" size={22} color={Colors.accent} />
         </Pressable>

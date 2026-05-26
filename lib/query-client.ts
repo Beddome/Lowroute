@@ -12,7 +12,7 @@ export function getApiUrl(): string {
     if (typeof window !== "undefined" && window.location?.origin) {
       return window.location.origin;
     }
-    console.warn("EXPO_PUBLIC_DOMAIN is not set, falling back to localhost");
+    if (__DEV__) console.warn("EXPO_PUBLIC_DOMAIN is not set, falling back to localhost");
     return "http://localhost:5000";
   }
 

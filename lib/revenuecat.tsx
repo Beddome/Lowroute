@@ -30,7 +30,7 @@ export function getRevenueCatInitError() {
 export function initializeRevenueCat() {
   if (!REVENUECAT_API_KEY) {
     rcInitError = "Subscription service not configured (missing API key).";
-    console.warn("[RevenueCat] API key not found, skipping initialization");
+    if (__DEV__) console.warn("[RevenueCat] API key not found, skipping initialization");
     return;
   }
 
@@ -40,15 +40,15 @@ export function initializeRevenueCat() {
         Purchases.setLogLevel(Purchases.LOG_LEVEL.WARN);
       }
     } catch (logErr) {
-      console.warn("[RevenueCat] setLogLevel failed (non-fatal):", logErr);
+      if (__DEV__) console.warn("[RevenueCat] setLogLevel failed (non-fatal):", logErr);
     }
     Purchases.configure({ apiKey: REVENUECAT_API_KEY });
     rcConfigured = true;
     rcInitError = null;
-    console.log("[RevenueCat] configured");
+    if (__DEV__) console.log("[RevenueCat] configured");
   } catch (e: any) {
     rcInitError = e?.message ?? "Failed to initialize subscription service.";
-    console.warn("[RevenueCat] initialization failed:", e);
+    if (__DEV__) console.warn("[RevenueCat] initialization failed:", e);
     rcConfigured = false;
   }
 }
@@ -77,7 +77,7 @@ export async function loginRevenueCat(appUserId: string) {
     await Purchases.logIn(appUserId);
     queryClient.invalidateQueries({ queryKey: ["revenuecat"] });
   } catch (e) {
-    console.warn("RevenueCat logIn failed:", e);
+    if (__DEV__) console.warn("RevenueCat logIn failed:", e);
   }
 }
 
@@ -87,7 +87,7 @@ export async function logoutRevenueCat() {
     await Purchases.logOut();
     queryClient.invalidateQueries({ queryKey: ["revenuecat"] });
   } catch (e) {
-    console.warn("RevenueCat logOut failed:", e);
+    if (__DEV__) console.warn("RevenueCat logOut failed:", e);
   }
 }
 
@@ -103,7 +103,7 @@ function useSubscriptionContext() {
         );
         return info;
       } catch (e) {
-        console.warn("[RevenueCat] getCustomerInfo failed:", e);
+        if (__DEV__) console.warn("[RevenueCat] getCustomerInfo failed:", e);
         throw e;
       }
     },
@@ -125,10 +125,10 @@ function useSubscriptionContext() {
           "getOfferings"
         );
         const pkgCount = offerings?.current?.availablePackages?.length ?? 0;
-        console.log(`[RevenueCat] offerings loaded (${pkgCount} packages)`);
+        if (__DEV__) console.log(`[RevenueCat] offerings loaded (${pkgCount} packages)`);
         return offerings;
       } catch (e) {
-        console.warn("[RevenueCat] getOfferings failed:", e);
+        if (__DEV__) console.warn("[RevenueCat] getOfferings failed:", e);
         throw e;
       }
     },
