@@ -1,8 +1,10 @@
-# LowRoute
+# True Maps
 
 ## Overview
 
-LowRoute is a community-powered GPS and hazard-reporting application designed for low-clearance vehicles such as lowriders, slammed cars, and sports cars. Its primary purpose is to help drivers identify and navigate routes that avoid road hazards like potholes, speed bumps, and construction, thus protecting their vehicles. The project aims to create a comprehensive platform that combines real-time navigation with community-sourced hazard data, personalized route safety scoring, and social features like car meets and friend tracking, ultimately enhancing the driving experience for enthusiasts of low-clearance vehicles.
+True Maps (internal slug: `lowroute`) is a community-powered GPS and hazard-reporting application designed for low-clearance vehicles such as lowriders, slammed cars, and sports cars. Its primary purpose is to help drivers identify and navigate routes that avoid road hazards like potholes, speed bumps, and construction, thus protecting their vehicles. The project aims to create a comprehensive platform that combines real-time navigation with community-sourced hazard data, personalized route safety scoring, and social features like car meets and friend tracking, ultimately enhancing the driving experience for enthusiasts of low-clearance vehicles.
+
+Note: the app was renamed from "LowRoute" to "True Maps". The internal Expo slug (`lowroute`), bundle identifier (`com.lowroute.app`), EAS project, RevenueCat entitlement ID (`"Lowroute Pro"`), `LOWROUTE_*` env vars, and `lowroute_*` AsyncStorage / DB keys are intentionally preserved for backward compatibility with existing builds and subscribers.
 
 ## User Preferences
 
@@ -10,7 +12,7 @@ I prefer iterative development, with a focus on delivering core features first. 
 
 ## System Architecture
 
-LowRoute utilizes a full-stack architecture with a React Native frontend (Expo Router) for cross-platform mobile and web, an Express.js backend, and a PostgreSQL database managed with Drizzle ORM.
+True Maps utilizes a full-stack architecture with a React Native frontend (Expo Router) for cross-platform mobile and web, an Express.js backend, and a PostgreSQL database managed with Drizzle ORM.
 
 ### UI/UX Decisions
 

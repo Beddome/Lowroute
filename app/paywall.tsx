@@ -217,7 +217,7 @@ function PaywallInner() {
           </View>
           <Text style={styles.headerTitle}>You're on Pro</Text>
           <Text style={styles.headerSubtitle}>
-            You have full access to all LowRoute Pro features.
+            You have full access to all True Maps Pro features.
           </Text>
         </View>
         <View style={styles.activeFeatures}>
@@ -463,7 +463,7 @@ function PaywallInner() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Confirm Purchase</Text>
             <Text style={styles.modalBody}>
-              Subscribe to LowRoute Pro ({selectedPlan === "yearly" ? "Yearly" : "Monthly"}) for{" "}
+              Subscribe to True Maps Pro ({selectedPlan === "yearly" ? "Yearly" : "Monthly"}) for{" "}
               {selectedPlan === "yearly" ? yearlyPrice : monthlyPrice}
               {selectedPlan === "yearly" ? "/year" : "/month"}?
             </Text>

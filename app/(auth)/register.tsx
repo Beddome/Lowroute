@@ -64,7 +64,7 @@ export default function RegisterScreen() {
           <View style={styles.logoContainer}>
             <Ionicons name="shield-checkmark" size={36} color={Colors.accent} />
           </View>
-          <Text style={styles.title}>Join LowRoute</Text>
+          <Text style={styles.title}>Join True Maps</Text>
           <Text style={styles.subtitle}>Help the community stay scrape-free</Text>
         </View>
 

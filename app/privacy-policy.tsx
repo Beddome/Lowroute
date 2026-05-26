@@ -51,7 +51,7 @@ export default function PrivacyPolicyScreen() {
       >
         <Text style={s.lastUpdated}>Last Updated: January 2025</Text>
 
-        <Paragraph text='LowRoute ("we," "us," or "our") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use the LowRoute mobile application and related services.' />
+        <Paragraph text='True Maps ("we," "us," or "our") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use the True Maps mobile application and related services.' />
 
         <Section title="1. Information We Collect">
           <Text style={s.subTitle}>Account Information</Text>
@@ -87,7 +87,7 @@ export default function PrivacyPolicyScreen() {
 
         <Section title="2. How We Use Your Information">
           <BulletList items={[
-            "Provide, operate, and maintain the LowRoute application",
+            "Provide, operate, and maintain the True Maps application",
             "Display hazards on the map and calculate safe routes for low-clearance vehicles",
             "Enable social features including friends, messaging, events, and marketplace",
             "Share your live location with friends you have connected with (when enabled)",
@@ -142,7 +142,7 @@ export default function PrivacyPolicyScreen() {
         </Section>
 
         <Section title="8. Children's Privacy">
-          <Paragraph text="LowRoute is not intended for children under the age of 13. We do not knowingly collect personal information from children under 13. If we discover that a child under 13 has provided us with personal information, we will promptly delete such information. If you believe a child under 13 has provided us with personal data, please contact us." />
+          <Paragraph text="True Maps is not intended for children under the age of 13. We do not knowingly collect personal information from children under 13. If we discover that a child under 13 has provided us with personal information, we will promptly delete such information. If you believe a child under 13 has provided us with personal data, please contact us." />
         </Section>
 
         <Section title="9. Changes to This Policy">

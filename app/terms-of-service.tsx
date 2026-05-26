@@ -51,10 +51,10 @@ export default function TermsOfServiceScreen() {
       >
         <Text style={s.lastUpdated}>Last Updated: January 2025</Text>
 
-        <Paragraph text='Welcome to LowRoute. By accessing or using the LowRoute mobile application ("App"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, do not use the App.' />
+        <Paragraph text='Welcome to True Maps. By accessing or using the True Maps mobile application ("App"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, do not use the App.' />
 
         <Section title="1. Eligibility">
-          <Paragraph text="You must be at least 13 years of age to use LowRoute. By using the App, you represent and warrant that you are at least 13 years old and have the legal capacity to enter into these Terms." />
+          <Paragraph text="You must be at least 13 years of age to use True Maps. By using the App, you represent and warrant that you are at least 13 years old and have the legal capacity to enter into these Terms." />
         </Section>
 
         <Section title="2. Account Registration">
@@ -82,9 +82,9 @@ export default function TermsOfServiceScreen() {
         </Section>
 
         <Section title="4. User-Generated Content">
-          <Paragraph text="By submitting content to LowRoute (including hazard reports, marketplace listings, messages, photos, and event postings), you:" />
+          <Paragraph text="By submitting content to True Maps (including hazard reports, marketplace listings, messages, photos, and event postings), you:" />
           <BulletList items={[
-            "Grant LowRoute a non-exclusive, worldwide, royalty-free license to use, display, and distribute your content within the App",
+            "Grant True Maps a non-exclusive, worldwide, royalty-free license to use, display, and distribute your content within the App",
             "Represent that you own or have the right to share the content",
             "Acknowledge that your content may be visible to other users",
             "Understand that we may remove content that violates these Terms or our community guidelines",
@@ -96,23 +96,23 @@ export default function TermsOfServiceScreen() {
         </Section>
 
         <Section title="6. Driving Safety Disclaimer">
-          <Paragraph text="IMPORTANT: LowRoute provides advisory route information and hazard data submitted by community members. LowRoute is NOT a replacement for your own judgment while driving." />
+          <Paragraph text="IMPORTANT: True Maps provides advisory route information and hazard data submitted by community members. True Maps is NOT a replacement for your own judgment while driving." />
           <BulletList items={[
             "Always observe traffic laws and road conditions regardless of information shown in the App",
             "Do not interact with the App while operating a vehicle",
             "Hazard reports are community-sourced and may be inaccurate, outdated, or incomplete",
             "Route suggestions are advisory only; road conditions may change without notice",
             "You are solely responsible for your driving decisions and vehicle safety",
-            "LowRoute assumes no liability for damage to your vehicle, personal injury, or any other losses arising from use of the App's route or hazard information",
+            "True Maps assumes no liability for damage to your vehicle, personal injury, or any other losses arising from use of the App's route or hazard information",
           ]} />
         </Section>
 
         <Section title="7. Marketplace">
-          <Paragraph text="The LowRoute marketplace allows users to list and discover automotive parts and accessories. Please note:" />
+          <Paragraph text="The True Maps marketplace allows users to list and discover automotive parts and accessories. Please note:" />
           <BulletList items={[
-            "LowRoute is a platform for connecting buyers and sellers; we are not a party to any transaction",
-            "LowRoute does not guarantee the quality, safety, legality, or accuracy of any listing",
-            "LowRoute does not handle payments, shipping, or dispute resolution between users",
+            "True Maps is a platform for connecting buyers and sellers; we are not a party to any transaction",
+            "True Maps does not guarantee the quality, safety, legality, or accuracy of any listing",
+            "True Maps does not handle payments, shipping, or dispute resolution between users",
             "All transactions are conducted at your own risk",
             "You are responsible for complying with applicable laws regarding the sale and purchase of goods",
           ]} />
@@ -120,7 +120,7 @@ export default function TermsOfServiceScreen() {
 
         <Section title="8. Subscriptions">
           <BulletList items={[
-            "LowRoute offers optional paid subscription tiers with additional features",
+            "True Maps offers optional paid subscription tiers with additional features",
             "Subscriptions are managed through the Apple App Store or Google Play Store",
             "Subscription billing, renewal, and cancellation are governed by the respective store's terms",
             "We may change subscription pricing or features with reasonable notice",
@@ -138,12 +138,12 @@ export default function TermsOfServiceScreen() {
         </Section>
 
         <Section title="10. Limitation of Liability">
-          <Paragraph text='TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, LOWROUTE AND ITS OFFICERS, DIRECTORS, EMPLOYEES, AND AGENTS SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING BUT NOT LIMITED TO VEHICLE DAMAGE, PERSONAL INJURY, LOSS OF DATA, OR LOSS OF PROFITS, ARISING FROM YOUR USE OF THE APP.' />
+          <Paragraph text='TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, TRUE MAPS AND ITS OFFICERS, DIRECTORS, EMPLOYEES, AND AGENTS SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING BUT NOT LIMITED TO VEHICLE DAMAGE, PERSONAL INJURY, LOSS OF DATA, OR LOSS OF PROFITS, ARISING FROM YOUR USE OF THE APP.' />
           <Paragraph text="The App is provided on an 'as is' and 'as available' basis without warranties of any kind, either express or implied." />
         </Section>
 
         <Section title="11. Indemnification">
-          <Paragraph text="You agree to indemnify and hold harmless LowRoute and its affiliates from any claims, damages, losses, or expenses arising from your use of the App, your violation of these Terms, or your violation of any rights of another party." />
+          <Paragraph text="You agree to indemnify and hold harmless True Maps and its affiliates from any claims, damages, losses, or expenses arising from your use of the App, your violation of these Terms, or your violation of any rights of another party." />
         </Section>
 
         <Section title="12. Changes to Terms">

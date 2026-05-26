@@ -111,7 +111,7 @@ export function LocationProvider({ children }: { children: ReactNode }) {
       if (Platform.OS === "ios" || Platform.OS === "android") {
         Alert.alert(
           "Background Location Required",
-          'LowRoute needs "Always" location access to continue tracking your route when the app is in the background. Please enable it in Settings.',
+          'True Maps needs "Always" location access to continue tracking your route when the app is in the background. Please enable it in Settings.',
           [
             { text: "Cancel", style: "cancel" },
             { text: "Open Settings", onPress: () => { try { Linking.openSettings(); } catch {} } },
@@ -223,7 +223,7 @@ export function LocationProvider({ children }: { children: ReactNode }) {
         timeInterval: 2000,
         showsBackgroundLocationIndicator: true,
         foregroundService: {
-          notificationTitle: "LowRoute Navigation",
+          notificationTitle: "True Maps Navigation",
           notificationBody: "Tracking your route for hazard alerts",
           notificationColor: "#60A5FA",
         },

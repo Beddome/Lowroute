@@ -1,8 +1,8 @@
-# LowRoute — App Store Listing Metadata
+# True Maps — App Store Listing Metadata
 
 ## App Identity
 
-- **App Name:** LowRoute
+- **App Name:** True Maps
 - **Subtitle (Apple) / Short Description (Google):** Safe Routes for Low Cars
 - **Bundle Identifier (iOS):** com.lowroute.app
 - **Package Name (Android):** com.lowroute.app
@@ -17,19 +17,19 @@
 
 ### Apple App Store (max 4000 characters)
 
-LowRoute is the first navigation app built specifically for lowriders, slammed cars, and low-clearance vehicles. Stop worrying about potholes, speed bumps, and rough roads destroying your ride. LowRoute helps you find the safest routes using real-time community-sourced hazard data.
+True Maps is the first navigation app built specifically for lowriders, slammed cars, and low-clearance vehicles. Stop worrying about potholes, speed bumps, and rough roads destroying your ride. True Maps helps you find the safest routes using real-time community-sourced hazard data.
 
 SMART ROUTE PLANNING
-Plan your trips with confidence. LowRoute analyzes road conditions along your route and scores each option based on hazard density and severity. Choose the safest path every time — whether you're cruising across town or heading to a car meet.
+Plan your trips with confidence. True Maps analyzes road conditions along your route and scores each option based on hazard density and severity. Choose the safest path every time — whether you're cruising across town or heading to a car meet.
 
 COMMUNITY-POWERED HAZARD REPORTING
 See hazards reported by drivers just like you. Report potholes, speed bumps, steep driveways, railroad crossings, construction zones, uneven pavement, and more. Each report includes severity ratings and optional photos so the community stays informed.
 
 LIVE GPS NAVIGATION WITH VOICE GUIDANCE
-Navigate turn-by-turn with voice directions. LowRoute tracks your position in real time, alerts you to upcoming hazards on your route, and helps you avoid surprises. Works with Bluetooth audio systems.
+Navigate turn-by-turn with voice directions. True Maps tracks your position in real time, alerts you to upcoming hazards on your route, and helps you avoid surprises. Works with Bluetooth audio systems.
 
 YOUR GARAGE
-Add your vehicles with details like ride height, suspension type, and clearance mode. LowRoute personalizes route safety scores based on your specific car — because a bagged show car and a daily driver don't face the same risks.
+Add your vehicles with details like ride height, suspension type, and clearance mode. True Maps personalizes route safety scores based on your specific car — because a bagged show car and a daily driver don't face the same risks.
 
 SOCIAL FEATURES & LIVE LOCATION
 Connect with fellow enthusiasts. Add friends, share your live location on the map, and see where your crew is in real time. Coordinate meetups and cruises without switching apps.
@@ -43,11 +43,11 @@ Buy and sell car parts within the community. Browse listings by category and con
 MESSAGING & GROUP CHATS
 Chat with friends, coordinate in group conversations, and message sellers about marketplace listings. Stay connected with your car community.
 
-Download LowRoute today and drive with confidence. Your car deserves better roads.
+Download True Maps today and drive with confidence. Your car deserves better roads.
 
 ### Google Play Store (max 4000 characters)
 
-LowRoute is the first navigation app built specifically for lowriders, slammed cars, and low-clearance vehicles. Stop worrying about potholes, speed bumps, and rough roads destroying your ride. LowRoute helps you find the safest routes using real-time community-sourced hazard data.
+True Maps is the first navigation app built specifically for lowriders, slammed cars, and low-clearance vehicles. Stop worrying about potholes, speed bumps, and rough roads destroying your ride. True Maps helps you find the safest routes using real-time community-sourced hazard data.
 
 Key Features:
 
@@ -60,7 +60,7 @@ Key Features:
 - Parts Marketplace — Buy and sell car parts locally. Browse by category, message sellers directly.
 - Messaging — DMs, group chats, and seller conversations all in one place.
 
-LowRoute is built by car enthusiasts, for car enthusiasts. Download now and drive with confidence.
+True Maps is built by car enthusiasts, for car enthusiasts. Download now and drive with confidence.
 
 ---
 
@@ -83,7 +83,7 @@ Navigate smarter with community-reported hazard data. Built for lowriders and lo
 ## What's New (Version 1.0.0)
 
 ```
-Welcome to LowRoute! Plan safer routes, report hazards, connect with fellow car enthusiasts, and protect your ride.
+Welcome to True Maps! Plan safer routes, report hazards, connect with fellow car enthusiasts, and protect your ride.
 ```
 
 ---
@@ -129,11 +129,11 @@ Welcome to LowRoute! Plan safer routes, report hazards, connect with fellow car 
 
 | Product | Type | Price |
 |---------|------|-------|
-| LowRoute Pro (Monthly) | Auto-Renewable Subscription | $10.00 CAD/month |
-| LowRoute Pro (Yearly) | Auto-Renewable Subscription | $96.00 CAD/year (20% off) |
+| True Maps Pro (Monthly) | Auto-Renewable Subscription | $10.00 CAD/month |
+| True Maps Pro (Yearly) | Auto-Renewable Subscription | $96.00 CAD/year (20% off) |
 
 **Subscription Description:**
-LowRoute Pro unlocks live GPS navigation with voice guidance, real-time hazard alerts, and priority access to new features. Subscriptions auto-renew unless cancelled at least 24 hours before the end of the current period. Manage subscriptions in your device settings.
+True Maps Pro unlocks live GPS navigation with voice guidance, real-time hazard alerts, and priority access to new features. Subscriptions auto-renew unless cancelled at least 24 hours before the end of the current period. Manage subscriptions in your device settings.
 
 ---
 
@@ -205,12 +205,12 @@ Minimum 3 screenshots, maximum 10 per device size.
 Provide these notes to the Apple review team:
 
 ```
-LowRoute is a navigation app for low-clearance vehicles (lowriders, slammed cars).
+True Maps is a navigation app for low-clearance vehicles (lowriders, slammed cars).
 Users report road hazards and the app scores routes by safety.
 
 Demo account for review:
   Username: appreview
-  Password: LowRoute-Review2026!
+  Password: TrueMaps-Review2026!
 
 The app requires location permission to display the map and nearby hazards.
 Background location is used only during active navigation for turn-by-turn guidance.

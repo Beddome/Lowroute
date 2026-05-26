@@ -368,7 +368,7 @@ export default function MapScreenWeb() {
     searchTimer.current = setTimeout(async () => {
       try {
         const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(text)}&format=json&limit=5`;
-        const res = await globalThis.fetch(url, { headers: { "User-Agent": "LowRoute/1.0" } });
+        const res = await globalThis.fetch(url, { headers: { "User-Agent": "TrueMaps/1.0" } });
         const results = await res.json();
         setGeocodeResults(results);
       } finally {

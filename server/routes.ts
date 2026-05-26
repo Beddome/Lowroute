@@ -2131,7 +2131,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const resetToken = await storage.getPasswordResetToken(req.params.token);
       if (!resetToken || new Date() > resetToken.expiresAt) {
         return res.status(400).send(`
-          <html><head><title>LowRoute - Reset Password</title>
+          <html><head><title>True Maps - Reset Password</title>
           <style>body{font-family:sans-serif;background:#0A0A0B;color:#F5F5F5;display:flex;justify-content:center;align-items:center;height:100vh;margin:0}
           .card{background:#111114;padding:40px;border-radius:16px;text-align:center;max-width:400px}
           h2{color:#F59E0B}p{color:#9A9AAF}</style></head>
@@ -2139,7 +2139,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         `);
       }
       res.send(`
-        <html><head><title>LowRoute - Reset Password</title>
+        <html><head><title>True Maps - Reset Password</title>
         <style>body{font-family:sans-serif;background:#0A0A0B;color:#F5F5F5;display:flex;justify-content:center;align-items:center;height:100vh;margin:0}
         .card{background:#111114;padding:40px;border-radius:16px;max-width:400px;width:90%}
         h2{color:#F59E0B;margin-bottom:20px}

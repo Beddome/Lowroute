@@ -39,7 +39,7 @@ export default function DisclaimerScreen({ onAccept }: DisclaimerScreenProps) {
 
         <Text style={styles.title}>Safety First</Text>
         <Text style={styles.subtitle}>
-          Please read before using LowRoute
+          Please read before using True Maps
         </Text>
 
         <View style={styles.card}>
@@ -48,7 +48,7 @@ export default function DisclaimerScreen({ onAccept }: DisclaimerScreenProps) {
             <View style={styles.cardItemText}>
               <Text style={styles.cardItemTitle}>Advisory Information Only</Text>
               <Text style={styles.cardItemDesc}>
-                LowRoute provides route suggestions and hazard reports based on community data. This information is advisory only and should not replace your own judgment while driving.
+                True Maps provides route suggestions and hazard reports based on community data. This information is advisory only and should not replace your own judgment while driving.
               </Text>
             </View>
           </View>
@@ -84,7 +84,7 @@ export default function DisclaimerScreen({ onAccept }: DisclaimerScreenProps) {
             <View style={styles.cardItemText}>
               <Text style={styles.cardItemTitle}>Driver Responsibility</Text>
               <Text style={styles.cardItemDesc}>
-                You are solely responsible for your driving decisions. LowRoute is not liable for any vehicle damage, accidents, or incidents.
+                You are solely responsible for your driving decisions. True Maps is not liable for any vehicle damage, accidents, or incidents.
               </Text>
             </View>
           </View>
@@ -101,7 +101,7 @@ export default function DisclaimerScreen({ onAccept }: DisclaimerScreenProps) {
           <Text style={styles.acceptText}>I Understand & Accept</Text>
         </Pressable>
         <Text style={styles.footerNote}>
-          By continuing, you acknowledge that LowRoute provides advisory route information and you accept full responsibility for your driving decisions.
+          By continuing, you acknowledge that True Maps provides advisory route information and you accept full responsibility for your driving decisions.
         </Text>
       </View>
     </View>

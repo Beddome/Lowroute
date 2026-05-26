@@ -90,7 +90,7 @@ export default function ManageSubscriptionScreen() {
           </View>
           <View style={styles.statusInfo}>
             <Text style={styles.statusPlan}>
-              {isSubscribed ? "LowRoute Pro" : "Free Plan"}
+              {isSubscribed ? "True Maps Pro" : "Free Plan"}
             </Text>
             <Text style={styles.statusDesc}>
               {isSubscribed
@@ -186,7 +186,7 @@ export default function ManageSubscriptionScreen() {
       </View>
 
       <Text style={styles.footerNote}>
-        Subscriptions are managed through the App Store or Google Play. LowRoute does not store payment details.
+        Subscriptions are managed through the App Store or Google Play. True Maps does not store payment details.
       </Text>
     </View>
   );

@@ -265,7 +265,7 @@ export default function ProfileScreen() {
         const shareUrl = `https://${domain}/route/${data.shareToken}`;
         try {
           await Share.share({
-            message: `Check out my LowRoute! ${shareUrl}`,
+            message: `Check out my True Maps! ${shareUrl}`,
             url: shareUrl,
           });
         } catch {}
@@ -295,7 +295,7 @@ export default function ProfileScreen() {
             <View style={styles.guestIconContainer}>
               <Ionicons name="car-sport" size={60} color={Colors.accent} />
             </View>
-            <Text style={styles.guestTitle}>Join the LowRoute Community</Text>
+            <Text style={styles.guestTitle}>Join the True Maps Community</Text>
             <Text style={styles.guestSubtitle}>
               Sign in to report hazards, earn reputation, and help protect every low car on the road.
             </Text>
