@@ -7,7 +7,6 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "prebuildCommand": "node scripts/inject-google-maps-key.js",
       "ios": {
         "simulator": true
       },
@@ -22,7 +21,6 @@
     },
     "preview": {
       "distribution": "internal",
-      "prebuildCommand": "node scripts/inject-google-maps-key.js",
       "ios": {
         "simulator": false
       },
@@ -37,7 +35,6 @@
     },
     "production": {
       "autoIncrement": true,
-      "prebuildCommand": "node scripts/inject-google-maps-key.js",
       "ios": {
         "image": "latest"
       },

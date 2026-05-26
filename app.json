@@ -69,7 +69,8 @@
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
         }
-      ]
+      ],
+      "./plugins/with-google-maps-key"
     ],
     "extra": {
       "eas": {
