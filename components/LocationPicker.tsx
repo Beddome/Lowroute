@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 2,
     borderRadius: 20,
-    padding: Platform.OS === "android" ? 16 : 2,
+    padding: 2,
     backgroundColor: "rgba(0,0,0,0.5)",
   },
   pinInner: {

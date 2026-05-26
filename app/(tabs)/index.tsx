@@ -54,25 +54,23 @@ function EventMarker({ event, onPress }: { event: AppEvent; onPress: () => void 
       onPress={onPress}
       tracksViewChanges={tracksChanges}
     >
-      <View style={styles.markerOuter}>
-        <View
-          style={[
-            styles.markerContainer,
-            {
-              width: 32,
-              height: 32,
-              borderRadius: 16,
-              backgroundColor: EVENT_COLOR,
-              borderColor: "rgba(0,0,0,0.6)",
-            },
-          ]}
-        >
-          <Ionicons
-            name={getEventIcon(event.eventType) as any}
-            size={16}
-            color="#fff"
-          />
-        </View>
+      <View
+        style={[
+          styles.markerContainer,
+          {
+            width: 32,
+            height: 32,
+            borderRadius: 16,
+            backgroundColor: EVENT_COLOR,
+            borderColor: "rgba(0,0,0,0.6)",
+          },
+        ]}
+      >
+        <Ionicons
+          name={getEventIcon(event.eventType) as any}
+          size={16}
+          color="#fff"
+        />
       </View>
     </Marker>
   );
@@ -101,25 +99,23 @@ function HazardMarker({ hazard, onPress }: { hazard: Hazard; onPress: () => void
       onPress={onPress}
       tracksViewChanges={!ready}
     >
-      <View style={styles.markerOuter}>
-        <View
-          style={[
-            styles.markerContainer,
-            {
-              width: size,
-              height: size,
-              borderRadius: size / 2,
-              backgroundColor: tier?.color ?? Colors.tier1,
-              borderColor: "rgba(0,0,0,0.6)",
-            },
-          ]}
-        >
-          <Ionicons
-            name={getHazardIcon(hazard.type) as any}
-            size={size * 0.55}
-            color="#000"
-          />
-        </View>
+      <View
+        style={[
+          styles.markerContainer,
+          {
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            backgroundColor: tier?.color ?? Colors.tier1,
+            borderColor: "rgba(0,0,0,0.6)",
+          },
+        ]}
+      >
+        <Ionicons
+          name={getHazardIcon(hazard.type) as any}
+          size={size * 0.55}
+          color="#000"
+        />
       </View>
     </Marker>
   );
@@ -142,18 +138,14 @@ function FriendMarker({ location, onPress }: { location: UserLocation; onPress: 
       tracksViewChanges={false}
     >
       {hasCar ? (
-        <View style={styles.markerOuter}>
-          <CarAvatar
-            style={location.activeCar!.avatarStyle}
-            color={location.activeCar!.avatarColor}
-            size={36}
-          />
-        </View>
+        <CarAvatar
+          style={location.activeCar!.avatarStyle}
+          color={location.activeCar!.avatarColor}
+          size={36}
+        />
       ) : (
-        <View style={styles.markerOuter}>
-          <View style={[styles.markerContainer, { width: 32, height: 32, borderRadius: 16, backgroundColor: FRIEND_COLOR, borderColor: "rgba(255,255,255,0.6)" }]}>
-            <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: "#fff" }}>{initial}</Text>
-          </View>
+        <View style={[styles.markerContainer, { width: 32, height: 32, borderRadius: 16, backgroundColor: FRIEND_COLOR, borderColor: "rgba(255,255,255,0.6)" }]}>
+          <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: "#fff" }}>{initial}</Text>
         </View>
       )}
     </Marker>
@@ -1627,11 +1619,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
-  },
-  markerOuter: {
-    alignItems: "center",
-    justifyContent: "center",
-    padding: Platform.OS === "android" ? 16 : 0,
   },
   originPin: { alignItems: "center", justifyContent: "center" },
   destPin: { alignItems: "center", justifyContent: "center" },
