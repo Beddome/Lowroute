@@ -18,9 +18,9 @@ function NativeTabLayout() {
         <Icon sf={{ default: "map", selected: "map.fill" }} />
         <Label>Map</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="marketplace">
-        <Icon sf={{ default: "bag", selected: "bag.fill" }} />
-        <Label>Market</Label>
+      <NativeTabs.Trigger name="events">
+        <Icon sf={{ default: "calendar", selected: "calendar" }} />
+        <Label>Events</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="inbox">
         <Icon sf={{ default: "bubble.left.and.bubble.right", selected: "bubble.left.and.bubble.right.fill" }} />
@@ -83,12 +83,18 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
+        name="events"
+        options={{
+          title: "Events",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="calendar" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="marketplace"
         options={{
-          title: "Market",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="bag" size={size} color={color} />
-          ),
+          href: null,
         }}
       />
       <Tabs.Screen
