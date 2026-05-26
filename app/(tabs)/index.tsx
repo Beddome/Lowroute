@@ -1631,7 +1631,7 @@ const styles = StyleSheet.create({
   markerOuter: {
     alignItems: "center",
     justifyContent: "center",
-    padding: Platform.OS === "android" ? 8 : 0,
+    padding: Platform.OS === "android" ? 16 : 0,
   },
   originPin: { alignItems: "center", justifyContent: "center" },
   destPin: { alignItems: "center", justifyContent: "center" },
