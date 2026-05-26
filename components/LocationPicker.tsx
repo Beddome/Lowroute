@@ -149,13 +149,17 @@ function NativeLocationPicker({
             coordinate={markerCoord}
             draggable
             onDragEnd={handleMarkerDragEnd}
+            anchor={{ x: 0.5, y: 0.5 }}
+            centerOffset={{ x: 0, y: 0 }}
           >
-            <View style={[styles.pinOuter, { borderColor: accentColor }]}>
-              <View style={[styles.pinInner, { backgroundColor: accentColor }]}>
-                <Ionicons name="location" size={18} color="#fff" />
+            <View style={styles.pinWrapper}>
+              <View style={[styles.pinOuter, { borderColor: accentColor }]}>
+                <View style={[styles.pinInner, { backgroundColor: accentColor }]}>
+                  <Ionicons name="location" size={18} color="#fff" />
+                </View>
               </View>
+              <View style={[styles.pinShadow, { backgroundColor: accentColor }]} />
             </View>
-            <View style={[styles.pinShadow, { backgroundColor: accentColor }]} />
           </Marker>
         </MapView>
         <View style={styles.coordBadge}>
@@ -200,6 +204,14 @@ const styles = StyleSheet.create({
   map: {
     width: "100%",
     height: "100%",
+  },
+  pinWrapper: {
+    width: 52,
+    height: 60,
+    alignItems: "center",
+    justifyContent: "flex-start",
+    overflow: "visible",
+    backgroundColor: "transparent",
   },
   pinOuter: {
     alignItems: "center",
