@@ -175,7 +175,13 @@ export default function ReportScreen() {
             </View>
             <Text style={styles.headerTitle}>Report Hazard</Text>
           </View>
-          <Pressable onPress={() => router.back()} style={styles.closeBtn} hitSlop={8}>
+          <Pressable
+            onPress={() => router.back()}
+            style={styles.closeBtn}
+            hitSlop={8}
+            accessibilityLabel="Close report"
+            testID="report-close"
+          >
             <Ionicons name="close" size={22} color={Colors.textSecondary} />
           </Pressable>
         </View>

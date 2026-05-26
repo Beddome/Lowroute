@@ -127,7 +127,13 @@ export default function CreateEventScreen() {
             </View>
             <Text style={styles.headerTitle}>{isEditing ? "Edit Event" : "Create Event"}</Text>
           </View>
-          <Pressable onPress={() => router.back()} style={styles.closeBtn} hitSlop={8}>
+          <Pressable
+            onPress={() => router.back()}
+            style={styles.closeBtn}
+            hitSlop={8}
+            accessibilityLabel="Close event editor"
+            testID="create-event-close"
+          >
             <Ionicons name="close" size={22} color={Colors.textSecondary} />
           </Pressable>
         </View>

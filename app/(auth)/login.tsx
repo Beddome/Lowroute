@@ -6,12 +6,10 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   Modal,
   Alert,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { Link, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { safeHaptics as Haptics } from "@/lib/safe-native";
@@ -64,15 +62,13 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAwareScrollView
       style={{ flex: 1, backgroundColor: Colors.bg }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      <ScrollView
-        contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 32 }]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
+      contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 32 }]}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+      bottomOffset={20}
+    ><>
         <View style={styles.header}>
           <View style={styles.logoContainer}>
             <Ionicons name="car-sport" size={40} color={Colors.accent} />
@@ -209,8 +205,8 @@ export default function LoginScreen() {
             </Pressable>
           </Pressable>
         </Modal>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </>
+    </KeyboardAwareScrollView>
   );
 }
 

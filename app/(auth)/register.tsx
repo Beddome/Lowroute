@@ -6,10 +6,8 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { safeHaptics as Haptics } from "@/lib/safe-native";
@@ -51,15 +49,13 @@ export default function RegisterScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAwareScrollView
       style={{ flex: 1, backgroundColor: Colors.bg }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      <ScrollView
-        contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 32 }]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
+      contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 32 }]}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+      bottomOffset={20}
+    ><>
         <View style={styles.header}>
           <View style={styles.logoContainer}>
             <Ionicons name="shield-checkmark" size={36} color={Colors.accent} />
@@ -150,8 +146,8 @@ export default function RegisterScreen() {
             By signing up, you agree to help keep the lowrider community safe by reporting hazards accurately.
           </Text>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </>
+    </KeyboardAwareScrollView>
   );
 }
 

@@ -187,7 +187,11 @@ export default function CreateListingScreen() {
       >
         <View style={styles.header}>
           <Text style={styles.headerTitle}>New Listing</Text>
-          <Pressable onPress={() => router.back()}>
+          <Pressable
+            onPress={() => router.back()}
+            accessibilityLabel="Close new listing"
+            testID="create-listing-close"
+          >
             <Ionicons name="close" size={24} color={Colors.textSecondary} />
           </Pressable>
         </View>

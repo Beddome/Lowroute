@@ -26,6 +26,23 @@ export const Colors = {
   success: SAFE,
   error: DANGER,
   white: "#FFFFFF",
+  friend: "#3B82F6",
+  event: "#8B5CF6",
+  marketplace: "#60A5FA",
+  routeColors: ["#60A5FA", "#34D399", "#FBBF24"],
+  clearanceColors: {
+    normal: SAFE,
+    lowered: CAUTION,
+    very_lowered: WARNING,
+    show_car: DANGER,
+  } as Record<string, string>,
+  conditionColors: {
+    new: SAFE,
+    like_new: "#34D399",
+    good: "#60A5FA",
+    fair: CAUTION,
+    parts_only: WARNING,
+  } as Record<string, string>,
   mapStyle: [
     { elementType: "geometry", stylers: [{ color: "#0f0f13" }] },
     { elementType: "labels.text.stroke", stylers: [{ color: "#0f0f13" }] },

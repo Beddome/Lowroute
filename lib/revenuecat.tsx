@@ -124,8 +124,10 @@ function useSubscriptionContext() {
           12000,
           "getOfferings"
         );
-        const pkgCount = offerings?.current?.availablePackages?.length ?? 0;
-        if (__DEV__) console.log(`[RevenueCat] offerings loaded (${pkgCount} packages)`);
+        if (__DEV__) {
+          const pkgCount = offerings?.current?.availablePackages?.length ?? 0;
+          console.log(`[RevenueCat] offerings loaded (${pkgCount} packages)`);
+        }
         return offerings;
       } catch (e) {
         if (__DEV__) console.warn("[RevenueCat] getOfferings failed:", e);

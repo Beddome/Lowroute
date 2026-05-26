@@ -169,8 +169,14 @@ export default function ConversationScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
     >
-      <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === "web" ? 67 : 8) }]}>
-        <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
+      <View style={[styles.header, { paddingTop: Platform.OS === "web" ? 67 : insets.top + 8 }]}>
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={12}
+          style={styles.backBtn}
+          accessibilityLabel="Back"
+          testID="conversation-back"
+        >
           <Ionicons name="chevron-back" size={24} color={Colors.text} />
         </Pressable>
         <View style={styles.headerInfo}>
@@ -179,7 +185,13 @@ export default function ConversationScreen() {
             <Text style={styles.headerListingTitle} numberOfLines={1}>{listingTitle}</Text>
           )}
         </View>
-        <Pressable onPress={() => setReportVisible(true)} hitSlop={12} style={styles.reportBtn}>
+        <Pressable
+          onPress={() => setReportVisible(true)}
+          hitSlop={12}
+          style={styles.reportBtn}
+          accessibilityLabel="Report conversation"
+          testID="conversation-report"
+        >
           <Ionicons name="flag-outline" size={20} color={Colors.textMuted} />
         </Pressable>
       </View>

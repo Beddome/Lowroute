@@ -23,14 +23,8 @@ import { fetch } from "expo/fetch";
 import { type FriendWithCar, formatVehicleName } from "@/shared/types";
 import CarAvatar from "@/components/CarAvatar";
 
-const FRIEND_COLOR = "#3B82F6";
-
-const CLEARANCE_MODE_COLORS: Record<string, string> = {
-  normal: "#22C55E",
-  lowered: "#EAB308",
-  very_lowered: "#F97316",
-  show_car: "#EF4444",
-};
+const FRIEND_COLOR = Colors.friend;
+const CLEARANCE_MODE_COLORS = Colors.clearanceColors;
 
 interface SearchUser {
   id: string;
@@ -145,7 +139,7 @@ export default function FriendsScreen() {
     ]);
   }, []);
 
-  const topPad = Platform.OS === "web" ? 67 : 20;
+  const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   return (
     <View style={[s.container, { paddingTop: topPad }]}>
@@ -156,6 +150,7 @@ export default function FriendsScreen() {
           hitSlop={12}
           accessibilityLabel="Close friends"
           accessibilityRole="button"
+          testID="friends-close"
         >
           <Ionicons name="close" size={24} color={Colors.textSecondary} />
         </Pressable>
@@ -179,6 +174,7 @@ export default function FriendsScreen() {
             hitSlop={8}
             accessibilityLabel="Clear search"
             accessibilityRole="button"
+            testID="friends-clear-search"
           >
             <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
           </Pressable>
@@ -330,7 +326,13 @@ export default function FriendsScreen() {
         >
           <Pressable style={s.popupOverlay} onPress={() => setSelectedFriend(null)}>
             <View style={s.popupCard} onStartShouldSetResponder={() => true}>
-              <Pressable style={s.popupClose} onPress={() => setSelectedFriend(null)} hitSlop={8}>
+              <Pressable
+                style={s.popupClose}
+                onPress={() => setSelectedFriend(null)}
+                hitSlop={8}
+                accessibilityLabel="Close friend details"
+                testID="friend-popup-close"
+              >
                 <Ionicons name="close" size={18} color={Colors.textMuted} />
               </Pressable>
 

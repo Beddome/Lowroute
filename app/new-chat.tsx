@@ -143,7 +143,12 @@ export default function NewChatScreen() {
   return (
     <View style={[s.container, { paddingTop: topPad }]}>
       <View style={s.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={12}
+          accessibilityLabel="Close new chat"
+          testID="new-chat-close"
+        >
           <Ionicons name="close" size={24} color={Colors.textSecondary} />
         </Pressable>
         <Text style={s.headerTitle}>New Message</Text>

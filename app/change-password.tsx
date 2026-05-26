@@ -7,10 +7,9 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -65,17 +64,21 @@ export default function ChangePasswordScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAwareScrollView
       style={{ flex: 1, backgroundColor: Colors.bg }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      contentContainerStyle={[styles.container, { paddingTop: topPad + 12, paddingBottom: insets.bottom + 32 }]}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+      bottomOffset={20}
     >
-      <ScrollView
-        contentContainerStyle={[styles.container, { paddingTop: topPad + 12, paddingBottom: insets.bottom + 32 }]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.header}>
-          <Pressable style={styles.backBtn} onPress={() => router.back()} hitSlop={8}>
+      <><View style={styles.header}>
+          <Pressable
+            style={styles.backBtn}
+            onPress={() => router.back()}
+            hitSlop={8}
+            accessibilityLabel="Close change password"
+            testID="change-password-close"
+          >
             <Ionicons name="close" size={24} color={Colors.text} />
           </Pressable>
           <Text style={styles.title}>Change Password</Text>
@@ -171,8 +174,8 @@ export default function ChangePasswordScreen() {
             )}
           </Pressable>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </>
+    </KeyboardAwareScrollView>
   );
 }
 

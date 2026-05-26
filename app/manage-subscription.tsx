@@ -73,7 +73,13 @@ export default function ManageSubscriptionScreen() {
   return (
     <View style={[styles.container, { paddingTop: topPad }]}>
       <View style={styles.header}>
-        <Pressable style={styles.closeBtn} onPress={() => router.back()} hitSlop={16}>
+        <Pressable
+          style={styles.closeBtn}
+          onPress={() => router.back()}
+          hitSlop={16}
+          accessibilityLabel="Close subscription"
+          testID="subscription-close"
+        >
           <Ionicons name="close" size={24} color={Colors.textSecondary} />
         </Pressable>
         <Text style={styles.title}>Subscription</Text>

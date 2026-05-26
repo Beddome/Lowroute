@@ -330,18 +330,18 @@ export default function MapScreen() {
     enabled: !!user,
   });
 
-  const [isTabFocused, setIsTabFocused] = useState(true);
+  const [mapFocused, setMapFocused] = useState(true);
   useFocusEffect(
     useCallback(() => {
-      setIsTabFocused(true);
-      return () => setIsTabFocused(false);
+      setMapFocused(true);
+      return () => setMapFocused(false);
     }, [])
   );
 
   const { data: friendLocations = [] } = useQuery<UserLocation[]>({
     queryKey: ["/api/friends/locations"],
-    enabled: !!user && isTabFocused,
-    refetchInterval: isTabFocused ? 30000 : false,
+    enabled: !!user && mapFocused,
+    refetchInterval: mapFocused ? 30000 : false,
     refetchIntervalInBackground: false,
   });
 
@@ -356,45 +356,34 @@ export default function MapScreen() {
 
   useEffect(() => {
     if (!user || !userLocation) return;
-    const MIN_MOVE_M = 25;
-    const MAX_AGE_MS = 5 * 60 * 1000;
-    const distanceM = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
-      const R = 6371000;
-      const toRad = (d: number) => (d * Math.PI) / 180;
-      const dLat = toRad(b.lat - a.lat);
-      const dLng = toRad(b.lng - a.lng);
-      const sa =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
-      return 2 * R * Math.asin(Math.sqrt(sa));
-    };
+    const MIN_DISTANCE_METERS = 25;
+    const MAX_INTERVAL_MS = 5 * 60 * 1000;
     const sendLocation = (force = false) => {
       const loc = userLocationRef.current;
       if (!loc) return;
-      const now = Date.now();
       const last = lastSentLocationRef.current;
-      const next = { lat: loc.latitude, lng: loc.longitude };
-      if (
-        !force &&
-        last &&
-        now - last.at < MAX_AGE_MS &&
-        distanceM(last, next) < MIN_MOVE_M
-      ) {
-        return;
+      const now = Date.now();
+      if (!force && last) {
+        const moved = getDistance(last.lat, last.lng, loc.latitude, loc.longitude);
+        const elapsed = now - last.at;
+        if (moved < MIN_DISTANCE_METERS && elapsed < MAX_INTERVAL_MS) return;
       }
-      lastSentLocationRef.current = { ...next, at: now };
+      lastSentLocationRef.current = { lat: loc.latitude, lng: loc.longitude, at: now };
       apiRequest("POST", "/api/location/update", {
-        lat: next.lat,
-        lng: next.lng,
+        lat: loc.latitude,
+        lng: loc.longitude,
         activeCarId: activeCarProfileRef.current?.id,
       }).catch(() => {});
     };
     sendLocation(true);
-    locationUpdateRef.current = setInterval(() => sendLocation(false), 30000);
+    locationUpdateRef.current = setInterval(() => {
+      if (!mapFocused) return;
+      sendLocation();
+    }, 30000);
     return () => {
       if (locationUpdateRef.current) clearInterval(locationUpdateRef.current);
     };
-  }, [user, !!userLocation]);
+  }, [user, !!userLocation, mapFocused]);
 
   useEffect(() => {
     if (carProfiles.length > 0) {

@@ -129,7 +129,12 @@ export default function CarProfileScreen() {
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: Platform.OS === "web" ? 16 : 12 }]}>
-        <Pressable onPress={() => router.back()} hitSlop={8}>
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={8}
+          accessibilityLabel="Close car profile"
+          testID="car-profile-close"
+        >
           <Ionicons name="close" size={24} color={Colors.textSecondary} />
         </Pressable>
         <Text style={styles.headerTitle}>{isEditing ? "Edit Car" : "Add Car"}</Text>
@@ -137,6 +142,8 @@ export default function CarProfileScreen() {
           onPress={() => saveMutation.mutate()}
           disabled={!canSave || saveMutation.isPending}
           hitSlop={8}
+          accessibilityLabel="Save car profile"
+          testID="car-profile-save"
         >
           <Ionicons
             name="checkmark"
