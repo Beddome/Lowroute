@@ -1352,23 +1352,6 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* Location button - positioned below search bar, hidden when geocode dropdown open */}
-      {locationGranted && !isNavigating && geocodeResults.length === 0 && (
-        <Pressable
-          style={[styles.locBtn, { top: insets.top + topPadding + 120, right: 16, zIndex: 101 }]}
-          onPress={() => {
-            if (userLocation) {
-              mapRef.current?.animateToRegion(
-                { ...userLocation, latitudeDelta: 0.02, longitudeDelta: 0.02 },
-                500
-              );
-            }
-          }}
-        >
-          <Ionicons name="navigate" size={20} color={Colors.text} />
-        </Pressable>
-      )}
-
       <Modal
         visible={carSelectorOpen}
         transparent
@@ -1796,24 +1779,6 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   geocodeText: { flex: 1, color: Colors.text, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
-
-  locBtn: {
-    position: "absolute",
-    right: 0,
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: Colors.bgCard,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 6,
-    elevation: 8,
-  },
 
   bottomPanel: {
     position: "absolute",
