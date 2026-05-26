@@ -83,7 +83,7 @@ function getHazardIcon(hazardType: string): string {
 
 function HazardMarker({ hazard, onPress }: { hazard: Hazard; onPress: () => void }) {
   const tier = SEVERITY_TIERS[hazard.severity - 1];
-  const size = hazard.severity >= 3 ? 36 : 30;
+  const size = 30;
   const isNative = Platform.OS !== "web";
   const [ready, setReady] = useState(!isNative);
 
