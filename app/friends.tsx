@@ -20,7 +20,7 @@ import { Colors } from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest, queryClient, getApiUrl } from "@/lib/query-client";
 import { fetch } from "expo/fetch";
-import type { FriendWithCar } from "@/shared/types";
+import { type FriendWithCar, formatVehicleName } from "@/shared/types";
 import CarAvatar from "@/components/CarAvatar";
 
 const FRIEND_COLOR = "#3B82F6";
@@ -291,8 +291,8 @@ export default function FriendsScreen() {
                     <View style={{ flex: 1 }}>
                       <Text style={s.userName}>{friend.username}</Text>
                       {friend.activeCar && (
-                        <Text style={s.friendCarSubtext}>
-                          {friend.activeCar.year} {friend.activeCar.make} {friend.activeCar.model}
+                        <Text style={s.friendCarSubtext} numberOfLines={1}>
+                          {formatVehicleName(friend.activeCar)}
                         </Text>
                       )}
                     </View>
@@ -341,7 +341,7 @@ export default function FriendsScreen() {
                 <>
                   <View style={s.popupDivider} />
                   <Text style={s.popupCarName}>
-                    {selectedFriend.activeCar.year} {selectedFriend.activeCar.make} {selectedFriend.activeCar.model}
+                    {formatVehicleName(selectedFriend.activeCar)}
                   </Text>
 
                   <View style={s.popupSpecsGrid}>

@@ -377,6 +377,8 @@ export async function createCarProfile(data: {
   isDefault?: boolean;
   avatarStyle?: string;
   avatarColor?: string;
+  vehicleType?: string;
+  nickname?: string | null;
 }) {
   if (data.isDefault) {
     await db.update(schema.carProfiles)
@@ -396,6 +398,8 @@ export async function createCarProfile(data: {
     isDefault: data.isDefault ?? false,
     avatarStyle: data.avatarStyle || "sedan",
     avatarColor: data.avatarColor || "#F97316",
+    vehicleType: (data.vehicleType as any) || "car",
+    nickname: data.nickname ?? null,
   }).returning();
   return profile;
 }
@@ -412,6 +416,8 @@ export async function updateCarProfile(id: string, data: Partial<{
   isDefault: boolean;
   avatarStyle: string;
   avatarColor: string;
+  vehicleType: string;
+  nickname: string | null;
 }>) {
   if (data.isDefault) {
     const existing = await getCarProfileById(id);
@@ -827,6 +833,8 @@ export async function getFriendsLocations(userId: string) {
     carWheelSize: schema.carProfiles.wheelSize,
     carAvatarStyle: schema.carProfiles.avatarStyle,
     carAvatarColor: schema.carProfiles.avatarColor,
+    carVehicleType: schema.carProfiles.vehicleType,
+    carNickname: schema.carProfiles.nickname,
   })
     .from(schema.userLocations)
     .leftJoin(schema.users, eq(schema.userLocations.userId, schema.users.id))
@@ -849,6 +857,8 @@ export async function getFriendsLocations(userId: string) {
       wheelSize: loc.carWheelSize ?? null,
       avatarStyle: loc.carAvatarStyle!,
       avatarColor: loc.carAvatarColor!,
+      vehicleType: (loc.carVehicleType ?? "car") as any,
+      nickname: loc.carNickname ?? null,
     } : undefined,
   }));
 }
@@ -1232,6 +1242,8 @@ export async function getFriendsWithCars(userId: string) {
     wheelSize: schema.carProfiles.wheelSize,
     avatarStyle: schema.carProfiles.avatarStyle,
     avatarColor: schema.carProfiles.avatarColor,
+    vehicleType: schema.carProfiles.vehicleType,
+    nickname: schema.carProfiles.nickname,
     isDefault: schema.carProfiles.isDefault,
   })
     .from(schema.carProfiles)
@@ -1257,6 +1269,8 @@ export async function getFriendsWithCars(userId: string) {
         wheelSize: car.wheelSize,
         avatarStyle: car.avatarStyle ?? "sedan",
         avatarColor: car.avatarColor ?? "#F97316",
+        vehicleType: (car.vehicleType ?? "car") as any,
+        nickname: car.nickname ?? null,
       } : undefined,
     };
   });

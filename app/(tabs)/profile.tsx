@@ -22,7 +22,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUnits } from "@/contexts/UnitsContext";
 import { Colors } from "@/constants/colors";
-import { formatMSTDateClient, CarProfile, SavedRoute, SUSPENSION_TYPES, CLEARANCE_MODES } from "@/shared/types";
+import { formatMSTDateClient, CarProfile, SavedRoute, SUSPENSION_TYPES, CLEARANCE_MODES, vehicleTypeLabel } from "@/shared/types";
 import { apiRequest, queryClient } from "@/lib/query-client";
 import CarAvatar from "@/components/CarAvatar";
 import { useSubscription } from "@/lib/revenuecat";
@@ -86,6 +86,7 @@ const repStyles = StyleSheet.create({
 function GarageCard({ car }: { car: CarProfile }) {
   const suspLabel = SUSPENSION_TYPES.find((s) => s.value === car.suspensionType)?.label ?? car.suspensionType;
   const clearLabel = CLEARANCE_MODES.find((c) => c.value === car.clearanceMode)?.label ?? car.clearanceMode;
+  const vehicleLabel = vehicleTypeLabel(car.vehicleType);
 
   return (
     <Pressable
@@ -98,9 +99,16 @@ function GarageCard({ car }: { car: CarProfile }) {
       <View style={garageStyles.carHeader}>
         <CarAvatar style={car.avatarStyle} color={car.avatarColor} size={44} />
         <View style={{ flex: 1, marginLeft: 12 }}>
-          <Text style={garageStyles.carName}>{car.year} {car.make} {car.model}</Text>
-          {car.rideHeight != null && (
-            <Text style={garageStyles.carDetail}>{car.rideHeight}" ride height</Text>
+          {car.nickname ? (
+            <>
+              <Text style={garageStyles.carName} numberOfLines={1}>{car.nickname}</Text>
+              <Text style={garageStyles.carDetail} numberOfLines={1}>{vehicleLabel} • {car.year} {car.make} {car.model}</Text>
+            </>
+          ) : (
+            <>
+              <Text style={garageStyles.carName} numberOfLines={1}>{car.year} {car.make} {car.model}</Text>
+              <Text style={garageStyles.carDetail}>{vehicleLabel}{car.rideHeight != null ? ` • ${car.rideHeight}" ride height` : ""}</Text>
+            </>
           )}
         </View>
         <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />

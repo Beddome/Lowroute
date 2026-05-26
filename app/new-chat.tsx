@@ -18,7 +18,7 @@ import { Colors } from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest, queryClient } from "@/lib/query-client";
 import CarAvatar from "@/components/CarAvatar";
-import type { FriendWithCar } from "@/shared/types";
+import { type FriendWithCar, formatVehicleName } from "@/shared/types";
 
 export default function NewChatScreen() {
   const insets = useSafeAreaInsets();
@@ -130,7 +130,7 @@ export default function NewChatScreen() {
             <Text style={s.friendName}>{item.username}</Text>
             {item.activeCar && (
               <Text style={s.friendCar} numberOfLines={1}>
-                {item.activeCar.year} {item.activeCar.make} {item.activeCar.model}
+                {formatVehicleName(item.activeCar)}
               </Text>
             )}
           </View>

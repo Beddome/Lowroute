@@ -92,6 +92,15 @@ export const PROMO_TYPES = [
   { value: "permanent", label: "Permanent Access", days: null },
 ] as const;
 
+export type VehicleType = "car" | "motorbike" | "street_bike" | "moped";
+
+export const VEHICLE_TYPES: Array<{ value: VehicleType; label: string; icon: string }> = [
+  { value: "car", label: "Car", icon: "car-sport" },
+  { value: "motorbike", label: "Motorbike", icon: "bicycle" },
+  { value: "street_bike", label: "Street Bike", icon: "bicycle-outline" },
+  { value: "moped", label: "Moped", icon: "bicycle-sharp" },
+];
+
 export interface CarProfile {
   id: string;
   userId: string;
@@ -106,7 +115,18 @@ export interface CarProfile {
   isDefault: boolean;
   avatarStyle: string;
   avatarColor: string;
+  vehicleType: VehicleType;
+  nickname: string | null;
   createdAt: string | Date;
+}
+
+export function formatVehicleName(car: { year: number; make: string; model: string; nickname?: string | null }): string {
+  const base = `${car.year} ${car.make} ${car.model}`;
+  return car.nickname ? `${car.nickname} — ${base}` : base;
+}
+
+export function vehicleTypeLabel(type: VehicleType | string | null | undefined): string {
+  return VEHICLE_TYPES.find((v) => v.value === type)?.label ?? "Car";
 }
 
 export interface AppEvent {
@@ -176,6 +196,8 @@ export interface UserLocation {
     wheelSize: number | null;
     avatarStyle: string;
     avatarColor: string;
+    vehicleType: VehicleType;
+    nickname: string | null;
   };
 }
 
@@ -276,6 +298,8 @@ export interface FriendWithCar extends FriendWithUser {
     wheelSize: number | null;
     avatarStyle: string;
     avatarColor: string;
+    vehicleType: VehicleType;
+    nickname: string | null;
   };
 }
 

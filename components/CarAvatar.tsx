@@ -13,6 +13,18 @@ export const AVATAR_STYLES: { value: string; label: string; icon: keyof typeof I
   { value: "van", label: "Van", icon: "bus-outline" },
 ];
 
+export const BIKE_AVATAR_STYLES: { value: string; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { value: "sport_bike", label: "Sport", icon: "bicycle" },
+  { value: "cruiser", label: "Cruiser", icon: "bicycle-outline" },
+  { value: "scooter", label: "Scooter", icon: "bicycle-sharp" },
+  { value: "moped", label: "Moped", icon: "bicycle" },
+];
+
+export function getAvatarStylesForVehicleType(vehicleType: string | null | undefined) {
+  if (vehicleType && vehicleType !== "car") return BIKE_AVATAR_STYLES;
+  return AVATAR_STYLES;
+}
+
 export const AVATAR_COLORS = [
   "#F97316",
   "#3B82F6",
@@ -25,7 +37,7 @@ export const AVATAR_COLORS = [
 ];
 
 function getIconForStyle(style: string): keyof typeof Ionicons.glyphMap {
-  const found = AVATAR_STYLES.find((s) => s.value === style);
+  const found = AVATAR_STYLES.find((s) => s.value === style) || BIKE_AVATAR_STYLES.find((s) => s.value === style);
   return found ? found.icon : "car";
 }
 

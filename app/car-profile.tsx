@@ -18,8 +18,8 @@ import { safeHaptics as Haptics } from "@/lib/safe-native";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { apiRequest, queryClient } from "@/lib/query-client";
-import { CarProfile, SUSPENSION_TYPES, CLEARANCE_MODES } from "@/shared/types";
-import CarAvatar, { AVATAR_STYLES, AVATAR_COLORS } from "@/components/CarAvatar";
+import { CarProfile, SUSPENSION_TYPES, CLEARANCE_MODES, VEHICLE_TYPES, VehicleType } from "@/shared/types";
+import CarAvatar, { AVATAR_COLORS, getAvatarStylesForVehicleType } from "@/components/CarAvatar";
 
 export default function CarProfileScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -37,6 +37,10 @@ export default function CarProfileScreen() {
   const [isDefault, setIsDefault] = useState(false);
   const [avatarStyle, setAvatarStyle] = useState("sedan");
   const [avatarColor, setAvatarColor] = useState("#F97316");
+  const [vehicleType, setVehicleType] = useState<VehicleType>("car");
+  const [nickname, setNickname] = useState("");
+
+  const avatarStylesForType = getAvatarStylesForVehicleType(vehicleType);
 
   const { data: car, isLoading: loadingCar } = useQuery<CarProfile>({
     queryKey: ["/api/cars", id],
@@ -56,6 +60,8 @@ export default function CarProfileScreen() {
       setIsDefault(car.isDefault);
       setAvatarStyle(car.avatarStyle ?? "sedan");
       setAvatarColor(car.avatarColor ?? "#F97316");
+      setVehicleType((car.vehicleType ?? "car") as VehicleType);
+      setNickname(car.nickname ?? "");
     }
   }, [car]);
 
@@ -73,6 +79,8 @@ export default function CarProfileScreen() {
         isDefault,
         avatarStyle,
         avatarColor,
+        vehicleType,
+        nickname: nickname.trim() || null,
       };
       if (isEditing) {
         return apiRequest("PUT", `/api/cars/${id}`, body);
@@ -154,9 +162,34 @@ export default function CarProfileScreen() {
           <CarAvatar style={avatarStyle} color={avatarColor} size={80} />
         </View>
 
-        <Text style={styles.sectionLabel}>Car Style</Text>
+        <Text style={styles.sectionLabel}>Vehicle Type</Text>
         <View style={styles.chipRow}>
-          {AVATAR_STYLES.map((s) => (
+          {VEHICLE_TYPES.map((v) => (
+            <Pressable
+              key={v.value}
+              style={[styles.avatarChip, vehicleType === v.value && { backgroundColor: Colors.accent + "22", borderColor: Colors.accent }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                if (v.value !== vehicleType) {
+                  const newStyles = getAvatarStylesForVehicleType(v.value);
+                  if (!newStyles.find((s) => s.value === avatarStyle)) {
+                    setAvatarStyle(newStyles[0].value);
+                  }
+                }
+                setVehicleType(v.value);
+              }}
+            >
+              <Ionicons name={v.icon as any} size={18} color={vehicleType === v.value ? Colors.accent : Colors.textSecondary} />
+              <Text style={[styles.avatarChipText, vehicleType === v.value && { color: Colors.accent }]}>
+                {v.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <Text style={styles.sectionLabel}>{vehicleType === "car" ? "Car Style" : "Bike Style"}</Text>
+        <View style={styles.chipRow}>
+          {avatarStylesForType.map((s) => (
             <Pressable
               key={s.value}
               style={[styles.avatarChip, avatarStyle === s.value && { backgroundColor: avatarColor + "22", borderColor: avatarColor }]}
@@ -198,6 +231,17 @@ export default function CarProfileScreen() {
         </View>
 
         <Text style={styles.sectionLabel}>Vehicle Info</Text>
+        <View style={[styles.inputGroup, { marginBottom: 12 }]}>
+          <Text style={styles.label}>Nickname (optional)</Text>
+          <TextInput
+            style={styles.input}
+            value={nickname}
+            onChangeText={(t) => setNickname(t.slice(0, 30))}
+            placeholder="Project Slammer"
+            placeholderTextColor={Colors.textMuted}
+            maxLength={30}
+          />
+        </View>
         <View style={styles.row}>
           <View style={[styles.inputGroup, { flex: 1 }]}>
             <Text style={styles.label}>Make</Text>

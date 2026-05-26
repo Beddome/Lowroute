@@ -35,6 +35,13 @@ export const clearanceModeEnum = pgEnum("clearance_mode", [
   "show_car",
 ]);
 
+export const vehicleTypeEnum = pgEnum("vehicle_type", [
+  "car",
+  "motorbike",
+  "street_bike",
+  "moped",
+]);
+
 export const eventTypeEnum = pgEnum("event_type", [
   "car_meet",
   "show_and_shine",
@@ -133,6 +140,8 @@ export const carProfiles = pgTable("car_profiles", {
   isDefault: boolean("is_default").notNull().default(false),
   avatarStyle: varchar("avatar_style", { length: 20 }).notNull().default("sedan"),
   avatarColor: varchar("avatar_color", { length: 10 }).notNull().default("#F97316"),
+  vehicleType: vehicleTypeEnum("vehicle_type").notNull().default("car"),
+  nickname: varchar("nickname", { length: 30 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

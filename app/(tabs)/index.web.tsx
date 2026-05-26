@@ -528,10 +528,26 @@ export default function MapScreenWeb() {
         <Pressable
           style={styles.fab}
           onPress={() => {
-            const center = mapInstanceRef.current?.getCenter();
-            const lat = center?.lat ?? 49.6935;
-            const lng = center?.lng ?? -112.8418;
-            router.push({ pathname: "/report", params: { lat: String(lat), lng: String(lng) } });
+            const fallback = () => {
+              const center = mapInstanceRef.current?.getCenter();
+              const lat = center?.lat ?? 49.6935;
+              const lng = center?.lng ?? -112.8418;
+              router.push({ pathname: "/report", params: { lat: String(lat), lng: String(lng) } });
+            };
+            if (typeof navigator !== "undefined" && navigator.geolocation) {
+              navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                  router.push({
+                    pathname: "/report",
+                    params: { lat: String(pos.coords.latitude), lng: String(pos.coords.longitude) },
+                  });
+                },
+                () => fallback(),
+                { enableHighAccuracy: true, timeout: 5000, maximumAge: 30000 }
+              );
+            } else {
+              fallback();
+            }
           }}
         >
           <Ionicons name="warning" size={22} color={Colors.bg} />

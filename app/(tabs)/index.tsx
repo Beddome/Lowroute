@@ -23,6 +23,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { SEVERITY_TIERS, HAZARD_TYPES, EVENT_TYPES } from "@/shared/types";
 import type { Hazard, AppEvent, CarProfile, UserLocation } from "@/shared/types";
+import { formatVehicleName } from "@/shared/types";
 import { useSubscription } from "@/lib/revenuecat";
 import { getApiUrl, apiRequest, queryClient } from "@/lib/query-client";
 import { fetch } from "expo/fetch";
@@ -985,7 +986,7 @@ export default function MapScreen() {
                 <>
                   <View style={styles.friendPopupDivider} />
                   <Text style={styles.friendPopupCarName}>
-                    {selectedFriend.activeCar.year} {selectedFriend.activeCar.make} {selectedFriend.activeCar.model}
+                    {formatVehicleName(selectedFriend.activeCar)}
                   </Text>
 
                   <View style={styles.friendPopupSpecsGrid}>
@@ -1198,7 +1199,7 @@ export default function MapScreen() {
                 >
                   <CarAvatar style={activeCarProfile.avatarStyle} color={activeCarProfile.avatarColor} size={22} />
                   <Text style={styles.carSelectorText} numberOfLines={1}>
-                    {activeCarProfile.year} {activeCarProfile.make} {activeCarProfile.model}
+                    {formatVehicleName(activeCarProfile)}
                   </Text>
                   <Ionicons name="chevron-down" size={14} color={Colors.textMuted} />
                 </Pressable>
@@ -1364,7 +1365,7 @@ export default function MapScreen() {
                 >
                   <Ionicons name="car-sport" size={18} color={isActive ? Colors.accent : Colors.textSecondary} />
                   <Text style={[styles.carModalItemText, isActive && { color: Colors.accent }]}>
-                    {car.year} {car.make} {car.model}
+                    {formatVehicleName(car)}
                   </Text>
                   {isActive && <Ionicons name="checkmark-circle" size={18} color={Colors.accent} />}
                 </Pressable>
@@ -1432,7 +1433,7 @@ function RoutePanel({
             <Pressable style={styles.carSelectorPillInline} onPress={onCarSelect}>
               <CarAvatar style={activeCarProfile.avatarStyle} color={activeCarProfile.avatarColor} size={20} />
               <Text style={styles.carSelectorText} numberOfLines={1}>
-                {activeCarProfile.year} {activeCarProfile.make} {activeCarProfile.model}
+                {formatVehicleName(activeCarProfile)}
               </Text>
               <Ionicons name="chevron-down" size={14} color={Colors.textMuted} />
             </Pressable>
@@ -1441,7 +1442,7 @@ function RoutePanel({
             <View style={styles.carProfileBadge}>
               <CarAvatar style={(carProfile as any).avatarStyle} color={(carProfile as any).avatarColor} size={20} />
               <Text style={styles.carProfileBadgeText}>
-                Risk for: {carProfile.year} {carProfile.make} {carProfile.model}
+                Risk for: {formatVehicleName(carProfile)}
               </Text>
             </View>
           )}

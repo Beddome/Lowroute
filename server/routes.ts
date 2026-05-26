@@ -1100,7 +1100,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/cars", requireAuth, async (req: Request, res: Response) => {
     try {
-      const { make, model, year, rideHeight, suspensionType, hasFrontLip, wheelSize, clearanceMode, isDefault, avatarStyle, avatarColor } = req.body;
+      const { make, model, year, rideHeight, suspensionType, hasFrontLip, wheelSize, clearanceMode, isDefault, avatarStyle, avatarColor, vehicleType, nickname } = req.body;
       if (!make || !model || !year) {
         return res.status(400).json({ message: "Make, model, and year are required" });
       }
@@ -1122,6 +1122,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (clearanceMode && !validClearance.includes(clearanceMode)) {
         return res.status(400).json({ message: "Invalid clearance mode" });
       }
+      const validVehicleTypes = ["car", "motorbike", "street_bike", "moped"];
+      if (vehicleType && !validVehicleTypes.includes(vehicleType)) {
+        return res.status(400).json({ message: "Invalid vehicle type" });
+      }
+      let nicknameClean: string | null = null;
+      if (nickname !== undefined && nickname !== null) {
+        if (typeof nickname !== "string") {
+          return res.status(400).json({ message: "Nickname must be a string" });
+        }
+        const trimmed = nickname.trim();
+        if (trimmed.length > 30) {
+          return res.status(400).json({ message: "Nickname must be 30 characters or fewer" });
+        }
+        nicknameClean = trimmed.length > 0 ? trimmed : null;
+      }
       const profile = await storage.createCarProfile({
         userId: req.session.userId!,
         make: make.trim(),
@@ -1135,6 +1150,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isDefault: !!isDefault,
         avatarStyle: avatarStyle || "sedan",
         avatarColor: avatarColor || "#F97316",
+        vehicleType: vehicleType || "car",
+        nickname: nicknameClean,
       });
       res.json(profile);
     } catch (err) {
@@ -1150,9 +1167,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (existing.userId !== req.session.userId) {
         return res.status(403).json({ message: "Not your car profile" });
       }
-      const { make, model, year, rideHeight, suspensionType, hasFrontLip, wheelSize, clearanceMode, isDefault, avatarStyle, avatarColor } = req.body;
+      const { make, model, year, rideHeight, suspensionType, hasFrontLip, wheelSize, clearanceMode, isDefault, avatarStyle, avatarColor, vehicleType, nickname } = req.body;
       const validSuspension = ["stock", "lowered", "coilovers", "air_ride", "bagged"];
       const validClearance = ["normal", "lowered", "very_lowered", "show_car"];
+      const validVehicleTypes = ["car", "motorbike", "street_bike", "moped"];
       const updates: any = {};
       if (make !== undefined) {
         if (typeof make !== "string" || make.trim().length < 1 || make.trim().length > 50) {
@@ -1191,6 +1209,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isDefault !== undefined) updates.isDefault = !!isDefault;
       if (avatarStyle !== undefined) updates.avatarStyle = avatarStyle;
       if (avatarColor !== undefined) updates.avatarColor = avatarColor;
+      if (vehicleType !== undefined) {
+        if (!validVehicleTypes.includes(vehicleType)) {
+          return res.status(400).json({ message: "Invalid vehicle type" });
+        }
+        updates.vehicleType = vehicleType;
+      }
+      if (nickname !== undefined) {
+        if (nickname === null) {
+          updates.nickname = null;
+        } else {
+          if (typeof nickname !== "string") {
+            return res.status(400).json({ message: "Nickname must be a string" });
+          }
+          const trimmed = nickname.trim();
+          if (trimmed.length > 30) {
+            return res.status(400).json({ message: "Nickname must be 30 characters or fewer" });
+          }
+          updates.nickname = trimmed.length > 0 ? trimmed : null;
+        }
+      }
       const profile = await storage.updateCarProfile(req.params.id, updates);
       res.json(profile);
     } catch (err) {
