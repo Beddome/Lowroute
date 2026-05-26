@@ -1288,20 +1288,9 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* Floating action buttons — anchored below the location button */}
+      {/* Floating action button — report hazard */}
       {!isNavigating && geocodeResults.length === 0 && (
-        <View style={[styles.mapFabColumn, { top: insets.top + topPadding + 120 + 44 + 10, right: 16 }]}>
-          <Pressable
-            style={[styles.mapFab, { backgroundColor: Colors.bgCard }]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              const lat = userLocation?.latitude ?? mapRegion.latitude;
-              const lng = userLocation?.longitude ?? mapRegion.longitude;
-              router.push({ pathname: "/create-event", params: { lat: String(lat), lng: String(lng) } });
-            }}
-          >
-            <Ionicons name="calendar" size={18} color={Colors.accent} />
-          </Pressable>
+        <View style={[styles.mapFabColumn, { top: insets.top + topPadding + 120 + 10, right: 16 }]}>
           <Pressable
             style={[styles.mapFab, { backgroundColor: Colors.accent }]}
             onPress={() => {

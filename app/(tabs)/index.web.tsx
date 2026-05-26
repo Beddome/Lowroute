@@ -526,18 +526,6 @@ export default function MapScreenWeb() {
 
       <View style={styles.fabGroup}>
         <Pressable
-          style={styles.fabEvent}
-          onPress={() => {
-            const center = mapInstanceRef.current?.getCenter();
-            const lat = center?.lat ?? 49.6935;
-            const lng = center?.lng ?? -112.8418;
-            router.push({ pathname: "/create-event", params: { lat: String(lat), lng: String(lng) } });
-          }}
-        >
-          <Ionicons name="calendar" size={20} color="#fff" />
-          <Text style={styles.fabEventLabel}>Event</Text>
-        </Pressable>
-        <Pressable
           style={styles.fab}
           onPress={() => {
             const center = mapInstanceRef.current?.getCenter();
@@ -766,20 +754,6 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
   },
   fabLabel: { color: Colors.bg, fontSize: 14, fontWeight: "700" as const },
-  fabEvent: {
-    backgroundColor: EVENT_COLOR,
-    borderRadius: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 6,
-    shadowColor: EVENT_COLOR,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-  },
-  fabEventLabel: { color: "#fff", fontSize: 13, fontWeight: "700" as const },
 
   bottomPanel: {
     position: "absolute" as const,
