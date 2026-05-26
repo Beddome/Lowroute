@@ -206,11 +206,10 @@ const styles = StyleSheet.create({
     height: "100%",
   },
   pinWrapper: {
-    width: 52,
-    height: 60,
+    width: 96,
+    height: 96,
     alignItems: "center",
-    justifyContent: "flex-start",
-    overflow: "visible",
+    justifyContent: "center",
     backgroundColor: "transparent",
   },
   pinOuter: {

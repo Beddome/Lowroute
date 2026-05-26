@@ -56,7 +56,7 @@ function EventMarker({ event, onPress }: { event: AppEvent; onPress: () => void 
       anchor={{ x: 0.5, y: 0.5 }}
       centerOffset={{ x: 0, y: 0 }}
     >
-      <View style={[styles.markerOuter, { width: 44, height: 44 }]}>
+      <View style={[styles.markerOuter, { width: 80, height: 80 }]}>
         <View
           style={[
             styles.markerContainer,
@@ -105,7 +105,7 @@ function HazardMarker({ hazard, onPress }: { hazard: Hazard; onPress: () => void
       anchor={{ x: 0.5, y: 0.5 }}
       centerOffset={{ x: 0, y: 0 }}
     >
-      <View style={[styles.markerOuter, { width: size + 12, height: size + 12 }]}>
+      <View style={[styles.markerOuter, { width: size + 48, height: size + 48 }]}>
         <View
           style={[
             styles.markerContainer,
@@ -148,7 +148,7 @@ function FriendMarker({ location, onPress }: { location: UserLocation; onPress: 
       centerOffset={{ x: 0, y: 0 }}
     >
       {hasCar ? (
-        <View style={[styles.markerOuter, { width: 48, height: 48 }]}>
+        <View style={[styles.markerOuter, { width: 84, height: 84 }]}>
           <CarAvatar
             style={location.activeCar!.avatarStyle}
             color={location.activeCar!.avatarColor}
@@ -156,7 +156,7 @@ function FriendMarker({ location, onPress }: { location: UserLocation; onPress: 
           />
         </View>
       ) : (
-        <View style={[styles.markerOuter, { width: 44, height: 44 }]}>
+        <View style={[styles.markerOuter, { width: 80, height: 80 }]}>
           <View style={[styles.markerContainer, { width: 32, height: 32, borderRadius: 16, backgroundColor: FRIEND_COLOR, borderColor: "rgba(255,255,255,0.6)" }]}>
             <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: "#fff" }}>{initial}</Text>
           </View>
@@ -1637,7 +1637,6 @@ const styles = StyleSheet.create({
   markerOuter: {
     alignItems: "center",
     justifyContent: "center",
-    overflow: "visible",
     backgroundColor: "transparent",
   },
   originPin: { alignItems: "center", justifyContent: "center" },
