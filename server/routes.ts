@@ -2216,7 +2216,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = await storage.exportUserData(req.session.userId!);
       if (!data) return res.status(404).json({ message: "User not found" });
-      res.setHeader("Content-Disposition", `attachment; filename="lowroute-data-export.json"`);
+      res.setHeader("Content-Disposition", `attachment; filename="true-maps-data-export.json"`);
       res.json(data);
     } catch (err) {
       console.error(err);
