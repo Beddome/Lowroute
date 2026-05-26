@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
+  Dimensions,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -33,7 +34,6 @@ export default function ReportScreen() {
 
   const [selectedType, setSelectedType] = useState<string>("");
   const [selectedSeverity, setSelectedSeverity] = useState<number>(0);
-  const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -44,6 +44,12 @@ export default function ReportScreen() {
   const initialLng = parseFloat(lng ?? "-112.8418");
   const [latitude, setLatitude] = useState(initialLat);
   const [longitude, setLongitude] = useState(initialLng);
+
+  const mapHeight = useMemo(() => {
+    if (Platform.OS === "web") return 360;
+    const screen = Dimensions.get("window").height;
+    return Math.min(440, Math.max(280, Math.round(screen * 0.5)));
+  }, []);
 
   const pickImage = async (useCamera: boolean) => {
     try {
@@ -118,8 +124,8 @@ export default function ReportScreen() {
       router.push("/(auth)/login");
       return;
     }
-    if (!selectedType || !selectedSeverity || !title.trim() || !description.trim()) {
-      setError("Please complete all fields");
+    if (!selectedType || !selectedSeverity) {
+      setError("Pick a hazard type and severity tier");
       return;
     }
     setIsSubmitting(true);
@@ -135,7 +141,6 @@ export default function ReportScreen() {
         lng: longitude,
         type: selectedType,
         severity: selectedSeverity,
-        title: title.trim(),
         description: description.trim(),
         photoUrl,
       });
@@ -149,6 +154,8 @@ export default function ReportScreen() {
       setIsSubmitting(false);
     }
   };
+
+  const canSubmit = !!selectedType && !!selectedSeverity;
 
   return (
     <KeyboardAvoidingView
@@ -191,6 +198,22 @@ export default function ReportScreen() {
           </View>
         ) : null}
 
+        {/* 1. Map — pin placement (large) */}
+        <View style={styles.section}>
+          <LocationPicker
+            latitude={latitude}
+            longitude={longitude}
+            onLocationChange={(lat, lng) => {
+              setLatitude(lat);
+              setLongitude(lng);
+            }}
+            accentColor={Colors.tier3}
+            label="Tap the map or drag the pin to mark the hazard"
+            mapHeight={mapHeight}
+          />
+        </View>
+
+        {/* 2. Hazard type */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Hazard Type</Text>
           <View style={styles.typeGrid}>
@@ -219,6 +242,26 @@ export default function ReportScreen() {
           </View>
         </View>
 
+        {/* 3. Description (optional) */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Description (optional)</Text>
+          <TextInput
+            style={styles.descInput}
+            placeholder="Extra details — which lane, how bad, landmarks…"
+            placeholderTextColor={Colors.textMuted}
+            value={description}
+            onChangeText={setDescription}
+            multiline
+            numberOfLines={3}
+            textAlignVertical="top"
+            maxLength={500}
+          />
+          {description.length > 0 && (
+            <Text style={styles.charCount}>{description.length}/500</Text>
+          )}
+        </View>
+
+        {/* 4. Severity tier */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Severity Tier</Text>
           <View style={styles.tierList}>
@@ -254,50 +297,9 @@ export default function ReportScreen() {
           </View>
         </View>
 
+        {/* 5. Photo (optional) */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Hazard Location</Text>
-          <LocationPicker
-            latitude={latitude}
-            longitude={longitude}
-            onLocationChange={(lat, lng) => {
-              setLatitude(lat);
-              setLongitude(lng);
-            }}
-            accentColor={Colors.tier3}
-            label="Tap the map or drag the pin to mark the hazard"
-          />
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Title</Text>
-          <TextInput
-            style={styles.titleInput}
-            placeholder="Short description (e.g. 'Deep pothole near intersection')"
-            placeholderTextColor={Colors.textMuted}
-            value={title}
-            onChangeText={setTitle}
-            maxLength={80}
-          />
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Description</Text>
-          <TextInput
-            style={styles.descInput}
-            placeholder="Describe the hazard — location details, which lane, how bad, etc."
-            placeholderTextColor={Colors.textMuted}
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-            maxLength={500}
-          />
-          <Text style={styles.charCount}>{description.length}/500</Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Photo (Optional)</Text>
+          <Text style={styles.sectionLabel}>Photo (optional)</Text>
           {photoUri ? (
             <View style={styles.photoPreview}>
               <Image source={{ uri: photoUri }} style={styles.photoImage} />
@@ -332,14 +334,15 @@ export default function ReportScreen() {
           )}
         </View>
 
+        {/* 6. Submit */}
         <Pressable
           style={({ pressed }) => [
             styles.submitBtn,
-            (!selectedType || !selectedSeverity || !title || !description) && styles.submitBtnDisabled,
+            !canSubmit && styles.submitBtnDisabled,
             pressed && { opacity: 0.85 },
           ]}
           onPress={handleSubmit}
-          disabled={isSubmitting || isUploading}
+          disabled={isSubmitting || isUploading || !canSubmit}
         >
           {isSubmitting || isUploading ? (
             <ActivityIndicator color={Colors.bg} />
@@ -450,16 +453,6 @@ const styles = StyleSheet.create({
   tierLabel: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.text },
   tierDetail: { fontSize: 12, fontFamily: "Inter_400Regular", color: Colors.textMuted, marginTop: 2 },
 
-  titleInput: {
-    backgroundColor: Colors.bgInput,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 14,
-    color: Colors.text,
-    fontSize: 15,
-    fontFamily: "Inter_400Regular",
-  },
   descInput: {
     backgroundColor: Colors.bgInput,
     borderRadius: 12,
@@ -469,7 +462,7 @@ const styles = StyleSheet.create({
     color: Colors.text,
     fontSize: 14,
     fontFamily: "Inter_400Regular",
-    minHeight: 100,
+    minHeight: 80,
     lineHeight: 20,
   },
   charCount: {

@@ -10,6 +10,7 @@ interface LocationPickerProps {
   onLocationChange: (lat: number, lng: number) => void;
   accentColor?: string;
   label?: string;
+  mapHeight?: number;
 }
 
 function safeParse(text: string, fallback: number): number {
@@ -81,6 +82,7 @@ function NativeLocationPicker({
   onLocationChange,
   accentColor = Colors.accent,
   label = "Tap the map or drag the pin to set location",
+  mapHeight,
 }: LocationPickerProps) {
   const MapView = require("react-native-maps").default;
   const { Marker, PROVIDER_DEFAULT } = require("react-native-maps");
@@ -127,7 +129,7 @@ function NativeLocationPicker({
         <Ionicons name="location" size={16} color={accentColor} />
         <Text style={styles.labelText}>{label}</Text>
       </View>
-      <View style={styles.mapContainer}>
+      <View style={[styles.mapContainer, mapHeight ? { height: mapHeight } : null]}>
         <MapView
           ref={mapRef}
           style={styles.map}

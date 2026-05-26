@@ -426,8 +426,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/hazards", requireAuth, async (req: Request, res: Response) => {
     try {
       const { lat, lng, type, severity, title, description, photoUrl } = req.body;
-      if (!lat || !lng || !type || !severity || !title || !description) {
-        return res.status(400).json({ message: "All fields required" });
+      if (!lat || !lng || !type || !severity) {
+        return res.status(400).json({ message: "Location, hazard type, and severity are required" });
       }
       const parsedLat = parseFloat(lat);
       const parsedLng = parseFloat(lng);
@@ -441,24 +441,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isNaN(parsedSeverity) || parsedSeverity < 1 || parsedSeverity > 4) {
         return res.status(400).json({ message: "Severity must be 1-4" });
       }
-      if (typeof title !== "string" || title.length < 3 || title.length > 100) {
-        return res.status(400).json({ message: "Title must be 3-100 characters" });
-      }
-      if (typeof description !== "string" || description.length < 5 || description.length > 500) {
-        return res.status(400).json({ message: "Description must be 5-500 characters" });
-      }
-      const validTypes = ["pothole", "speed_bump", "construction", "raised_manhole", "railroad_crossing", "flooded_road", "debris", "large_bump_dip", "steep_driveway", "other"];
-      if (!validTypes.includes(type)) {
+      // Title is no longer collected from the user — derive it from the hazard
+      // type label so the column stays populated (legacy data + UI fallback).
+      const HAZARD_TYPE_LABELS: Record<string, string> = {
+        pothole: "Pothole",
+        speed_bump: "Speed Bump",
+        construction: "Construction Zone",
+        raised_manhole: "Raised Manhole",
+        railroad_crossing: "Railroad Crossing",
+        flooded_road: "Flooded Road",
+        debris: "Debris in Road",
+        large_bump_dip: "Large Bump / Dip",
+        steep_driveway: "Steep Driveway Angle",
+        other: "Other Hazard",
+      };
+      if (!HAZARD_TYPE_LABELS[type]) {
         return res.status(400).json({ message: "Invalid hazard type" });
       }
+      const userTitle = typeof title === "string" ? title.trim() : "";
+      if (userTitle.length > 100) {
+        return res.status(400).json({ message: "Title must be at most 100 characters" });
+      }
+      const finalTitle = userTitle.length >= 3 ? userTitle : HAZARD_TYPE_LABELS[type];
+      const userDescription = typeof description === "string" ? description.trim() : "";
+      if (userDescription.length > 500) {
+        return res.status(400).json({ message: "Description must be at most 500 characters" });
+      }
+      const finalDescription = userDescription.length > 0 ? userDescription : HAZARD_TYPE_LABELS[type];
       const hazard = await storage.createHazard({
         userId: req.session.userId!,
         lat: parsedLat,
         lng: parsedLng,
         type,
         severity: parsedSeverity,
-        title: title.trim(),
-        description: description.trim(),
+        title: finalTitle,
+        description: finalDescription,
         photoUrl: photoUrl && typeof photoUrl === "string" ? photoUrl.trim() : null,
       });
       await storage.updateUserReputation(req.session.userId!, 10);
