@@ -52,6 +52,13 @@ const STEPS: Step[] = [
       "Find nearby meets and cruises on the map, RSVP, and share live location with friends so the crew rolls together.",
   },
   {
+    icon: "pricetags",
+    color: Colors.marketplace,
+    title: "Buy & sell parts",
+    description:
+      "Browse the community marketplace for parts near you, filter by category and condition, and list your own with photos.",
+  },
+  {
     icon: "chatbubbles",
     color: Colors.friend,
     title: "Stay connected",

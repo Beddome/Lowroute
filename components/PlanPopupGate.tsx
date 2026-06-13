@@ -15,25 +15,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Colors } from "@/constants/colors";
 import { useSubscription } from "@/lib/revenuecat";
 import { useAuth } from "@/contexts/AuthContext";
+import { PRO_FEATURES, FREE_FEATURES } from "@/constants/plans";
 
 const PLAN_POPUP_KEY = "lowroute_plan_popup_seen";
-
-const PRO_FEATURES = [
-  "Live GPS navigation",
-  "Hazard proximity alerts",
-  "Priority reporting",
-  "Ad-free experience",
-  "Route history & analytics",
-  "Early access to new features",
-  "Exclusive badges",
-];
-
-const FREE_FEATURES = [
-  "View hazard map",
-  "Report hazards",
-  "Community voting",
-  "Basic route suggestions",
-];
 
 export default function PlanPopupGate() {
   const insets = useSafeAreaInsets();

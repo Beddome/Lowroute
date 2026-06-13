@@ -19,27 +19,11 @@ import { useSubscription, ENTITLEMENT_ID } from "@/lib/revenuecat";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Colors } from "@/constants/colors";
 import { apiRequest } from "@/lib/query-client";
+import { PRO_FEATURES, FREE_FEATURES } from "@/constants/plans";
 import type { PurchasesPackage } from "react-native-purchases";
 
 const FALLBACK_MONTHLY_PRICE = "$10.00 CAD";
 const FALLBACK_YEARLY_PRICE = "$96.00 CAD";
-
-const PRO_FEATURES = [
-  "Live GPS navigation",
-  "Hazard proximity alerts",
-  "Priority reporting",
-  "Ad-free experience",
-  "Route history & analytics",
-  "Early access to new features",
-  "Exclusive badges",
-];
-
-const FREE_FEATURES = [
-  "View hazard map",
-  "Report hazards",
-  "Community voting",
-  "Basic route suggestions",
-];
 
 function PaywallFallback({ error, resetError }: { error: Error; resetError: () => void }) {
   const insets = useSafeAreaInsets();
