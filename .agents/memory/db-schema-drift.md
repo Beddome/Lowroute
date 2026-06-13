@@ -36,5 +36,18 @@ reproducible across environments (fresh dev DB, prod).
 **How to apply:** Put guarded, idempotent renames in `scripts/db-fixups.sql` (run by
 `scripts/post-merge.sh` BEFORE push). Guard with `to_regclass(...) IS NOT NULL` so it
 is a no-op on a fresh/empty DB, and rename only when the legacy name exists and the
-target name does not. The same fixup must be applied to prod before/at publish so the
-publish diff is a no-op for it.
+target name does not.
+
+## Rule: prod constraint-name drift is fixed ONLY by Publish, never by direct ALTER
+**Why:** Prod is read-only to the agent (the database skill blocks DDL there) and prod
+schema changes flow exclusively through Replit's Publish diff (dev↔prod). `db-fixups.sql`
+runs against DEV during post-merge, NOT prod, so it does not change the publish outcome.
+A legacy prod constraint name (e.g. `promo_codes_code_key`, FK `promo_codes_created_by_fkey`)
+is converged when the user re-publishes: drizzle emits drop-old + add-new, which is a pure
+rename with NO row-data loss as long as data already satisfies the constraint (e.g. codes
+are distinct). Renaming a unique/FK constraint never truncates; the interactive "truncate"
+prompt only appears in `drizzle-kit push`, not the Publish flow.
+**How to apply:** Verify prod drift read-only via `executeSql({environment:"production"})`,
+confirm no duplicate values that would block an `ADD ... UNIQUE`, then tell the user to
+re-publish and confirm any rename prompt in the Publish UI. Do NOT run `ALTER TABLE`
+against prod and do NOT write a prod migration script.
