@@ -17,7 +17,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.lowroute.app",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "infoPlist": {
         "NSLocationAlwaysAndWhenInUseUsageDescription": "True Maps uses your location in the background to provide turn-by-turn navigation and alert you to nearby hazards while driving.",
         "NSLocationWhenInUseUsageDescription": "True Maps needs your location to show nearby hazards and help plan safe routes.",
