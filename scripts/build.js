@@ -6,6 +6,44 @@ const { pipeline } = require("stream/promises");
 
 let metroProcess = null;
 
+function parseTimeoutMs(envValue, defaultMs) {
+  if (!envValue) {
+    return defaultMs;
+  }
+  const parsed = Number(envValue);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    console.warn(
+      `Invalid timeout value "${envValue}"; falling back to ${defaultMs}ms`,
+    );
+    return defaultMs;
+  }
+  return parsed;
+}
+
+// How long to wait for the Metro bundler to become ready before giving up.
+// Cold/slow deploy builders can take well over a minute to warm up, so this
+// defaults to 5 minutes. Configurable via METRO_READY_TIMEOUT_MS.
+const METRO_READY_TIMEOUT_MS = parseTimeoutMs(
+  process.env.METRO_READY_TIMEOUT_MS,
+  5 * 60 * 1_000,
+);
+
+// How long to wait for each bundle/manifest/asset download (and the overall
+// download phase) before aborting. Defaults to 15 minutes. Configurable via
+// BUILD_DOWNLOAD_TIMEOUT_MS.
+const DOWNLOAD_TIMEOUT_MS = parseTimeoutMs(
+  process.env.BUILD_DOWNLOAD_TIMEOUT_MS,
+  15 * 60 * 1_000,
+);
+
+function formatDuration(ms) {
+  const totalSeconds = Math.round(ms / 1000);
+  if (totalSeconds % 60 === 0) {
+    return `${totalSeconds / 60}m`;
+  }
+  return `${totalSeconds}s`;
+}
+
 function exitWithError(message) {
   console.error(message);
   if (metroProcess) {
@@ -137,7 +175,11 @@ async function startMetro(expoPublicDomain) {
     });
   }
 
-  for (let i = 0; i < 60; i++) {
+  const deadline = Date.now() + METRO_READY_TIMEOUT_MS;
+  console.log(
+    `Waiting up to ${formatDuration(METRO_READY_TIMEOUT_MS)} for Metro to become ready...`,
+  );
+  while (Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
     const healthy = await checkMetroHealth();
@@ -147,11 +189,11 @@ async function startMetro(expoPublicDomain) {
     }
   }
 
-  console.error("Metro timeout");
+  console.error(
+    `Metro timeout after ${formatDuration(METRO_READY_TIMEOUT_MS)}`,
+  );
   process.exit(1);
 }
-
-const DOWNLOAD_TIMEOUT_MS = 15 * 60 * 1_000;
 
 async function downloadFile(url, outputPath) {
   const controller = new AbortController();
@@ -180,7 +222,9 @@ async function downloadFile(url, outputPath) {
     }
 
     if (error.name === "AbortError") {
-      throw new Error(`Download timeout after 15m: ${url}`);
+      throw new Error(
+        `Download timeout after ${formatDuration(DOWNLOAD_TIMEOUT_MS)}: ${url}`,
+      );
     }
     throw error;
   } finally {
@@ -233,7 +277,7 @@ async function downloadManifest(platform) {
   } catch (error) {
     if (error.name === "AbortError") {
       throw new Error(
-        `Manifest download timeout after 15m for platform: ${platform}`,
+        `Manifest download timeout after ${formatDuration(DOWNLOAD_TIMEOUT_MS)} for platform: ${platform}`,
       );
     }
     throw error;
@@ -517,7 +561,7 @@ async function main() {
     setTimeout(() => {
       reject(
         new Error(
-          `Overall download timeout after ${downloadTimeout / 1000} seconds. ` +
+          `Overall download timeout after ${formatDuration(downloadTimeout)}. ` +
             "Metro may be struggling to generate bundles. Check Metro logs above.",
         ),
       );
