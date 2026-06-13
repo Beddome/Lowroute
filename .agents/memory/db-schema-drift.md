@@ -51,3 +51,17 @@ prompt only appears in `drizzle-kit push`, not the Publish flow.
 confirm no duplicate values that would block an `ADD ... UNIQUE`, then tell the user to
 re-publish and confirm any rename prompt in the Publish UI. Do NOT run `ALTER TABLE`
 against prod and do NOT write a prod migration script.
+
+## Heuristic: "saves silently fail / data not added in the PUBLISHED app" = check prod schema drift FIRST
+**Why:** A feature can ship to the app + dev DB (column in `schema.ts`, applied to dev via
+push) but never reach prod if the user didn't re-publish afterward. The deployed backend then
+inserts a column prod lacks → every write 500s → nothing saves, and an older published app
+build may not even surface the error. This recurred twice on `car_profiles`: first the
+raw-SQL-lost columns, then `vehicle_type`/`nickname` present in dev+schema but absent in prod
+(prod inserts stopped on the date the feature shipped). Diagnose by comparing dev vs prod
+columns, not by re-reading app code (which is usually already correct).
+**How to apply:** Confirm the dev source of truth has the column AND that car/record creation
+works in dev (exercise the real API), then read-only-check the prod columns. The fix is a
+re-publish — additive adds (nullable col, or NOT NULL col WITH a DEFAULT, or a new enum type)
+backfill existing prod rows from the DEFAULT and are non-destructive, so the Publish diff
+applies with no rename/truncate prompt.
