@@ -82,7 +82,6 @@ function PaywallInner() {
     restore,
     isPurchasing,
     isRestoring,
-    isLoading: rcLoading,
     isOfferingsLoading,
     offeringsError,
     refetchOfferings,
@@ -97,6 +96,16 @@ function PaywallInner() {
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [pendingPackage, setPendingPackage] = useState<PurchasesPackage | null>(null);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
+  const [loadingTimedOut, setLoadingTimedOut] = useState(false);
+
+  // Watchdog: no matter what RevenueCat does (hung fetch, never-configured
+  // state, mocked Expo Go env), guarantee the spinner clears and the screen
+  // becomes usable with fallback pricing after a short wait.
+  React.useEffect(() => {
+    if (offerings || offeringsError) return;
+    const t = setTimeout(() => setLoadingTimedOut(true), 10000);
+    return () => clearTimeout(t);
+  }, [offerings, offeringsError]);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
@@ -186,6 +195,11 @@ function PaywallInner() {
     }
   };
 
+  const handleRetryOfferings = () => {
+    setLoadingTimedOut(false);
+    refetchOfferings();
+  };
+
   const handleRestore = async () => {
     setPurchaseError(null);
     try {
@@ -260,10 +274,29 @@ function PaywallInner() {
           </Text>
         </View>
 
-        {(isOfferingsLoading || (!isConfigured && !initError)) && !offerings && (
+        {(isOfferingsLoading || (!isConfigured && !initError)) && !offerings && !offeringsError && !loadingTimedOut && (
           <View style={styles.statusBanner}>
             <ActivityIndicator color={Colors.accent} size="small" />
             <Text style={styles.statusBannerText}>Loading subscription plans…</Text>
+          </View>
+        )}
+
+        {loadingTimedOut && !offerings && !offeringsError && !(isConfigured === false && initError) && (
+          <View style={styles.statusBanner}>
+            <Ionicons name="information-circle" size={18} color={Colors.textSecondary} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.statusBannerText} numberOfLines={2}>
+                Showing standard pricing — couldn't reach the store.
+              </Text>
+            </View>
+            <Pressable
+              onPress={handleRetryOfferings}
+              style={styles.retryBtn}
+              hitSlop={8}
+              testID="paywall-retry-timeout"
+            >
+              <Text style={styles.retryBtnText}>Retry</Text>
+            </Pressable>
           </View>
         )}
 
@@ -277,9 +310,9 @@ function PaywallInner() {
                   : initError || "Subscription service unavailable."}
               </Text>
             </View>
-            {offeringsError && isConfigured && refetchOfferings && (
+            {offeringsError && isConfigured && (
               <Pressable
-                onPress={() => refetchOfferings()}
+                onPress={handleRetryOfferings}
                 style={styles.retryBtn}
                 hitSlop={8}
                 testID="paywall-retry-offerings"
@@ -367,9 +400,9 @@ function PaywallInner() {
 
         <View style={styles.ctaSection}>
           <Pressable
-            style={[styles.ctaButton, (isPurchasing || rcLoading) && styles.ctaButtonDisabled]}
+            style={[styles.ctaButton, isPurchasing && styles.ctaButtonDisabled]}
             onPress={handlePurchase}
-            disabled={isPurchasing || rcLoading}
+            disabled={isPurchasing}
             testID="paywall-subscribe"
           >
             {isPurchasing ? (

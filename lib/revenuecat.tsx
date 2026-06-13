@@ -98,7 +98,7 @@ function useSubscriptionContext() {
       try {
         const info = await withTimeout(
           Purchases.getCustomerInfo(),
-          12000,
+          8000,
           "getCustomerInfo"
         );
         return info;
@@ -121,7 +121,7 @@ function useSubscriptionContext() {
       try {
         const offerings = await withTimeout(
           Purchases.getOfferings(),
-          12000,
+          8000,
           "getOfferings"
         );
         if (__DEV__) {
