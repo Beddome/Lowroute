@@ -1,1 +1,2 @@
 - [DB schema drift & db:push](db-schema-drift.md) — schema changes must go via shared/schema.ts not raw SQL; `db:push` hangs on a promo_codes truncate prompt, so prefer additive DDL.
+- [Deploy Metro bundle timeout](deploy-metro-bundle-timeout.md) — "failed to publish" w/ Metro "Download timeout" = cold build slowness; raise timeouts in scripts/build.js, don't rewrite.
