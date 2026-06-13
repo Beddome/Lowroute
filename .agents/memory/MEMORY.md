@@ -1,0 +1,1 @@
+- [DB schema drift & db:push](db-schema-drift.md) — schema changes must go via shared/schema.ts not raw SQL; `db:push` hangs on a promo_codes truncate prompt, so prefer additive DDL.
