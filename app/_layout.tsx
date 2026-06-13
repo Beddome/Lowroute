@@ -19,11 +19,14 @@ import { LocationProvider } from "@/contexts/LocationContext";
 import { UnitsProvider } from "@/contexts/UnitsContext";
 import { Colors } from "@/constants/colors";
 import OfflineBanner from "@/components/OfflineBanner";
+import PlanPopupGate from "@/components/PlanPopupGate";
 import DisclaimerScreen from "@/app/disclaimer";
+import WalkthroughScreen from "@/app/walkthrough";
 import { registerForPushNotifications, setupNotificationHandler } from "@/lib/notifications";
 import { initializeRevenueCat, SubscriptionProvider } from "@/lib/revenuecat";
 
 const DISCLAIMER_KEY = "lowroute_disclaimer_accepted";
+const WALKTHROUGH_KEY = "lowroute_walkthrough_completed";
 
 SplashScreen.preventAutoHideAsync();
 try { initializeRevenueCat(); } catch (e) { console.warn("RevenueCat init error:", e); }
@@ -188,18 +191,22 @@ export default function RootLayout() {
   });
 
   const [disclaimerAccepted, setDisclaimerAccepted] = useState<boolean | null>(null);
+  const [walkthroughDone, setWalkthroughDone] = useState<boolean | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem(DISCLAIMER_KEY).then((val) => {
       setDisclaimerAccepted(val === "true");
     }).catch(() => setDisclaimerAccepted(false));
+    AsyncStorage.getItem(WALKTHROUGH_KEY).then((val) => {
+      setWalkthroughDone(val === "true");
+    }).catch(() => setWalkthroughDone(false));
   }, []);
 
   useEffect(() => {
-    if ((fontsLoaded || fontError) && disclaimerAccepted !== null) {
+    if ((fontsLoaded || fontError) && disclaimerAccepted !== null && walkthroughDone !== null) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError, disclaimerAccepted]);
+  }, [fontsLoaded, fontError, disclaimerAccepted, walkthroughDone]);
 
   useEffect(() => {
     if (disclaimerAccepted) {
@@ -212,14 +219,29 @@ export default function RootLayout() {
     AsyncStorage.setItem(DISCLAIMER_KEY, "true").catch(() => {});
   }, []);
 
+  const handleCompleteWalkthrough = useCallback(() => {
+    setWalkthroughDone(true);
+    AsyncStorage.setItem(WALKTHROUGH_KEY, "true").catch(() => {});
+  }, []);
+
   if (!fontsLoaded && !fontError) return null;
-  if (disclaimerAccepted === null) return null;
+  if (disclaimerAccepted === null || walkthroughDone === null) return null;
 
   if (!disclaimerAccepted) {
     return (
       <ErrorBoundary>
         <GestureHandlerRootView style={{ flex: 1 }}>
           <DisclaimerScreen onAccept={handleAcceptDisclaimer} />
+        </GestureHandlerRootView>
+      </ErrorBoundary>
+    );
+  }
+
+  if (!walkthroughDone) {
+    return (
+      <ErrorBoundary>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <WalkthroughScreen onComplete={handleCompleteWalkthrough} />
         </GestureHandlerRootView>
       </ErrorBoundary>
     );
@@ -236,6 +258,7 @@ export default function RootLayout() {
                   <LocationProvider>
                     <OfflineBanner />
                     <RootLayoutNav />
+                    <PlanPopupGate />
                   </LocationProvider>
                 </UnitsProvider>
               </SubscriptionProvider>
