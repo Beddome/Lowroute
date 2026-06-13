@@ -17,7 +17,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.lowroute.app",
-      "buildNumber": "2",
+      "buildNumber": "3",
       "infoPlist": {
         "NSLocationAlwaysAndWhenInUseUsageDescription": "True Maps uses your location in the background to provide turn-by-turn navigation and alert you to nearby hazards while driving.",
         "NSLocationWhenInUseUsageDescription": "True Maps needs your location to show nearby hazards and help plan safe routes.",
@@ -29,7 +29,7 @@
     },
     "android": {
       "package": "com.lowroute.app",
-      "versionCode": 4,
+      "versionCode": 5,
       "adaptiveIcon": {
         "backgroundColor": "#0A0A0B",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
