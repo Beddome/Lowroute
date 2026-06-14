@@ -1,2 +1,1 @@
-- [DB schema drift & db:push](db-schema-drift.md) — schema changes must go via shared/schema.ts not raw SQL; `db:push` hangs on a promo_codes truncate prompt, so prefer additive DDL.
-- [Deploy Metro bundle timeout](deploy-metro-bundle-timeout.md) — "failed to publish" w/ Metro "Download timeout" = cold build slowness; raise timeouts in scripts/build.js, don't rewrite.
+- [Blank paywall/sheet on iOS](paywall-blank-ios.md) — a screen blank on iOS despite JS having no empty render path is a native presentation issue; `formSheet` is the offender, switch to `modal`.

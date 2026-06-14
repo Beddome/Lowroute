@@ -64,9 +64,9 @@ function RootLayoutNav() {
       <Stack.Screen
         name="paywall"
         options={{
-          presentation: "formSheet",
-          sheetAllowedDetents: [0.9],
-          sheetGrabberVisible: true,
+          // Must stay "modal" — "formSheet" renders a blank sheet on iOS
+          // (New Arch + react-native-screens 4.x). See .agents/memory/paywall-blank-ios.md
+          presentation: "modal",
           headerShown: false,
           contentStyle: { backgroundColor: Colors.bg },
         }}
