@@ -10,10 +10,13 @@
     <meta property="og:description" content="Avoid scrapes. Score your route. Cruise with the crew. The GPS built for low cars and powered by the streets." />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="BASE_URL_PLACEHOLDER/assets/true-maps-promo.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
     <style>
       :root {
         --bg: #0A0A0B;
-        --bg-2: #121019;
+        --bg-2: #100D18;
         --card: #16131F;
         --card-2: #1C1830;
         --border: #2A2440;
@@ -24,12 +27,16 @@
         --violet: #8B5CF6;
         --violet-bright: #A855F7;
         --violet-soft: #C4B5FD;
+        --amber: #F59E0B;
+        --orange: #F97316;
+        --red: #EF4444;
+        --green: #22C55E;
         --grad: linear-gradient(135deg, #7C3AED 0%, #A855F7 100%);
       }
       * { box-sizing: border-box; margin: 0; padding: 0; }
       html { scroll-behavior: smooth; }
       body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         background: var(--bg);
         color: var(--text);
         line-height: 1.6;
@@ -38,74 +45,71 @@
       }
       a { color: var(--violet-soft); text-decoration: none; }
       a:hover { text-decoration: underline; }
+      .wrap { max-width: 1140px; margin: 0 auto; padding: 0 24px; }
 
-      .wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+      .graffiti { font-family: "Permanent Marker", "Inter", cursive; font-weight: 400; }
 
       /* HERO */
       .hero {
         position: relative;
-        text-align: center;
-        padding: 84px 24px 64px;
+        overflow: hidden;
+        padding: 64px 24px 56px;
         background:
-          radial-gradient(900px 500px at 50% -10%, rgba(139, 92, 246, 0.28), transparent 60%),
-          radial-gradient(600px 400px at 85% 20%, rgba(168, 85, 247, 0.16), transparent 60%),
-          linear-gradient(180deg, #0A0A0B 0%, #121019 100%);
+          radial-gradient(900px 520px at 18% -10%, rgba(139, 92, 246, 0.32), transparent 60%),
+          radial-gradient(700px 460px at 92% 30%, rgba(168, 85, 247, 0.18), transparent 60%),
+          linear-gradient(180deg, #0A0A0B 0%, #100D18 100%);
       }
-      .eyebrow {
-        display: inline-block;
-        font-size: 12px;
-        letter-spacing: 2.5px;
-        text-transform: uppercase;
-        color: var(--violet-soft);
-        border: 1px solid var(--border);
-        background: rgba(139, 92, 246, 0.08);
-        padding: 7px 14px;
-        border-radius: 999px;
-        margin-bottom: 26px;
+      .hero-grid {
+        max-width: 1140px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 48px;
+        align-items: center;
       }
-      .hero-logo {
-        font-size: 60px;
-        font-weight: 900;
-        font-style: italic;
-        color: var(--heading);
-        letter-spacing: -2px;
-        line-height: 0.95;
-        text-transform: uppercase;
-        margin-bottom: 14px;
-        text-shadow: 0 6px 40px rgba(139, 92, 246, 0.35);
+      .brand-row { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+      .brand-pin { width: 52px; height: 52px; flex: none; filter: drop-shadow(0 6px 18px rgba(139,92,246,0.5)); }
+      .wordmark { line-height: 0.82; }
+      .wordmark .true {
+        display: block;
+        font-size: 56px;
+        color: #F6F4FC;
+        letter-spacing: 1px;
+        transform: rotate(-3deg);
+        text-shadow: 0 4px 24px rgba(0,0,0,0.6);
       }
-      .hero-logo span {
+      .wordmark .maps {
+        display: block;
+        font-size: 56px;
+        letter-spacing: 1px;
+        transform: rotate(-3deg) translateX(10px);
         color: transparent;
         background: var(--grad);
         -webkit-background-clip: text;
         background-clip: text;
+        text-shadow: 0 4px 30px rgba(139,92,246,0.4);
       }
       .hero-tagline {
-        font-size: 19px;
-        font-weight: 700;
-        letter-spacing: 0.5px;
+        font-size: 17px;
+        font-weight: 800;
+        letter-spacing: 1px;
         text-transform: uppercase;
-        color: var(--muted);
-        margin-bottom: 22px;
+        color: var(--violet-soft);
+        margin: 6px 0 18px;
       }
       .hero-desc {
-        max-width: 600px;
-        margin: 0 auto 36px;
+        max-width: 520px;
         font-size: 16px;
         color: var(--text);
+        margin-bottom: 30px;
       }
 
-      .store-badges {
-        display: flex;
-        gap: 14px;
-        justify-content: center;
-        flex-wrap: wrap;
-      }
+      .store-badges { display: flex; gap: 14px; flex-wrap: wrap; }
       .store-badge {
         display: inline-flex;
         align-items: center;
         gap: 10px;
-        padding: 14px 26px;
+        padding: 13px 24px;
         background: var(--grad);
         color: #fff;
         font-weight: 700;
@@ -114,283 +118,406 @@
         transition: transform 0.15s ease, box-shadow 0.2s ease;
         box-shadow: 0 8px 30px rgba(124, 58, 237, 0.35);
       }
-      .store-badge:hover {
-        text-decoration: none;
-        transform: translateY(-2px);
-        box-shadow: 0 12px 36px rgba(124, 58, 237, 0.5);
-      }
+      .store-badge:hover { text-decoration: none; transform: translateY(-2px); box-shadow: 0 12px 36px rgba(124, 58, 237, 0.5); }
       .store-badge svg { width: 20px; height: 20px; }
-      .store-badge.secondary {
-        background: transparent;
-        border: 1px solid var(--border);
-        color: var(--heading);
-        box-shadow: none;
+      .store-badge.secondary { background: transparent; border: 1px solid var(--border); color: var(--heading); box-shadow: none; }
+      .store-badge.secondary:hover { border-color: var(--violet); background: rgba(139, 92, 246, 0.12); }
+
+      /* PHONE MOCKUP */
+      .phone-stage { display: flex; justify-content: center; }
+      .phone {
+        position: relative;
+        width: 300px;
+        max-width: 84vw;
+        background: #050507;
+        border: 9px solid #1A1726;
+        border-radius: 44px;
+        padding: 12px;
+        box-shadow: 0 40px 90px rgba(0,0,0,0.7), 0 0 70px rgba(139,92,246,0.22);
       }
-      .store-badge.secondary:hover {
-        border-color: var(--violet);
-        background: rgba(139, 92, 246, 0.12);
+      .notch {
+        position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+        width: 120px; height: 26px; background: #050507; border-radius: 16px; z-index: 5;
       }
+      .screen { background: #0B0A12; border-radius: 32px; overflow: hidden; }
+      .statusbar { display: flex; justify-content: space-between; align-items: center; padding: 14px 22px 8px; font-size: 12px; font-weight: 700; color: #fff; }
+      .statusbar .dots { display: flex; gap: 5px; align-items: center; }
+      .statusbar .dots svg { width: 16px; height: 12px; opacity: 0.95; }
+      .app-head { display: flex; align-items: center; gap: 8px; padding: 4px 16px 12px; }
+      .mode-pill {
+        display: inline-flex; align-items: center; gap: 6px;
+        background: #17142099; border: 1px solid var(--border);
+        padding: 7px 12px; border-radius: 999px; font-size: 13px; font-weight: 700; color: var(--heading);
+      }
+      .mode-pill .car { color: var(--violet-bright); }
+      .avatar { margin-left: auto; width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg,#7C3AED,#A855F7); border: 2px solid #2A2440; }
+      .segmented { display: flex; gap: 6px; padding: 0 16px 12px; }
+      .seg { flex: 1; text-align: center; padding: 8px 0; font-size: 12px; font-weight: 700; color: var(--muted); background: #14111E; border: 1px solid var(--border); border-radius: 9px; }
+      .seg.active { color: #fff; background: var(--grad); border-color: transparent; box-shadow: 0 6px 16px rgba(124,58,237,0.45); }
+      .map-area { position: relative; }
+      .map-area svg { display: block; width: 100%; height: auto; }
+      .map-fabs { position: absolute; top: 12px; right: 12px; display: flex; flex-direction: column; gap: 8px; }
+      .fab { width: 34px; height: 34px; border-radius: 50%; background: #0c0b13d9; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--violet-soft); }
+      .fab svg { width: 16px; height: 16px; }
+      .score-card { margin: -2px 12px 12px; background: #110F1A; border: 1px solid var(--border); border-radius: 16px; padding: 14px; }
+      .score-top { display: flex; justify-content: space-between; align-items: baseline; }
+      .score-label { font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+      .score-risk { font-size: 12px; font-weight: 800; color: var(--red); }
+      .score-num { font-size: 38px; font-weight: 900; color: var(--heading); line-height: 1; margin: 4px 0; }
+      .score-num small { font-size: 15px; color: var(--muted); font-weight: 700; }
+      .score-meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+      .score-meta .plus { color: var(--amber); font-weight: 700; }
+      .score-bar { height: 7px; border-radius: 99px; background: linear-gradient(90deg,#22C55E,#F59E0B 55%,#EF4444); }
+      .nav-btn { display: block; margin: 12px; text-align: center; padding: 13px; border-radius: 12px; background: var(--grad); color: #fff; font-weight: 800; font-size: 15px; box-shadow: 0 8px 22px rgba(124,58,237,0.45); }
+
+      /* FEATURE STRIP */
+      .strip { padding: 56px 24px 8px; }
+      .strip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px 18px; max-width: 1140px; margin: 0 auto; text-align: center; }
+      .strip-item .ic {
+        width: 58px; height: 58px; margin: 0 auto 14px; border-radius: 16px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(139, 92, 246, 0.14); border: 1px solid rgba(139, 92, 246, 0.4);
+      }
+      .strip-item .ic svg { width: 28px; height: 28px; color: var(--violet-bright); }
+      .strip-item h3 { font-size: 14px; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; color: var(--heading); margin-bottom: 6px; }
+      .strip-item p { font-size: 13px; color: var(--muted); line-height: 1.5; max-width: 220px; margin: 0 auto; }
 
       /* SHOWCASE */
-      .showcase { padding: 16px 24px 56px; }
+      .showcase { padding: 56px 24px; }
       .showcase-frame {
-        max-width: 1040px;
-        margin: 0 auto;
-        border-radius: 20px;
-        overflow: hidden;
+        max-width: 1080px; margin: 0 auto; border-radius: 20px; overflow: hidden;
         border: 1px solid var(--border);
         box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 60px rgba(139, 92, 246, 0.18);
       }
       .showcase-frame img { display: block; width: 100%; height: auto; }
 
-      /* SECTION HEADING */
-      .section { padding: 64px 24px; }
-      .section-kicker {
-        text-align: center;
-        font-size: 12px;
-        letter-spacing: 2.5px;
-        text-transform: uppercase;
-        color: var(--violet-bright);
-        margin-bottom: 10px;
-      }
-      .section-title {
-        text-align: center;
-        font-size: 30px;
-        font-weight: 800;
-        color: var(--heading);
-        margin-bottom: 44px;
-      }
+      /* SECTIONS */
+      .section { padding: 16px 24px 56px; }
+      .section-kicker { text-align: center; font-size: 12px; letter-spacing: 2.5px; text-transform: uppercase; color: var(--violet-bright); margin-bottom: 10px; }
+      .section-title { text-align: center; font-size: 30px; font-weight: 800; color: var(--heading); margin-bottom: 44px; }
 
-      .features-grid {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 20px;
-      }
+      .features-grid { display: grid; grid-template-columns: 1fr; gap: 20px; max-width: 1080px; margin: 0 auto; }
       .feature-card {
         background: linear-gradient(180deg, var(--card) 0%, var(--card-2) 100%);
-        border: 1px solid var(--border);
-        border-radius: 16px;
-        padding: 26px;
+        border: 1px solid var(--border); border-radius: 16px; padding: 26px;
         transition: transform 0.15s ease, border-color 0.2s ease;
       }
-      .feature-card:hover {
-        transform: translateY(-3px);
-        border-color: rgba(139, 92, 246, 0.6);
-      }
-      .feature-icon {
-        width: 46px; height: 46px;
-        display: flex; align-items: center; justify-content: center;
-        border-radius: 12px;
-        background: rgba(139, 92, 246, 0.14);
-        border: 1px solid rgba(139, 92, 246, 0.35);
-        margin-bottom: 16px;
-        font-size: 22px;
-      }
-      .feature-card h3 {
-        font-size: 18px;
-        font-weight: 700;
-        color: var(--heading);
-        margin-bottom: 8px;
-      }
-      .feature-card p {
-        font-size: 14px;
-        color: var(--muted);
-        line-height: 1.6;
-      }
+      .feature-card:hover { transform: translateY(-3px); border-color: rgba(139, 92, 246, 0.6); }
+      .feature-icon { width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; border-radius: 12px; background: rgba(139, 92, 246, 0.14); border: 1px solid rgba(139, 92, 246, 0.35); margin-bottom: 16px; }
+      .feature-icon svg { width: 24px; height: 24px; color: var(--violet-bright); }
+      .feature-card .kick { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--violet-bright); margin-bottom: 6px; }
+      .feature-card h3 { font-size: 19px; font-weight: 800; color: var(--heading); margin-bottom: 8px; }
+      .feature-card p { font-size: 14px; color: var(--muted); line-height: 1.6; }
 
       /* LIFESTYLE BAND */
       .lifestyle {
-        text-align: center;
-        padding: 72px 24px;
+        text-align: center; padding: 84px 24px;
         background:
-          radial-gradient(700px 360px at 50% 50%, rgba(124, 58, 237, 0.2), transparent 65%),
+          radial-gradient(760px 380px at 50% 50%, rgba(124, 58, 237, 0.22), transparent 65%),
           var(--bg-2);
-        border-top: 1px solid var(--border);
-        border-bottom: 1px solid var(--border);
+        border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
       }
-      .lifestyle h2 {
-        font-size: 30px;
-        font-weight: 900;
-        font-style: italic;
-        text-transform: uppercase;
-        color: var(--heading);
-        letter-spacing: -0.5px;
-        margin-bottom: 16px;
-      }
-      .lifestyle .accent {
-        font-size: 22px;
-        font-weight: 800;
-        font-style: italic;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-      }
-      .lifestyle .accent span {
-        color: transparent;
-        background: var(--grad);
-        -webkit-background-clip: text;
-        background-clip: text;
-      }
+      .lifestyle h2 { font-size: 34px; color: var(--heading); margin-bottom: 18px; transform: rotate(-2deg); }
+      .lifestyle .accent { font-size: 30px; transform: rotate(-2deg); display: inline-block; }
+      .lifestyle .accent .live { color: transparent; background: var(--grad); -webkit-background-clip: text; background-clip: text; }
+
+      /* QUICK ACTIONS */
+      .actions { padding: 64px 24px; }
+      .actions-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; max-width: 720px; margin: 0 auto; text-align: center; }
+      .action .ring { width: 64px; height: 64px; margin: 0 auto 12px; border-radius: 50%; border: 2px solid rgba(139,92,246,0.45); display: flex; align-items: center; justify-content: center; background: rgba(139,92,246,0.08); transition: transform 0.15s ease, border-color 0.2s ease; }
+      .action:hover .ring { transform: translateY(-3px); border-color: var(--violet); }
+      .action .ring svg { width: 26px; height: 26px; color: var(--violet-bright); }
+      .action span { font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; font-weight: 700; color: var(--muted); }
 
       /* CTA */
       .cta {
-        text-align: center;
-        padding: 72px 24px;
-        background: var(--bg);
+        position: relative; text-align: center; padding: 90px 24px 96px; overflow: hidden;
+        background:
+          radial-gradient(700px 320px at 50% 120%, rgba(139, 92, 246, 0.28), transparent 60%),
+          var(--bg);
       }
-      .cta h2 {
-        font-size: 34px;
-        font-weight: 900;
-        font-style: italic;
-        text-transform: uppercase;
-        color: var(--heading);
-        margin-bottom: 10px;
-      }
-      .cta h2 span {
-        color: transparent;
-        background: var(--grad);
-        -webkit-background-clip: text;
-        background-clip: text;
-      }
-      .cta p {
-        font-size: 15px;
-        letter-spacing: 1px;
-        text-transform: uppercase;
-        color: var(--muted);
-        margin-bottom: 32px;
-      }
+      .skyline { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 90px; opacity: 0.5; color: #1C1830; }
+      .cta-inner { position: relative; z-index: 2; }
+      .cta h2 { font-size: 40px; color: var(--heading); margin-bottom: 12px; transform: rotate(-2deg); }
+      .cta h2 .mv { color: transparent; background: var(--grad); -webkit-background-clip: text; background-clip: text; }
+      .cta p { font-size: 15px; letter-spacing: 1.5px; text-transform: uppercase; font-weight: 700; color: var(--muted); margin-bottom: 32px; }
+      .cta .store-badges { justify-content: center; }
 
       /* FOOTER */
-      footer {
-        text-align: center;
-        padding: 44px 24px;
-        border-top: 1px solid var(--border);
-      }
-      .footer-logo {
-        font-size: 20px;
-        font-weight: 900;
-        font-style: italic;
-        text-transform: uppercase;
-        color: var(--heading);
-        margin-bottom: 18px;
-      }
-      .footer-logo span {
-        color: transparent;
-        background: var(--grad);
-        -webkit-background-clip: text;
-        background-clip: text;
-      }
-      .footer-links {
-        display: flex;
-        gap: 24px;
-        justify-content: center;
-        flex-wrap: wrap;
-        margin-bottom: 18px;
-      }
+      footer { text-align: center; padding: 44px 24px; border-top: 1px solid var(--border); }
+      .footer-logo { font-size: 24px; margin-bottom: 18px; }
+      .footer-logo .t { color: var(--heading); }
+      .footer-logo .m { color: transparent; background: var(--grad); -webkit-background-clip: text; background-clip: text; }
+      .footer-links { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; margin-bottom: 18px; }
       .footer-links a { font-size: 14px; color: var(--muted); }
       .footer-links a:hover { color: var(--violet-soft); }
       .footer-copy { font-size: 13px; color: var(--faint); }
 
-      @media (min-width: 640px) {
+      @media (max-width: 400px) {
+        .actions-grid { grid-template-columns: repeat(2, 1fr); gap: 24px 16px; }
+      }
+      @media (min-width: 560px) {
+        .strip-grid { grid-template-columns: repeat(4, 1fr); }
         .features-grid { grid-template-columns: 1fr 1fr; }
       }
       @media (min-width: 900px) {
-        .features-grid { grid-template-columns: 1fr 1fr 1fr; }
-        .hero { padding: 110px 24px 80px; }
-        .hero-logo { font-size: 78px; }
-        .hero-tagline { font-size: 22px; }
-        .lifestyle h2 { font-size: 40px; }
-        .lifestyle .accent { font-size: 28px; }
-        .cta h2 { font-size: 44px; }
+        .hero { padding: 96px 24px 84px; }
+        .hero-grid { grid-template-columns: 1.05fr 0.95fr; gap: 40px; }
+        .wordmark .true, .wordmark .maps { font-size: 76px; }
+        .brand-pin { width: 64px; height: 64px; }
+        .hero-tagline { font-size: 19px; }
+        .lifestyle h2 { font-size: 46px; }
+        .lifestyle .accent { font-size: 40px; }
+        .cta h2 { font-size: 54px; }
       }
     </style>
   </head>
   <body>
+    <!-- HERO -->
     <section class="hero">
-      <span class="eyebrow">Real Drivers · Real Roads</span>
-      <div class="hero-logo">True<span>Maps</span></div>
-      <p class="hero-tagline">Built for Low Cars. Powered by the Streets.</p>
-      <p class="hero-desc">
-        The navigation app built for lowriders, slammed cars, and low-clearance vehicles.
-        Avoid potholes, speed bumps, and rough roads with community-powered hazard data —
-        and route scoring tuned to your ride height.
-      </p>
-      <div class="store-badges">
-        <a href="#" class="store-badge" id="app-store-link">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
-          App Store
-        </a>
-        <a href="#" class="store-badge secondary" id="play-store-link">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3,20.5V3.5C3,2.91 3.34,2.39 3.84,2.15L13.69,12L3.84,21.85C3.34,21.6 3,21.09 3,20.5M16.81,15.12L6.05,21.34L14.54,12.85L16.81,15.12M20.16,10.81C20.5,11.08 20.75,11.5 20.75,12C20.75,12.5 20.53,12.9 20.18,13.18L17.89,14.5L15.39,12L17.89,9.5L20.16,10.81M6.05,2.66L16.81,8.88L14.54,11.15L6.05,2.66Z"/></svg>
-          Google Play
-        </a>
+      <div class="hero-grid">
+        <div>
+          <div class="brand-row">
+            <svg class="brand-pin" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="pinGrad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#7C3AED" />
+                  <stop offset="1" stop-color="#A855F7" />
+                </linearGradient>
+              </defs>
+              <path d="M32 2C19 2 8.5 12.3 8.5 25.1 8.5 41 32 62 32 62s23.5-21 23.5-36.9C55.5 12.3 45 2 32 2z" fill="url(#pinGrad)"/>
+              <path d="M16 30c.7-3 1.8-6.2 3-7.4 1-1 3.6-1.4 7-1.6h12c3.4.2 6 .6 7 1.6 1.2 1.2 2.3 4.4 3 7.4v5.5a1.6 1.6 0 0 1-1.6 1.6h-2.6a1.6 1.6 0 0 1-1.6-1.6V34H21.4v1.5A1.6 1.6 0 0 1 19.8 37h-2.2A1.6 1.6 0 0 1 16 35.5V30z" fill="#fff"/>
+              <rect x="19" y="29" width="26" height="3.2" rx="1.6" fill="#7C3AED"/>
+              <circle cx="22.5" cy="34.5" r="2.6" fill="#1A1726"/>
+              <circle cx="41.5" cy="34.5" r="2.6" fill="#1A1726"/>
+            </svg>
+            <div class="wordmark">
+              <span class="graffiti true">TRUE</span>
+              <span class="graffiti maps">MAPS</span>
+            </div>
+          </div>
+          <p class="hero-tagline">Built for Low Cars. Powered by the Streets.</p>
+          <p class="hero-desc">
+            The navigation app built for lowriders, slammed cars, and low-clearance vehicles.
+            Avoid potholes, speed bumps, and rough roads with community-powered hazard data —
+            and route scoring tuned to your ride height.
+          </p>
+          <div class="store-badges">
+            <a href="#" class="store-badge" id="app-store-link">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+              App Store
+            </a>
+            <a href="#" class="store-badge secondary" id="play-store-link">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3,20.5V3.5C3,2.91 3.34,2.39 3.84,2.15L13.69,12L3.84,21.85C3.34,21.6 3,21.09 3,20.5M16.81,15.12L6.05,21.34L14.54,12.85L16.81,15.12M20.16,10.81C20.5,11.08 20.75,11.5 20.75,12C20.75,12.5 20.53,12.9 20.18,13.18L17.89,14.5L15.39,12L17.89,9.5L20.16,10.81M6.05,2.66L16.81,8.88L14.54,11.15L6.05,2.66Z"/></svg>
+              Google Play
+            </a>
+          </div>
+        </div>
+
+        <!-- PHONE MOCKUP -->
+        <div class="phone-stage">
+          <div class="phone">
+            <div class="notch"></div>
+            <div class="screen">
+              <div class="statusbar">
+                <span>9:41</span>
+                <span class="dots">
+                  <svg viewBox="0 0 18 12" fill="currentColor" stroke="none"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4" y="5" width="3" height="7" rx="1"/><rect x="8" y="3" width="3" height="9" rx="1"/><rect x="12" y="1" width="3" height="11" rx="1"/></svg>
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 18.5a1.6 1.6 0 1 0 0 3.2 1.6 1.6 0 0 0 0-3.2zM5.3 13.3l2 2a6.6 6.6 0 0 1 9.4 0l2-2a9.4 9.4 0 0 0-13.4 0zM1.4 9.4l2 2a12.2 12.2 0 0 1 17.2 0l2-2a15 15 0 0 0-21.2 0z"/></svg>
+                  <svg viewBox="0 0 26 24" fill="currentColor"><rect x="1" y="6" width="20" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="8" width="14" height="8" rx="1.5"/><rect x="22" y="9.5" width="2.5" height="5" rx="1"/></svg>
+                </span>
+              </div>
+              <div class="app-head">
+                <span class="mode-pill"><span class="car">&#x1F697;</span> Low Car Mode &#9662;</span>
+                <span class="avatar"></span>
+              </div>
+              <div class="segmented">
+                <span class="seg">Fastest</span>
+                <span class="seg active">Safest</span>
+                <span class="seg">Balanced</span>
+              </div>
+              <div class="map-area">
+                <svg viewBox="0 0 300 260" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <linearGradient id="routeGrad" x1="0" y1="1" x2="1" y2="0">
+                      <stop offset="0" stop-color="#A855F7"/>
+                      <stop offset="1" stop-color="#7C3AED"/>
+                    </linearGradient>
+                  </defs>
+                  <rect width="300" height="260" fill="#0E0D16"/>
+                  <g stroke="#1B1828" stroke-width="10" stroke-linecap="round">
+                    <line x1="-10" y1="60" x2="310" y2="40"/>
+                    <line x1="-10" y1="150" x2="310" y2="170"/>
+                    <line x1="50" y1="-10" x2="40" y2="270"/>
+                    <line x1="170" y1="-10" x2="190" y2="270"/>
+                    <line x1="250" y1="-10" x2="260" y2="270"/>
+                  </g>
+                  <g stroke="#141220" stroke-width="4">
+                    <line x1="-10" y1="105" x2="310" y2="100"/>
+                    <line x1="-10" y1="210" x2="310" y2="220"/>
+                    <line x1="110" y1="-10" x2="115" y2="270"/>
+                  </g>
+                  <path d="M120 236 C 110 200 150 185 160 160 C 170 135 120 120 130 92 C 138 68 190 70 196 44"
+                        fill="none" stroke="url(#routeGrad)" stroke-width="7" stroke-linecap="round"
+                        style="filter: drop-shadow(0 0 7px rgba(168,85,247,0.7));"/>
+                  <!-- hazards -->
+                  <g>
+                    <circle cx="156" cy="166" r="11" fill="#F97316"/>
+                    <text x="156" y="171" font-size="13" font-weight="900" text-anchor="middle" fill="#0E0D16">!</text>
+                  </g>
+                  <g>
+                    <circle cx="126" cy="104" r="11" fill="#EF4444"/>
+                    <text x="126" y="109" font-size="13" font-weight="900" text-anchor="middle" fill="#0E0D16">!</text>
+                  </g>
+                  <g>
+                    <circle cx="185" cy="58" r="10" fill="#F59E0B"/>
+                    <text x="185" y="63" font-size="12" font-weight="900" text-anchor="middle" fill="#0E0D16">!</text>
+                  </g>
+                  <!-- start pin -->
+                  <g>
+                    <circle cx="120" cy="236" r="13" fill="#A855F7"/>
+                    <circle cx="120" cy="236" r="5" fill="#0E0D16"/>
+                  </g>
+                </svg>
+                <div class="map-fabs">
+                  <span class="fab"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3 2 8l10 5 10-5-10-5zm0 7.7L4.8 8 12 5.3 19.2 8 12 10.7zM2 13l10 5 10-5-2.3-1.2L12 15.5 4.3 11.8 2 13z"/></svg></span>
+                  <span class="fab"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 1 21h22L12 2zm0 4.5L19.5 19h-15L12 6.5zM11 10v4h2v-4h-2zm0 5v2h2v-2h-2z"/></svg></span>
+                  <span class="fab"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 11l20-9-9 20-2-9-9-2z"/></svg></span>
+                </div>
+              </div>
+              <div class="score-card">
+                <div class="score-top">
+                  <span class="score-label">Scrape Score</span>
+                  <span class="score-risk">High Risk</span>
+                </div>
+                <div class="score-num">7.2<small> /10</small></div>
+                <div class="score-meta"><span>5 Hazards</span><span class="plus">+4 min</span></div>
+                <div class="score-bar"></div>
+              </div>
+              <span class="nav-btn">Start Navigation</span>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
+    <!-- FEATURE STRIP -->
+    <section class="strip">
+      <div class="strip-grid">
+        <div class="strip-item">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C7.6 2 4 5.6 4 10c0 5.2 7 11.5 7.3 11.8.4.3.9.3 1.3 0C13 21.5 20 15.2 20 10c0-4.4-3.6-8-8-8zm0 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg></div>
+          <h3>Avoid Scrapes</h3>
+          <p>Real-time hazard alerts for low-clearance vehicles.</p>
+        </div>
+        <div class="strip-item">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 0-18 0"/><path d="M12 12l4-3"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/></svg></div>
+          <h3>Scrape Score</h3>
+          <p>Smart route scoring built for your ride height.</p>
+        </div>
+        <div class="strip-item">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm-8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 2c-2.7 0-8 1.3-8 4v2h8v-2c0-1 .4-1.9 1-2.7-.4 0-.7-.3-1-.3zm8 0c-.3 0-.6 0-1 .3.6.8 1 1.7 1 2.7v2h8v-2c0-2.7-5.3-4-8-4z"/></svg></div>
+          <h3>Community Powered</h3>
+          <p>Report, confirm &amp; share hazards with other drivers.</p>
+        </div>
+        <div class="strip-item">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11v7a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H8v1a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-7zm2.3-1h9.4l-.9-2.6H8.2L7.3 10zM7.5 15a1.2 1.2 0 1 0 0-2.4 1.2 1.2 0 0 0 0 2.4zm9 0a1.2 1.2 0 1 0 0-2.4 1.2 1.2 0 0 0 0 2.4z"/></svg></div>
+          <h3>Meetups &amp; Cruises</h3>
+          <p>Find meets, plan cruises &amp; roll out with the crew.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SHOWCASE -->
     <section class="showcase">
+      <p class="section-kicker">See the whole experience</p>
       <div class="showcase-frame">
         <img src="/assets/true-maps-promo.png" alt="True Maps — community hazards, car profiles, meetups, and crew mode shown across phone screens" loading="lazy" />
       </div>
     </section>
 
+    <!-- DEEP-DIVE FEATURES -->
     <section class="section wrap">
       <p class="section-kicker">Built for the Low Life</p>
       <h2 class="section-title">Everything your ride needs</h2>
       <div class="features-grid">
         <div class="feature-card">
-          <div class="feature-icon">&#x1F4CD;</div>
-          <h3>Avoid Scrapes</h3>
-          <p>Real-time hazard alerts for low-clearance vehicles. Know about deep dips, speed bumps, and potholes before your bumper finds them.</p>
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 1 21h22L12 2zm0 4.5L19.5 19h-15L12 6.5zM11 10v4h2v-4h-2zm0 5v2h2v-2h-2z"/></svg></div>
+          <p class="kick">Community Hazards</p>
+          <h3>Spot trouble before your bumper does</h3>
+          <p>Deep dips, speed bumps, potholes and construction — reported and confirmed by drivers in real time, with severity tiers and recent photos.</p>
         </div>
         <div class="feature-card">
-          <div class="feature-icon">&#x1F4CA;</div>
-          <h3>Scrape Score</h3>
-          <p>Smart route scoring built for your ride height. Every route is rated on risk so you can pick the safest path, every drive.</p>
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11v7a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H8v1a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-7zm2.3-1h9.4l-.9-2.6H8.2L7.3 10zM7.5 15a1.2 1.2 0 1 0 0-2.4 1.2 1.2 0 0 0 0 2.4zm9 0a1.2 1.2 0 1 0 0-2.4 1.2 1.2 0 0 0 0 2.4z"/></svg></div>
+          <p class="kick">Car Profiles</p>
+          <h3>Your garage, your scores</h3>
+          <p>Save every build with ride height, front lip, side skirts, suspension and wheel size. Routes are scored against the car you're actually driving.</p>
         </div>
         <div class="feature-card">
-          <div class="feature-icon">&#x1F465;</div>
-          <h3>Community Powered</h3>
-          <p>Report, confirm, and share hazards with other drivers. The more the crew contributes, the smarter the map gets.</p>
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 2v2H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2V2h-2v2H9V2H7zM5 9h14v10H5V9zm2 2v2h2v-2H7zm4 0v2h2v-2h-2zm4 0v2h2v-2h-2z"/></svg></div>
+          <p class="kick">Meetups &amp; Events</p>
+          <h3>Never miss a meet</h3>
+          <p>Browse upcoming and nearby car meets and cruises, RSVP, and create your own events so the whole crew rolls out together.</p>
         </div>
         <div class="feature-card">
-          <div class="feature-icon">&#x1F698;</div>
-          <h3>Meetups &amp; Cruises</h3>
-          <p>Find meets, plan cruises, and stay connected with friends. Create events and roll out together.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#x1F3AF;</div>
-          <h3>Live Navigation</h3>
-          <p>Turn-by-turn voice guidance with real-time hazard alerts. Know what's ahead before your car does.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#x1F697;</div>
-          <h3>Your Garage</h3>
-          <p>Add your cars with ride height and suspension details for personalized safety scores tuned to each build.</p>
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm-8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 2c-2.7 0-8 1.3-8 4v2h8v-2c0-1 .4-1.9 1-2.7-.4 0-.7-.3-1-.3zm8 0c-.3 0-.6 0-1 .3.6.8 1 1.7 1 2.7v2h8v-2c0-2.7-5.3-4-8-4z"/></svg></div>
+          <p class="kick">Crew Mode</p>
+          <h3>Cruise together, stay together</h3>
+          <p>Snap Maps-style live location with your friends. See who's heading to the meet, who's cruising, and roll deep with the crew.</p>
         </div>
       </div>
     </section>
 
+    <!-- LIFESTYLE BAND -->
     <section class="lifestyle">
-      <h2>Not Just GPS. It's a Lifestyle.</h2>
-      <p class="accent"><span>Lower It. Map It. Live It.</span></p>
+      <h2 class="graffiti">Not Just GPS. It's a Lifestyle.</h2>
+      <p class="accent graffiti">Lower It. Map It. <span class="live">Live It.</span></p>
     </section>
 
+    <!-- QUICK ACTIONS -->
+    <section class="actions">
+      <div class="actions-grid">
+        <div class="action">
+          <div class="ring"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 1 21h22L12 2zm0 4.5L19.5 19h-15L12 6.5zM11 10v4h2v-4h-2zm0 5v2h2v-2h-2z"/></svg></div>
+          <span>Report</span>
+        </div>
+        <div class="action">
+          <div class="ring"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 11l20-9-9 20-2-9-9-2z"/></svg></div>
+          <span>Navigate</span>
+        </div>
+        <div class="action">
+          <div class="ring"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm-8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 2c-2.7 0-8 1.3-8 4v2h8v-2c0-1 .4-1.9 1-2.7-.4 0-.7-.3-1-.3zm8 0c-.3 0-.6 0-1 .3.6.8 1 1.7 1 2.7v2h8v-2c0-2.7-5.3-4-8-4z"/></svg></div>
+          <span>Connect</span>
+        </div>
+        <div class="action">
+          <div class="ring"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11v7a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H8v1a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-7zm2.3-1h9.4l-.9-2.6H8.2L7.3 10zM7.5 15a1.2 1.2 0 1 0 0-2.4 1.2 1.2 0 0 0 0 2.4zm9 0a1.2 1.2 0 1 0 0-2.4 1.2 1.2 0 0 0 0 2.4z"/></svg></div>
+          <span>Cruise</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA -->
     <section class="cta">
-      <h2>Join the <span>Movement</span>.</h2>
-      <p>True Maps. Real Drivers. Real Roads.</p>
-      <div class="store-badges">
-        <a href="#" class="store-badge" id="cta-app-store">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
-          App Store
-        </a>
-        <a href="#" class="store-badge secondary" id="cta-play-store">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3,20.5V3.5C3,2.91 3.34,2.39 3.84,2.15L13.69,12L3.84,21.85C3.34,21.6 3,21.09 3,20.5M16.81,15.12L6.05,21.34L14.54,12.85L16.81,15.12M20.16,10.81C20.5,11.08 20.75,11.5 20.75,12C20.75,12.5 20.53,12.9 20.18,13.18L17.89,14.5L15.39,12L17.89,9.5L20.16,10.81M6.05,2.66L16.81,8.88L14.54,11.15L6.05,2.66Z"/></svg>
-          Google Play
-        </a>
+      <svg class="skyline" viewBox="0 0 1200 90" preserveAspectRatio="none" fill="currentColor">
+        <path d="M0 90V60h40V42h26V60h30V30h22v12h20V20h28v22h18V48h34V34h22v14h26V58h30V40h24v18h22V26h26v32h20V46h30v12h22V36h26v22h22V52h30v6h26V44h26v14h24V62h34v28z"/>
+      </svg>
+      <div class="cta-inner">
+        <h2 class="graffiti">Join the <span class="mv">Movement</span>.</h2>
+        <p>True Maps. Real Drivers. Real Roads.</p>
+        <div class="store-badges">
+          <a href="#" class="store-badge" id="cta-app-store">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+            App Store
+          </a>
+          <a href="#" class="store-badge secondary" id="cta-play-store">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3,20.5V3.5C3,2.91 3.34,2.39 3.84,2.15L13.69,12L3.84,21.85C3.34,21.6 3,21.09 3,20.5M16.81,15.12L6.05,21.34L14.54,12.85L16.81,15.12M20.16,10.81C20.5,11.08 20.75,11.5 20.75,12C20.75,12.5 20.53,12.9 20.18,13.18L17.89,14.5L15.39,12L17.89,9.5L20.16,10.81M6.05,2.66L16.81,8.88L14.54,11.15L6.05,2.66Z"/></svg>
+            Google Play
+          </a>
+        </div>
       </div>
     </section>
 
     <footer>
-      <div class="footer-logo">True<span>Maps</span></div>
+      <div class="footer-logo graffiti"><span class="t">TRUE</span> <span class="m">MAPS</span></div>
       <div class="footer-links">
         <a href="/privacy-policy">Privacy Policy</a>
         <a href="/terms-of-service">Terms of Service</a>
