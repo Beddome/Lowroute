@@ -468,6 +468,21 @@ function PaywallInner() {
             </View>
           )}
         </View>
+
+        <View style={styles.legalSection}>
+          <Text style={styles.legalDisclosure}>
+            True Maps Pro is an auto-renewable subscription billed at {monthlyPrice}/month or {yearlyPrice}/year. Payment is charged to your App Store or Google Play account at confirmation of purchase. The subscription automatically renews unless it is cancelled at least 24 hours before the end of the current period. Your account is charged for renewal within 24 hours prior to the end of the current period. You can manage or cancel your subscription in your device account settings after purchase.
+          </Text>
+          <View style={styles.legalLinksRow}>
+            <Pressable hitSlop={8} onPress={() => router.push("/terms-of-service")}>
+              <Text style={styles.legalLink}>Terms of Use</Text>
+            </Pressable>
+            <Text style={styles.legalLinkSep}>•</Text>
+            <Pressable hitSlop={8} onPress={() => router.push("/privacy-policy")}>
+              <Text style={styles.legalLink}>Privacy Policy</Text>
+            </Pressable>
+          </View>
+        </View>
       </ScrollView>
 
       <Modal
@@ -687,6 +702,24 @@ const styles = StyleSheet.create({
   guaranteeSection: { paddingHorizontal: 24, gap: 14, marginBottom: 20 },
   guaranteeRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   guaranteeText: { fontSize: 14, fontFamily: "Inter_400Regular", color: Colors.textSecondary },
+
+  legalSection: { paddingHorizontal: 24, marginBottom: 24, alignItems: "center" },
+  legalDisclosure: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textMuted,
+    lineHeight: 16,
+    textAlign: "center",
+    marginBottom: 12,
+  },
+  legalLinksRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  legalLink: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.accent,
+    textDecorationLine: "underline",
+  },
+  legalLinkSep: { fontSize: 12, color: Colors.textMuted },
 
   promoSection: {
     marginHorizontal: 16,
