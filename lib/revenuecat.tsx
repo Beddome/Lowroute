@@ -91,6 +91,23 @@ export async function logoutRevenueCat() {
   }
 }
 
+// Opens Apple's native offer-code redemption sheet (iOS only). This routes
+// free/discounted access through Apple In-App Purchase, satisfying Guideline
+// 3.1.1. No-ops on Android/web/Expo Go where the sheet is unavailable. The
+// result arrives asynchronously via RevenueCat, so we refresh entitlement
+// state after the sheet is dismissed.
+export async function presentCodeRedemptionSheet() {
+  if (Platform.OS !== "ios") return;
+  if (!rcConfigured) return;
+  try {
+    await Purchases.presentCodeRedemptionSheet();
+  } catch (e) {
+    if (__DEV__) console.warn("RevenueCat presentCodeRedemptionSheet failed:", e);
+  } finally {
+    queryClient.invalidateQueries({ queryKey: ["revenuecat"] });
+  }
+}
+
 function useSubscriptionContext() {
   const customerInfoQuery = useQuery<CustomerInfo>({
     queryKey: ["revenuecat", "customer-info"],

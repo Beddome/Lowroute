@@ -15,7 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { safeHaptics as Haptics } from "@/lib/safe-native";
 import { useAuth } from "@/contexts/AuthContext";
-import { useSubscription, ENTITLEMENT_ID } from "@/lib/revenuecat";
+import { useSubscription, ENTITLEMENT_ID, presentCodeRedemptionSheet } from "@/lib/revenuecat";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Colors } from "@/constants/colors";
 import { apiRequest } from "@/lib/query-client";
@@ -107,6 +107,16 @@ function PaywallInner() {
   const yearlyMonthly = yearlyPkg?.product?.price
     ? `${yearlyPkg.product.currencyCode} ${(yearlyPkg.product.price / 12).toFixed(2)}`
     : "$8.00 CAD";
+
+  const handleRedeemOfferCode = async () => {
+    if (!user) {
+      router.push("/(auth)/login");
+      return;
+    }
+    Haptics.selectionAsync();
+    await presentCodeRedemptionSheet();
+    await refreshUser();
+  };
 
   const handleRedeemPromo = async () => {
     if (!promoCode.trim()) return;
@@ -424,50 +434,63 @@ function PaywallInner() {
           </View>
         </View>
 
-        <View style={styles.promoSection}>
-          <View style={styles.promoHeader}>
-            <Ionicons name="pricetag" size={18} color={Colors.accent} />
-            <Text style={styles.promoTitle}>Have a promo code?</Text>
-          </View>
-          <View style={styles.promoInputRow}>
-            <TextInput
-              style={styles.promoInput}
-              value={promoCode}
-              onChangeText={(t) => {
-                setPromoCode(t.toUpperCase());
-                setPromoMessage(null);
-              }}
-              placeholder="LOWPRO-XXXXXX"
-              placeholderTextColor={Colors.textMuted}
-              autoCapitalize="characters"
-              autoCorrect={false}
-              editable={!promoLoading}
-            />
-            <Pressable
-              style={[styles.promoBtn, (!promoCode.trim() || promoLoading) && { opacity: 0.5 }]}
-              onPress={handleRedeemPromo}
-              disabled={!promoCode.trim() || promoLoading}
-            >
-              {promoLoading ? (
-                <ActivityIndicator color={Colors.bg} size="small" />
-              ) : (
-                <Ionicons name="arrow-forward" size={20} color={Colors.bg} />
-              )}
+        {Platform.OS === "ios" ? (
+          <View style={styles.promoSection}>
+            <View style={styles.promoHeader}>
+              <Ionicons name="pricetag" size={18} color={Colors.accent} />
+              <Text style={styles.promoTitle}>Have a code?</Text>
+            </View>
+            <Pressable style={styles.redeemCodeBtn} onPress={handleRedeemOfferCode}>
+              <Ionicons name="gift-outline" size={18} color={Colors.bg} />
+              <Text style={styles.redeemCodeBtnText}>Redeem a code</Text>
             </Pressable>
           </View>
-          {promoMessage && (
-            <View style={[styles.promoMsg, { backgroundColor: promoMessage.success ? Colors.tier1 + "15" : Colors.error + "15" }]}>
-              <Ionicons
-                name={promoMessage.success ? "checkmark-circle" : "alert-circle"}
-                size={16}
-                color={promoMessage.success ? Colors.tier1 : Colors.error}
-              />
-              <Text style={[styles.promoMsgText, { color: promoMessage.success ? Colors.tier1 : Colors.error }]}>
-                {promoMessage.text}
-              </Text>
+        ) : (
+          <View style={styles.promoSection}>
+            <View style={styles.promoHeader}>
+              <Ionicons name="pricetag" size={18} color={Colors.accent} />
+              <Text style={styles.promoTitle}>Have a promo code?</Text>
             </View>
-          )}
-        </View>
+            <View style={styles.promoInputRow}>
+              <TextInput
+                style={styles.promoInput}
+                value={promoCode}
+                onChangeText={(t) => {
+                  setPromoCode(t.toUpperCase());
+                  setPromoMessage(null);
+                }}
+                placeholder="LOWPRO-XXXXXX"
+                placeholderTextColor={Colors.textMuted}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                editable={!promoLoading}
+              />
+              <Pressable
+                style={[styles.promoBtn, (!promoCode.trim() || promoLoading) && { opacity: 0.5 }]}
+                onPress={handleRedeemPromo}
+                disabled={!promoCode.trim() || promoLoading}
+              >
+                {promoLoading ? (
+                  <ActivityIndicator color={Colors.bg} size="small" />
+                ) : (
+                  <Ionicons name="arrow-forward" size={20} color={Colors.bg} />
+                )}
+              </Pressable>
+            </View>
+            {promoMessage && (
+              <View style={[styles.promoMsg, { backgroundColor: promoMessage.success ? Colors.tier1 + "15" : Colors.error + "15" }]}>
+                <Ionicons
+                  name={promoMessage.success ? "checkmark-circle" : "alert-circle"}
+                  size={16}
+                  color={promoMessage.success ? Colors.tier1 : Colors.error}
+                />
+                <Text style={[styles.promoMsgText, { color: promoMessage.success ? Colors.tier1 : Colors.error }]}>
+                  {promoMessage.text}
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
 
         <View style={styles.legalSection}>
           <Text style={styles.legalDisclosure}>
@@ -731,6 +754,16 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   promoHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+  redeemCodeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: Colors.accent,
+  },
+  redeemCodeBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: Colors.bg },
   promoTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: Colors.text },
   promoInputRow: { flexDirection: "row", gap: 10 },
   promoInput: {
