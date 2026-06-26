@@ -1,5 +1,8 @@
 import { fetch } from "expo/fetch";
+import { Platform } from "react-native";
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+
+const CLIENT_PLATFORM_HEADER = "X-Client-Platform";
 
 /**
  * Gets the base URL for the Express API server (e.g., "http://localhost:3000")
@@ -47,9 +50,12 @@ export async function apiRequest(
   const baseUrl = getApiUrl();
   const url = new URL(route, baseUrl);
 
+  const headers: Record<string, string> = { [CLIENT_PLATFORM_HEADER]: Platform.OS };
+  if (data) headers["Content-Type"] = "application/json";
+
   const res = await fetch(url.toString(), {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers,
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
@@ -68,6 +74,7 @@ export const getQueryFn: <T>(options: {
     const url = new URL(queryKey.join("/") as string, baseUrl);
 
     const res = await fetch(url.toString(), {
+      headers: { [CLIENT_PLATFORM_HEADER]: Platform.OS },
       credentials: "include",
     });
 

@@ -1,5 +1,5 @@
 import express from "express";
-import type { Express, Request, Response } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "node:http";
 import session from "express-session";
 import ConnectPgSimple from "connect-pg-simple";
@@ -1023,7 +1023,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/promo/redeem", requireAuth, async (req: Request, res: Response) => {
+  // Apple App Store compliance: promo/discount codes cannot be redeemed through
+  // a custom flow on iOS. The iOS app uses Apple's native offer-code sheet
+  // instead, so reject any promo redemption originating from the iOS client
+  // (defense-in-depth — the iOS UI no longer calls this endpoint). Runs before
+  // auth so iOS gets a clear refusal regardless of session state.
+  const blockIosPromoRedeem = (req: Request, res: Response, next: NextFunction) => {
+    const clientPlatform = String(req.get("X-Client-Platform") || "").toLowerCase();
+    if (clientPlatform === "ios") {
+      return res.status(403).json({
+        message: "Promo codes can't be redeemed here on iPhone. Tap \"Redeem a code\" to use an App Store offer code instead.",
+      });
+    }
+    next();
+  };
+
+  app.post("/api/promo/redeem", blockIosPromoRedeem, requireAuth, async (req: Request, res: Response) => {
     try {
       const { code } = req.body;
       if (!code || typeof code !== "string") {
