@@ -1,2 +1,3 @@
 - [Blank paywall/sheet on iOS](paywall-blank-ios.md) — a screen blank on iOS despite JS having no empty render path is a native presentation issue; `formSheet` is the offender, switch to `modal`.
+- [Apple 2.3.10 store references](apple-review-store-references.md) — Apple rejects iOS binary/UI text mentioning "Google Play"; platform-gate all store-name strings (iOS→App Store, Android→Google Play).
 - [iOS on-device name went stale](ios-display-name-stale.md) — after an Expo rename, pin `CFBundleDisplayName` explicitly; relying on `expo.name` alone can leave Apple seeing the old home-screen label (2.3.8).

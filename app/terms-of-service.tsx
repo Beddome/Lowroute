@@ -34,6 +34,12 @@ function BulletList({ items }: { items: string[] }) {
 export default function TermsOfServiceScreen() {
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const storeName =
+    Platform.OS === "ios"
+      ? "Apple App Store"
+      : Platform.OS === "android"
+      ? "Google Play Store"
+      : "Apple App Store or Google Play Store";
 
   return (
     <View style={[s.container, { paddingTop: topPad }]}>
@@ -121,10 +127,10 @@ export default function TermsOfServiceScreen() {
         <Section title="8. Subscriptions">
           <BulletList items={[
             "True Maps offers optional paid subscription tiers with additional features",
-            "Subscriptions are managed through the Apple App Store or Google Play Store",
+            `Subscriptions are managed through the ${storeName}`,
             "Subscription billing, renewal, and cancellation are governed by the respective store's terms",
             "We may change subscription pricing or features with reasonable notice",
-            "Refund requests should be directed to the Apple App Store or Google Play Store",
+            `Refund requests should be directed to the ${storeName}`,
           ]} />
         </Section>
 

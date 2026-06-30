@@ -192,7 +192,7 @@ export default function ManageSubscriptionScreen() {
       </View>
 
       <Text style={styles.footerNote}>
-        Subscriptions are managed through the App Store or Google Play. True Maps does not store payment details.
+        Subscriptions are managed through {Platform.OS === "ios" ? "the App Store" : Platform.OS === "android" ? "Google Play" : "the App Store or Google Play"}. True Maps does not store payment details.
       </Text>
     </View>
   );

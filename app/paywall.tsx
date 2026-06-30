@@ -426,7 +426,7 @@ function PaywallInner() {
           </View>
           <View style={styles.guaranteeRow}>
             <Ionicons name="lock-closed" size={20} color={Colors.tier1} />
-            <Text style={styles.guaranteeText}>Secure payments via App Store / Google Play</Text>
+            <Text style={styles.guaranteeText}>Secure payments via {Platform.OS === "ios" ? "the App Store" : Platform.OS === "android" ? "Google Play" : "the App Store or Google Play"}</Text>
           </View>
           <View style={styles.guaranteeRow}>
             <Ionicons name="people" size={20} color={Colors.tier1} />
@@ -494,7 +494,7 @@ function PaywallInner() {
 
         <View style={styles.legalSection}>
           <Text style={styles.legalDisclosure}>
-            True Maps Pro is an auto-renewable subscription billed at {monthlyPrice}/month or {yearlyPrice}/year. Payment is charged to your App Store or Google Play account at confirmation of purchase. The subscription automatically renews unless it is cancelled at least 24 hours before the end of the current period. Your account is charged for renewal within 24 hours prior to the end of the current period. You can manage or cancel your subscription in your device account settings after purchase.
+            True Maps Pro is an auto-renewable subscription billed at {monthlyPrice}/month or {yearlyPrice}/year. Payment is charged to your {Platform.OS === "ios" ? "App Store" : Platform.OS === "android" ? "Google Play" : "App Store or Google Play"} account at confirmation of purchase. The subscription automatically renews unless it is cancelled at least 24 hours before the end of the current period. Your account is charged for renewal within 24 hours prior to the end of the current period. You can manage or cancel your subscription in your device account settings after purchase.
           </Text>
           <View style={styles.legalLinksRow}>
             <Pressable hitSlop={8} onPress={() => router.push("/terms-of-service")}>
