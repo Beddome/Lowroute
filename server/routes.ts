@@ -313,6 +313,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     await storage.seedAdminUser(adminUsername, adminHash);
   }
 
+  await storage.seedReviewerDemoContent();
+
   // Auth routes
   app.post("/api/auth/register", async (req: Request, res: Response) => {
     try {

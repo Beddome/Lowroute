@@ -349,6 +349,168 @@ export async function seedDemoHazards() {
   }
 }
 
+// Seeds a few believable "friend" accounts and, if the App Store reviewer
+// account exists, wires them up as accepted friends with pre-populated Inbox
+// conversations so Apple can verify the Friends and Inbox features (Guideline 2.1a).
+// Fully idempotent: safe to run on every server boot.
+export async function seedReviewerDemoContent() {
+  // The App Store reviewer account must already exist. We locate it by a stable
+  // REVIEWER_EMAIL if provided, otherwise by REVIEWER_USERNAME (default "Appletest").
+  // Ordering by createdAt keeps the match deterministic if case variants exist.
+  const reviewerEmail = process.env.REVIEWER_EMAIL;
+  const reviewerUsername = process.env.REVIEWER_USERNAME || "Appletest";
+
+  const [reviewer] = reviewerEmail
+    ? await db.select().from(schema.users)
+        .where(sql`lower(${schema.users.email}) = lower(${reviewerEmail})`)
+        .orderBy(schema.users.createdAt)
+        .limit(1)
+    : await db.select().from(schema.users)
+        .where(sql`lower(${schema.users.username}) = lower(${reviewerUsername})`)
+        .orderBy(schema.users.createdAt)
+        .limit(1);
+
+  // Fail closed: without a real reviewer account we create nothing, so demo
+  // friend accounts never leak into a normal production database.
+  if (!reviewer) {
+    console.log(`[seed] App Review account (${reviewerEmail || reviewerUsername}) not found — skipping demo friend/inbox seeding. Create the reviewer account (or set REVIEWER_EMAIL / REVIEWER_USERNAME) and restart to populate Friends and Inbox.`);
+    return;
+  }
+
+  const dummies = [
+    {
+      id: "demo-friend-lowlife",
+      username: "LowLifeLuis",
+      email: "lowlifeluis@truemaps.demo",
+      make: "Honda", model: "Civic", year: 2004,
+      avatarStyle: "coupe", avatarColor: "#F97316",
+      thread: [
+        { fromReviewer: false, text: "Yo! Welcome to True Maps 👋 tagged that brutal pothole on Mayor Magrath already." },
+        { fromReviewer: true, text: "Thanks! Just routed around it, saved my lip lol" },
+        { fromReviewer: false, text: "Haha classic. There's a meet this weekend if you're down." },
+      ],
+    },
+    {
+      id: "demo-friend-slammed",
+      username: "SlammedSara",
+      email: "slammedsara@truemaps.demo",
+      make: "Nissan", model: "240SX", year: 1998,
+      avatarStyle: "sports", avatarColor: "#A855F7",
+      thread: [
+        { fromReviewer: false, text: "Hey, are you coming to the cruise Friday night?" },
+        { fromReviewer: true, text: "For sure. What time are we linking up?" },
+        { fromReviewer: false, text: "8pm at the usual spot 🚗💨" },
+      ],
+    },
+    {
+      id: "demo-friend-bagged",
+      username: "BaggedBen",
+      email: "baggedben@truemaps.demo",
+      make: "Chevrolet", model: "Silverado", year: 2015,
+      avatarStyle: "truck", avatarColor: "#22C55E",
+      thread: [],
+    },
+  ];
+
+  // Give the reviewer Pro so Apple can verify all features (Guideline 2.1a).
+  if (reviewer.subscriptionTier !== "pro") {
+    await db.update(schema.users)
+      .set({ subscriptionTier: "pro" })
+      .where(eq(schema.users.id, reviewer.id));
+  }
+
+  for (const d of dummies) {
+    await db.insert(schema.users).values({
+      id: d.id,
+      username: d.username,
+      email: d.email,
+      passwordHash: "seeded",
+      reputation: 250,
+    }).onConflictDoNothing();
+
+    // Confirm the fixed-id row actually exists before any FK-dependent insert.
+    // If a real user already holds this username/email, the insert above was a
+    // no-op and we skip this dummy rather than crashing startup on an FK error.
+    const [dummyUser] = await db.select({ id: schema.users.id })
+      .from(schema.users)
+      .where(eq(schema.users.id, d.id))
+      .limit(1);
+    if (!dummyUser) {
+      console.log(`[seed] Skipped demo friend "${d.username}" (username/email already taken by a real account).`);
+      continue;
+    }
+
+    const existingCar = await db.select({ id: schema.carProfiles.id })
+      .from(schema.carProfiles)
+      .where(eq(schema.carProfiles.userId, d.id))
+      .limit(1);
+    if (existingCar.length === 0) {
+      await db.insert(schema.carProfiles).values({
+        userId: d.id,
+        make: d.make,
+        model: d.model,
+        year: d.year,
+        suspensionType: "bagged",
+        clearanceMode: "very_lowered",
+        isDefault: true,
+        avatarStyle: d.avatarStyle,
+        avatarColor: d.avatarColor,
+        vehicleType: "car",
+      });
+    }
+
+    const [existingFriend] = await db.select({ id: schema.friendships.id, status: schema.friendships.status })
+      .from(schema.friendships)
+      .where(or(
+        and(eq(schema.friendships.requesterId, reviewer.id), eq(schema.friendships.addresseeId, d.id)),
+        and(eq(schema.friendships.requesterId, d.id), eq(schema.friendships.addresseeId, reviewer.id)),
+      ))
+      .limit(1);
+    if (!existingFriend) {
+      await db.insert(schema.friendships).values({
+        requesterId: d.id,
+        addresseeId: reviewer.id,
+        status: "accepted",
+      });
+    } else if (existingFriend.status !== "accepted") {
+      // Force any pending/blocked demo friendship to accepted so App Review sees a friend.
+      await db.update(schema.friendships)
+        .set({ status: "accepted" })
+        .where(eq(schema.friendships.id, existingFriend.id));
+    }
+
+    if (d.thread.length === 0) continue;
+
+    const [existingMsg] = await db.select({ id: schema.messages.id })
+      .from(schema.messages)
+      .where(and(
+        sql`${schema.messages.listingId} IS NULL`,
+        sql`${schema.messages.groupChatId} IS NULL`,
+        or(
+          and(eq(schema.messages.senderId, reviewer.id), eq(schema.messages.receiverId, d.id)),
+          and(eq(schema.messages.senderId, d.id), eq(schema.messages.receiverId, reviewer.id)),
+        ),
+      ))
+      .limit(1);
+    if (existingMsg) continue;
+
+    let ts = Date.now() - 1000 * 60 * 60; // start ~1 hour ago
+    for (const m of d.thread) {
+      await db.insert(schema.messages).values({
+        senderId: m.fromReviewer ? reviewer.id : d.id,
+        receiverId: m.fromReviewer ? d.id : reviewer.id,
+        listingId: null,
+        content: m.text,
+        isRead: m.fromReviewer, // leave the friend's last incoming message unread so the Inbox shows a badge
+        createdAt: new Date(ts),
+      });
+      ts += 1000 * 60 * 2; // 2 minutes apart
+    }
+  }
+
+  console.log(`[seed] Linked demo friends and inbox threads for reviewer "${reviewer.username}".`);
+}
+
 export async function getCarProfilesByUser(userId: string) {
   return db.select().from(schema.carProfiles).where(eq(schema.carProfiles.userId, userId));
 }

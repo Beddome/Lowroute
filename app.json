@@ -23,6 +23,8 @@
         "CFBundleName": "True Maps",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "True Maps uses your location in the background to provide turn-by-turn navigation and alert you to nearby hazards while driving.",
         "NSLocationWhenInUseUsageDescription": "True Maps needs your location to show nearby hazards and help plan safe routes.",
+        "NSCameraUsageDescription": "True Maps uses the camera so you can take a photo of a road hazard — for example, snapping a pothole while reporting it — and to add photos to your car-parts marketplace listings.",
+        "NSPhotoLibraryUsageDescription": "True Maps needs access to your photo library so you can attach an existing photo to a hazard report or a marketplace listing — for example, choosing a saved picture of a pothole or a part you're selling.",
         "UIBackgroundModes": [
           "location"
         ],
