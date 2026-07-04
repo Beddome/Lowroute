@@ -10,10 +10,11 @@ import {
   Alert,
   Platform,
   Modal,
+  RefreshControl,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { safeHaptics as Haptics } from "@/lib/safe-native";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
@@ -54,20 +55,23 @@ export default function FriendsScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedFriend, setSelectedFriend] = useState<FriendWithCar | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const { data: friends = [], isLoading: friendsLoading } = useQuery<FriendWithCar[]>({
+  const { data: friends = [], isLoading: friendsLoading, refetch: refetchFriends } = useQuery<FriendWithCar[]>({
     queryKey: ["/api/friends/with-cars"],
     enabled: !!user,
   });
 
-  const { data: pendingRequests = [], isLoading: requestsLoading } = useQuery<PendingRequest[]>({
+  const { data: pendingRequests = [], isLoading: requestsLoading, refetch: refetchRequests } = useQuery<PendingRequest[]>({
     queryKey: ["/api/friends/requests"],
     enabled: !!user,
+    refetchInterval: 15000,
   });
 
-  const { data: friendshipStatuses = [] } = useQuery<FriendshipStatus[]>({
+  const { data: friendshipStatuses = [], refetch: refetchStatuses } = useQuery<FriendshipStatus[]>({
     queryKey: ["/api/friends/statuses"],
     enabled: !!user,
+    refetchInterval: 15000,
   });
 
   const statusByUser = new Map(friendshipStatuses.map((st) => [st.otherUserId, st]));
@@ -80,6 +84,24 @@ export default function FriendsScreen() {
     queryClient.invalidateQueries({ queryKey: ["/api/friends/requests"] });
     queryClient.invalidateQueries({ queryKey: ["/api/friends/statuses"] });
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+      refetchFriends();
+      refetchRequests();
+      refetchStatuses();
+    }, [user, refetchFriends, refetchRequests, refetchStatuses])
+  );
+
+  const onPullToRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([refetchFriends(), refetchRequests(), refetchStatuses()]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refetchFriends, refetchRequests, refetchStatuses]);
 
   const sendRequestMutation = useMutation({
     mutationFn: (addresseeId: string) =>
@@ -257,6 +279,13 @@ export default function FriendsScreen() {
         scrollEnabled={true}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onPullToRefresh}
+            tintColor={FRIEND_COLOR}
+          />
+        }
         ListHeaderComponent={
           <>
             {pendingRequests.length > 0 && (
