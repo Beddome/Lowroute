@@ -74,7 +74,13 @@
           "isAndroidForegroundServiceEnabled": true
         }
       ],
-      "./plugins/with-google-maps-key"
+      "./plugins/with-google-maps-key",
+      [
+        "expo-notifications",
+        {
+          "color": "#FFB300"
+        }
+      ]
     ],
     "extra": {
       "eas": {

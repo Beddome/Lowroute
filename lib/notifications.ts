@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import Constants from "expo-constants";
 import { getApiUrl, apiRequest } from "@/lib/query-client";
 
 let notificationsModule: any = null;
@@ -29,9 +30,20 @@ export async function registerForPushNotifications(): Promise<string | null> {
 
     if (finalStatus !== "granted") return null;
 
-    const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId: undefined,
-    });
+    const projectId =
+      Constants?.expoConfig?.extra?.eas?.projectId ??
+      (Constants as any)?.easConfig?.projectId;
+
+    if (!projectId) {
+      if (__DEV__) {
+        console.warn(
+          "Push registration skipped: no EAS projectId found in app config."
+        );
+      }
+      return null;
+    }
+
+    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     const token = tokenData.data;
 
     await apiRequest("POST", new URL("/api/push-token", getApiUrl()).toString(), { pushToken: token });

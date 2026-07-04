@@ -51,7 +51,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     refreshUser().then((data) => {
-      if (data?.id) loginRevenueCat(String(data.id)).catch(() => {});
+      if (data?.id) {
+        registerForPushNotifications().catch(() => {});
+        loginRevenueCat(String(data.id)).catch(() => {});
+      }
     }).finally(() => setIsLoading(false));
   }, []);
 

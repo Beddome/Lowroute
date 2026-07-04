@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { eq, and, or, sql, between, desc, asc, gte, lte, ilike, ne } from "drizzle-orm";
+import { eq, and, or, sql, between, desc, asc, gte, lte, ilike, ne, inArray, isNotNull } from "drizzle-orm";
 import * as schema from "../shared/schema";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -1819,9 +1819,10 @@ export async function updatePushToken(userId: string, pushToken: string | null) 
 
 export async function getPushTokensForUsers(userIds: string[]) {
   if (userIds.length === 0) return [];
-  const result = await db.execute(sql`
-    SELECT id, push_token FROM users WHERE id = ANY(${userIds}) AND push_token IS NOT NULL
-  `);
-  return Array.isArray(result) ? result : (result as any).rows ?? [];
+  const rows = await db
+    .select({ id: schema.users.id, push_token: schema.users.pushToken })
+    .from(schema.users)
+    .where(and(inArray(schema.users.id, userIds), isNotNull(schema.users.pushToken)));
+  return rows;
 }
 
