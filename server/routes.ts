@@ -1586,6 +1586,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/friends/statuses", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const statuses = await storage.getFriendshipStatuses(req.session.userId!);
+      res.json(statuses);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch friendship statuses" });
+    }
+  });
+
   app.post("/api/friends/:id/accept", requireAuth, async (req: Request, res: Response) => {
     try {
       const result = await storage.acceptFriendRequest(req.params.id, req.session.userId!);

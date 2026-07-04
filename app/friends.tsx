@@ -38,6 +38,14 @@ interface PendingRequest {
   createdAt: string;
 }
 
+interface FriendshipStatus {
+  friendshipId: string;
+  otherUserId: string;
+  username: string;
+  status: "pending" | "accepted" | "blocked";
+  isOutgoing: boolean;
+}
+
 export default function FriendsScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -57,15 +65,28 @@ export default function FriendsScreen() {
     enabled: !!user,
   });
 
+  const { data: friendshipStatuses = [] } = useQuery<FriendshipStatus[]>({
+    queryKey: ["/api/friends/statuses"],
+    enabled: !!user,
+  });
+
+  const statusByUser = new Map(friendshipStatuses.map((st) => [st.otherUserId, st]));
+  const sentRequests = friendshipStatuses.filter(
+    (st) => st.status === "pending" && st.isOutgoing
+  );
+
+  const refreshFriendData = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/friends/with-cars"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/friends/requests"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/friends/statuses"] });
+  };
+
   const sendRequestMutation = useMutation({
     mutationFn: (addresseeId: string) =>
       apiRequest("POST", "/api/friends/request", { addresseeId }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/friends/with-cars"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/friends/requests"] });
+      refreshFriendData();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setSearchQuery("");
-      setSearchResults([]);
     },
     onError: (err: any) => {
       const msg = err?.message || "Could not send friend request.";
@@ -76,8 +97,7 @@ export default function FriendsScreen() {
   const acceptMutation = useMutation({
     mutationFn: (id: string) => apiRequest("POST", `/api/friends/${id}/accept`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/friends/with-cars"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/friends/requests"] });
+      refreshFriendData();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
   });
@@ -85,7 +105,7 @@ export default function FriendsScreen() {
   const declineMutation = useMutation({
     mutationFn: (id: string) => apiRequest("POST", `/api/friends/${id}/decline`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/friends/requests"] });
+      refreshFriendData();
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     },
   });
@@ -93,7 +113,7 @@ export default function FriendsScreen() {
   const removeMutation = useMutation({
     mutationFn: (id: string) => apiRequest("DELETE", `/api/friends/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/friends/with-cars"] });
+      refreshFriendData();
       queryClient.invalidateQueries({ queryKey: ["/api/friends/locations"] });
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     },
@@ -184,17 +204,33 @@ export default function FriendsScreen() {
       {searchResults.length > 0 && (
         <View style={s.searchResults}>
           {searchResults.map((u) => {
-            const alreadyFriend = friends.some((f) => f.friendId === u.id);
+            const st = statusByUser.get(u.id);
             return (
               <View key={u.id} style={s.searchResultItem}>
                 <View style={s.userAvatar}>
                   <Text style={s.userAvatarText}>{u.username[0]?.toUpperCase()}</Text>
                 </View>
                 <Text style={s.userName}>{u.username}</Text>
-                {alreadyFriend ? (
+                {st?.status === "accepted" ? (
                   <View style={s.alreadyBadge}>
                     <Ionicons name="checkmark" size={14} color={Colors.success} />
                   </View>
+                ) : st?.status === "pending" && st.isOutgoing ? (
+                  <View style={s.pendingBadge}>
+                    <Ionicons name="time-outline" size={13} color={Colors.textMuted} />
+                    <Text style={s.pendingBadgeText}>Sent</Text>
+                  </View>
+                ) : st?.status === "pending" && !st.isOutgoing ? (
+                  <Pressable
+                    style={({ pressed }) => [s.acceptInlineBtn, pressed && { opacity: 0.7 }]}
+                    onPress={() => acceptMutation.mutate(st.friendshipId)}
+                    disabled={acceptMutation.isPending}
+                    accessibilityLabel={`Accept friend request from ${u.username}`}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="checkmark" size={14} color={Colors.success} />
+                    <Text style={s.acceptInlineText}>Accept</Text>
+                  </Pressable>
                 ) : (
                   <Pressable
                     style={({ pressed }) => [s.addBtn, pressed && { opacity: 0.7 }]}
@@ -257,6 +293,34 @@ export default function FriendsScreen() {
                         <Ionicons name="close" size={18} color={Colors.error} />
                       </Pressable>
                     </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {sentRequests.length > 0 && (
+              <View style={s.section}>
+                <Text style={s.sectionTitle}>Sent Requests</Text>
+                {sentRequests.map((req) => (
+                  <View key={req.friendshipId} style={s.requestItem}>
+                    <View style={s.userAvatar}>
+                      <Text style={s.userAvatarText}>
+                        {req.username?.[0]?.toUpperCase() ?? "?"}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.userName}>{req.username}</Text>
+                      <Text style={s.requestTime}>Request pending</Text>
+                    </View>
+                    <Pressable
+                      style={({ pressed }) => [s.cancelBtn, pressed && { opacity: 0.7 }]}
+                      onPress={() => removeMutation.mutate(req.friendshipId)}
+                      disabled={removeMutation.isPending}
+                      accessibilityLabel={`Cancel friend request to ${req.username}`}
+                      accessibilityRole="button"
+                    >
+                      <Text style={s.cancelBtnText}>Cancel</Text>
+                    </Pressable>
                   </View>
                 ))}
               </View>
@@ -545,6 +609,53 @@ const s = StyleSheet.create({
     borderColor: Colors.success + "44",
     alignItems: "center",
     justifyContent: "center",
+  },
+  pendingBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    height: 36,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: Colors.textMuted + "18",
+    borderWidth: 1,
+    borderColor: Colors.textMuted + "44",
+  },
+  pendingBadgeText: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.textMuted,
+  },
+  acceptInlineBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    height: 36,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: Colors.success + "18",
+    borderWidth: 1,
+    borderColor: Colors.success + "44",
+  },
+  acceptInlineText: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.success,
+  },
+  cancelBtn: {
+    height: 32,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: Colors.error + "18",
+    borderWidth: 1,
+    borderColor: Colors.error + "44",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelBtnText: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.error,
   },
   section: {
     paddingHorizontal: 16,

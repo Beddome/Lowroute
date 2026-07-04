@@ -911,6 +911,39 @@ export async function getPendingFriendRequests(userId: string) {
     ));
 }
 
+export async function getFriendshipStatuses(userId: string) {
+  const rows = await db.select({
+    id: schema.friendships.id,
+    requesterId: schema.friendships.requesterId,
+    addresseeId: schema.friendships.addresseeId,
+    status: schema.friendships.status,
+  })
+    .from(schema.friendships)
+    .where(or(
+      eq(schema.friendships.requesterId, userId),
+      eq(schema.friendships.addresseeId, userId),
+    ));
+
+  const otherIds = rows.map(r => (r.requesterId === userId ? r.addresseeId : r.requesterId));
+  if (otherIds.length === 0) return [];
+
+  const users = await db.select({ id: schema.users.id, username: schema.users.username })
+    .from(schema.users)
+    .where(sql`${schema.users.id} IN ${otherIds}`);
+  const nameMap = new Map(users.map(u => [u.id, u.username]));
+
+  return rows.map(r => {
+    const otherUserId = r.requesterId === userId ? r.addresseeId : r.requesterId;
+    return {
+      friendshipId: r.id,
+      otherUserId,
+      username: nameMap.get(otherUserId) || "Unknown",
+      status: r.status,
+      isOutgoing: r.requesterId === userId,
+    };
+  });
+}
+
 export async function getFriendshipById(id: string) {
   const [f] = await db.select().from(schema.friendships).where(eq(schema.friendships.id, id));
   return f || null;
